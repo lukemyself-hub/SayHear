@@ -8,6 +8,11 @@ import {
 } from "@sayhear/domain";
 import type { Pool } from "pg";
 
+export type RecoveryDerivedLatency = Readonly<{
+  oldestPendingSeconds: number;
+  pendingSessions: number;
+}>;
+
 type EvaluationRow = Readonly<{
   continuous_exchange_no: number;
   daily_session_id: string;

@@ -16,6 +16,11 @@ export const PR_VALIDATE_WORKFLOW_PATH = ".github/workflows/pr-validate.yml";
 export const PR_REVIEW_GATE_CHECK_NAME = "pr-review-gate";
 
 const FIXED_BASELINE_IDS = new Set<string>(FIXED_PR_CI_BASELINE);
+const ENUMERATED_OFFLINE_EVALUATION_PATHS = new Set([
+  "eval/retrieval-precision-v1/README.md",
+  "eval/retrieval-precision-v1/harness.ts",
+  "tests/system/retrieval-precision-corpus.system.test.ts",
+]);
 const IMPACT_KINDS: readonly ReleaseImpactKind[] = [
   "ui",
   "server-business",
@@ -1176,15 +1181,17 @@ export function evaluatePrReviewGate(
       message: "This change requires full capability acceptance and a human release decision.",
     });
   }
-  // Only a bound owner decision can locate tooling with no deployed impact.
-  // Runtime, eval, unknown and unapproved paths still require normal classification.
+  // A diff-bound no-runtime decision may also name these exact offline eval files.
+  // It cannot classify arbitrary eval, runtime, or unknown paths.
+  const approvedPaths = new Set(policy.humanApprovedPaths ?? []);
   const ownerLocatedTooling = policy.humanApprovedNoRuntimeImpact === true &&
     input.pullRequest.changedFiles.length > 0 &&
     input.pullRequest.changedFiles.every(({ path }) =>
-      policy.humanApprovedPaths?.includes(path) &&
-      (/^(?:scripts|tests|docs)\//.test(path) ||
-        [".gitignore", "AGENTS.md", "CODEOWNERS", "package.json", "pnpm-lock.yaml"].includes(path) ||
-        /^tsconfig[^/]*\.json$/.test(path)),
+      ENUMERATED_OFFLINE_EVALUATION_PATHS.has(path) ||
+      (approvedPaths.has(path) &&
+        (/^(?:scripts|tests|docs)\//.test(path) ||
+          [".gitignore", "AGENTS.md", "CODEOWNERS", "package.json", "pnpm-lock.yaml"].includes(path) ||
+          /^tsconfig[^/]*\.json$/.test(path))),
     );
   if (plan.requiresImpactLocation && !ownerLocatedTooling) {
     return outcome(input, "awaiting_verification", {

@@ -946,6 +946,7 @@ export function createServerComposition() {
       clock: configuration.clock,
       repository: continuousExchangeRepository,
     }),
+
     conversationService,
     entityService,
     fastPathExtractionRepository,

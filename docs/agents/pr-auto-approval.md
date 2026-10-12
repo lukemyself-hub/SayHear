@@ -31,16 +31,20 @@ Luke 的人工审核决定因此通过本机管理员写入的 `humanReviewAutho
    绑定审核包中的 PR 号、`approvedHeadSha`、`diff.digest`、
    `reviewContext.requirementDigest` 和精确路径；经 Luke 在自己的终端授权后安装。
    若 PR 改了 Validate 工作流，另绑定人工审核过的 workflow blob，不能自动信任它。
-3. 若仅剩 Issue 的人工交接标签，按这次决定恢复 `ongoing` 并移除 `ready-for-human`
-   和 `ready-for-agent`，随后再次 `prepare`，独立审核报告必须匹配最新需求摘要。
+3. 若仅剩 Issue 的人工交接标签，按这次决定恢复 `ongoing`，并清除审核回写留下的
+   `ready-for-agent` 和旧流程可能残留的 `ready-for-human`，随后再次 `prepare`，
+   独立审核报告必须匹配最新需求摘要。
 4. 用固定 `submit` 提交报告。controller 重新验证所有检查、需求、版本与保护规则，
    合格时由 App 提交 `APPROVED` 和成功的 gate，按既有生产授权执行受保护合入。
 
 本机审批工具、测试、文档和根配置没有生产业务影响时，人工记录可另声明
-`noRuntimeImpact: true`。只有完整 diff 与需求摘要匹配、每个改动路径都在记录中，
-且路径均属于 scripts/tests/docs 或明确的根配置时，该决定才定位原本未知的影响，
-要求完整 CI 基线；不伪装成生产业务专项。apps/packages/eval 与未知路径不能使用
-该出口，已有路径提示所要求的专项仍然执行。模型报告不能设置这个字段。
+`noRuntimeImpact: true`。只有完整 diff 与需求摘要匹配，且每个改动路径都是明确列出的
+离线评估路径，或精确授权的 scripts/tests/docs/根配置路径时，该决定才定位原本未知的
+影响，要求完整 CI 基线；不伪装成生产业务专项。当前仅列出
+`eval/retrieval-precision-v1/README.md`、`eval/retrieval-precision-v1/harness.ts` 和
+`tests/system/retrieval-precision-corpus.system.test.ts` 三个离线路径。其他 eval、runtime
+和未知路径不适用。人工授权的 scripts/ci 与 tests/ci 路径仍须逐个精确匹配。混合 runtime
+改动按声明的影响执行正常专项检查。模型报告不能设置这个字段。
 
 其余人工授权只解除匹配的路径门禁。失败 CI、P0–P2 发现、未解决的审核线程、风险标记、
 能力发布、暂停与生产证据要求仍会阻断。代码或需求改变后重新审核与绑定。
@@ -115,6 +119,26 @@ pnpm pr:review-gate:dry-run -- --input <snapshot.json>
 - 涉及审批规则、CI、产品定义、删除测试、完整能力验收或生产新能力启用时转人工。UI 变化按 Luke 确认的标准，追加 `ui:portal-smoke`（`tests/portal-integration.test.ts` 与 `tests/portal-conversation-status.test.ts` 两个模块级行为测试），不再要求设计稿所述的桌面与移动端交互证据；仓库当前没有接入 PR CI 的浏览器 E2E runner。该降级是产品决定，不是测试通过，等真实浏览器 E2E 落地后可恢复。当前所有数据库迁移都返回 `awaiting_verification`；gate 尚未接入旧 schema、既有数据约束和新旧程序兼容证据。
 - 只有可读的 main 保护规则、最新 base、过期 review 失效、管理员强制执行、恰好一个审批名额、没有绕过 actor，以及精确匹配来源的 `validate` 和 `pr-review-gate` 两项 required checks 同时成立时，才会生成 `merge_candidate`。
 - 所有必要证据必须来自同一个 PR Validate workflow run 和 attempt。快照采集器仍须证明它们是当前最新 run；gate 本身不连接 GitHub，也不提供全仓合入锁。
+
+## Issue 标签交接
+
+- Gate 因 PR Validate 仍处于 `queued`、`in_progress`、`missing` 或 `unknown` 而返回
+  `awaiting_verification`，或审核上下文报告 `repository_merge_busy`、
+  `github_context_unavailable`、`stale_review`、`policy_version_mismatch`、
+  `incomplete_diff` 等可重试状态时，审核尚在等待，Issue 保持 `ongoing`，不写终态评论。
+  `trusted_identity_unconfigured`、`review_author_unavailable`、
+  `branch_protection_unreadable`、`production_deploy_behavior_unknown` 等阻断属于终态，
+  先回写评论，再按 `ready-for-agent` 交接，不能让 `ongoing` 长期占用 Issue。
+- 其他终态非批准结果（`request_changes`、终态 `awaiting_verification` 或
+  `human_decision`）必须先确认 Issue 评论已写入，再设置 `ready-for-agent`、移除
+  `ongoing` 和其他互斥分诊状态，并回读最终标签。更新失败时不能声称已完成交接。
+  评论若要求维护者决定，Agent 先等待决定，不得自行替代。Agent 接续时检查依赖、暂停
+  记录和关联 PR；恰好一个开放关联 PR 时继续原 PR 和分支，不创建重复 PR。多个关联 PR、
+  依赖或暂停仍阻断。本仓库不含 Issue 调度器，因此这条接续行为是外部调度器的要求，
+  不能仅凭本文档声称已经实测。
+- App 已提交 `APPROVED` 且 GitHub 回读确认 auto-merge 已启用，或 PR 已在回读时合入后，
+  移除 `ongoing` 和互斥分诊状态，关闭 Issue，并回读确认关闭状态。类别标签如 `bug`
+  保留。
 
 ## 快照信任边界
 

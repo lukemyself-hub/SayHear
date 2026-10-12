@@ -11,10 +11,11 @@ import { runRetrievalPrecisionCorpus } from "../../eval/retrieval-precision-v1/h
  * synthetic multi-day corpus records hit rate and injection precision as
  * accounting baselines with per-query ledger output, through the production
  * retrieval functions. Fence leakage, budget violations, and deadline
- * violations are absolutely zero. Hit rate / precision levels carry no
- * thresholds here (budgets v2 from production manifests is a later slice) —
- * the only sanity assertions are that the harness produces meaningful,
- * non-empty accounting at all.
+ * violations are absolutely zero. The system test drives a stepwise monotonic
+ * clock for deterministic accounting rather than real latency evidence; the
+ * standalone accounting CLI retains the real clock. Hit rate / precision
+ * levels carry no thresholds here (budgets v2 from production manifests is a
+ * later slice).
  */
 
 const testDatabaseUrl = process.env.TEST_DATABASE_URL;
@@ -35,9 +36,11 @@ describe("retrieval-precision corpus runner (AC 38)", () => {
   }, 10_000);
 
   it("runs the fixed-seed corpus through the production retrieval functions with the absolute zeros intact", async () => {
+    let retrievalNowMs = 0;
     const result = await runRetrievalPrecisionCorpus({
       pool: database.pool,
       log: (line) => console.log(`[corpus] ${line}`),
+      retrievalMonotonicNow: () => retrievalNowMs++,
     });
 
     const expectedQueries =
@@ -61,6 +64,7 @@ describe("retrieval-precision corpus runner (AC 38)", () => {
     expect(result.metrics.budgetViolationCount).toBe(0);
     expect(result.metrics.deadlineViolationCount).toBe(0);
     expect(result.metrics.runsDegraded).toBe(0);
+    expect(result.metrics.durationP95Ms).toBeGreaterThan(0);
     expect(result.metrics.durationP95Ms).toBeLessThanOrEqual(200);
 
     // The corpus was planted through production admission, and every probe

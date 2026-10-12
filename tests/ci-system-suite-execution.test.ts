@@ -23,6 +23,15 @@ function report(testResults: ReturnType<typeof fileResult>[]): VitestJsonReport 
   return { success: true, testResults };
 }
 
+function thrownMessage(action: () => unknown): string {
+  try {
+    action();
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+  throw new Error("Expected the action to throw.");
+}
+
 describe("PR system suite execution", () => {
   it("passes when every discovered system suite ran without a skipped test", () => {
     const result = assertSystemSuitesExecuted({
@@ -58,7 +67,7 @@ describe("PR system suite execution", () => {
   });
 
   it("fails when the environment caused a system suite to skip", () => {
-    expect(() =>
+    const message = thrownMessage(() =>
       assertSystemSuitesExecuted({
         discoveredSystemSuites: ["/repo/tests/system/alpha.system.test.ts"],
         expectedCount: 1,
@@ -66,7 +75,10 @@ describe("PR system suite execution", () => {
           fileResult("tests/system/alpha.system.test.ts", ["skipped", "skipped"]),
         ]),
       }),
-    ).toThrow(/alpha\.system\.test\.ts/);
+    );
+    expect(message).toContain("alpha.system.test.ts");
+    expect(message).toContain("reported skipped tests");
+
     expect(() =>
       assertSystemSuitesExecuted({
         discoveredSystemSuites: ["/repo/tests/system/alpha.system.test.ts"],
@@ -76,6 +88,37 @@ describe("PR system suite execution", () => {
         ]),
       }),
     ).toThrow(/alpha\.system\.test\.ts/);
+  });
+
+  it("reports failed assertions without misdiagnosing them as skipped tests", () => {
+    const message = thrownMessage(() =>
+      assertSystemSuitesExecuted({
+        discoveredSystemSuites: ["/repo/tests/system/alpha.system.test.ts"],
+        expectedCount: 1,
+        report: report([
+          fileResult("tests/system/alpha.system.test.ts", ["passed", "failed"]),
+        ]),
+      }),
+    );
+
+    expect(message).toContain("alpha.system.test.ts reported failed tests");
+    expect(message).not.toContain("reported skipped tests");
+    expect(message).not.toContain("database");
+  });
+
+  it("reports both skipped and failed assertions when a suite contains both", () => {
+    const message = thrownMessage(() =>
+      assertSystemSuitesExecuted({
+        discoveredSystemSuites: ["/repo/tests/system/alpha.system.test.ts"],
+        expectedCount: 1,
+        report: report([
+          fileResult("tests/system/alpha.system.test.ts", ["skipped", "failed"]),
+        ]),
+      }),
+    );
+
+    expect(message).toContain("reported skipped tests");
+    expect(message).toContain("reported failed tests");
   });
 
   it("fails when a system suite did not pass", () => {
@@ -88,6 +131,73 @@ describe("PR system suite execution", () => {
         ]),
       }),
     ).toThrow(/alpha\.system\.test\.ts/);
+  });
+
+  it("counts Vitest todo assertions as skipped tests", () => {
+    expect(() =>
+      assertSystemSuitesExecuted({
+        discoveredSystemSuites: ["/repo/tests/system/alpha.system.test.ts"],
+        expectedCount: 1,
+        report: report([
+          fileResult("tests/system/alpha.system.test.ts", ["todo"]),
+        ]),
+      }),
+    ).toThrow(/alpha\.system\.test\.ts reported skipped tests/);
+  });
+
+  it("counts disabled assertions as skipped tests", () => {
+    expect(() =>
+      assertSystemSuitesExecuted({
+        discoveredSystemSuites: ["/repo/tests/system/alpha.system.test.ts"],
+        expectedCount: 1,
+        report: report([
+          fileResult("tests/system/alpha.system.test.ts", ["disabled"]),
+        ]),
+      }),
+    ).toThrow(/alpha\.system\.test\.ts reported skipped tests/);
+  });
+
+  it("fails closed on an unrecognized suite status without calling it a database skip", () => {
+    const result = {
+      ...fileResult("tests/system/alpha.system.test.ts", []),
+      status: "interrupted",
+    };
+    const message = thrownMessage(() =>
+      assertSystemSuitesExecuted({
+        discoveredSystemSuites: ["/repo/tests/system/alpha.system.test.ts"],
+        expectedCount: 1,
+        report: report([result]),
+      }),
+    );
+
+    expect(message).toContain("alpha.system.test.ts reported failed tests");
+    expect(message).not.toContain("database");
+  });
+
+  it("rejects unknown assertion statuses even when the suite reports passed", () => {
+    const message = thrownMessage(() =>
+      assertSystemSuitesExecuted({
+        discoveredSystemSuites: ["/repo/tests/system/alpha.system.test.ts"],
+        expectedCount: 1,
+        report: report([
+          fileResult("tests/system/alpha.system.test.ts", ["passed", "interrupted"]),
+        ]),
+      }),
+    );
+
+    expect(message).toContain("alpha.system.test.ts reported failed tests");
+    expect(message).not.toContain("reported skipped tests");
+    expect(message).not.toContain("database");
+  });
+
+  it("rejects a passing system suite with no assertions", () => {
+    expect(() =>
+      assertSystemSuitesExecuted({
+        discoveredSystemSuites: ["/repo/tests/system/alpha.system.test.ts"],
+        expectedCount: 1,
+        report: report([fileResult("tests/system/alpha.system.test.ts", [])]),
+      }),
+    ).toThrow(/alpha\.system\.test\.ts reported no tests/);
   });
 
   it("fails when the executed system suite count drifts from the expectation", () => {

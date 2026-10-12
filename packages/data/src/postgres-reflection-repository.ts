@@ -45,6 +45,9 @@ import {
 } from "@sayhear/application";
 import type { Pool, PoolClient } from "pg";
 
+import type { RecoveryDerivedLatency } from "./postgres-continuous-exchange-repository";
+export type { RecoveryDerivedLatency } from "./postgres-continuous-exchange-repository";
+
 import { createUuidV7 } from "./uuid-v7";
 import {
   findTerminalCandidateByFingerprintWithin,
@@ -346,6 +349,56 @@ export class PostgresReflectionRepository implements ReflectionRepository {
     private readonly pool: Pool,
     private readonly registry: ReflectionRegistryLookup,
   ) {}
+
+  public async readDerivedLatency(
+    now: Date,
+    policyVersion: string,
+  ): Promise<RecoveryDerivedLatency> {
+    const result = await this.pool.query<{
+      oldest_pending_seconds: number | null;
+      pending_sessions: number;
+    }>(
+      `WITH pending_sessions AS (
+         SELECT s.daily_session_id,
+                GREATEST(0, FLOOR(EXTRACT(EPOCH FROM ($1::timestamptz - s.quiescent_at))))::int AS pending_seconds
+         FROM daily_sessions s
+         INNER JOIN app_users owner ON owner.user_id = s.user_id
+         LEFT JOIN daily_session_date_outcomes outcome
+           ON outcome.daily_session_id = s.daily_session_id
+           AND outcome.source_revision = s.source_revision
+         LEFT JOIN LATERAL (
+           SELECT status FROM reflection_runs run
+           WHERE run.daily_session_id = s.daily_session_id
+             AND run.source_revision = s.source_revision
+             AND run.policy_version = $2
+             AND run.scope_type = 'daily_session'
+             AND run.status = 'built'
+           ORDER BY run.updated_at DESC LIMIT 1
+         ) reflection ON true
+         WHERE s.activity_state = 'quiescent'
+           AND s.quiescent_at IS NOT NULL
+           AND owner.status = 'active'
+           AND outcome.outcome IS DISTINCT FROM 'no_activity'
+           AND EXISTS (
+             SELECT 1 FROM evidence_source_snapshots snap
+             INNER JOIN evidence_items item
+               ON item.evidence_source_snapshot_id = snap.evidence_source_snapshot_id
+             WHERE snap.daily_session_id = s.daily_session_id
+               AND snap.source_revision = s.source_revision
+               AND item.status = 'active'
+           )
+           AND reflection.status IS DISTINCT FROM 'built'
+       )
+       SELECT MAX(pending_seconds)::int AS oldest_pending_seconds,
+              COUNT(*)::int AS pending_sessions
+       FROM pending_sessions`,
+      [now, policyVersion],
+    );
+    return {
+      oldestPendingSeconds: result.rows[0]?.oldest_pending_seconds ?? 0,
+      pendingSessions: result.rows[0]?.pending_sessions ?? 0,
+    };
+  }
 
   public async readPolicyVersion(): Promise<string | null> {
     const result = await this.pool.query<{ policy_version: string }>(

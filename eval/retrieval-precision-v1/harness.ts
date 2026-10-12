@@ -148,8 +148,13 @@ export type CorpusHarnessResult = Readonly<{
 export async function runRetrievalPrecisionCorpus(input: {
   pool: Pool;
   log?: (line: string) => void;
+  /**
+   * Deterministic deadline clock for tests. The CLI omits it and uses the real
+   * monotonic clock.
+   */
+  retrievalMonotonicNow?: () => number;
 }): Promise<CorpusHarnessResult> {
-  const { pool, log = () => {} } = input;
+  const { pool, log = () => {}, retrievalMonotonicNow } = input;
   const corpus = buildCorpus();
   const baseTime = Date.parse(CORPUS_BASE_TIME_UTC);
   let clockNowMs = baseTime;
@@ -211,6 +216,9 @@ export async function runRetrievalPrecisionCorpus(input: {
     repository: retrievalRepository,
     registry: retrievalRegistry,
     clock,
+    ...(retrievalMonotonicNow
+      ? { monotonicNow: retrievalMonotonicNow }
+      : {}),
   });
 
   await entityService.ensureSelfEntity({ userId: OWNER });

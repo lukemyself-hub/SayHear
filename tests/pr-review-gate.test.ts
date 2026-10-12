@@ -24,6 +24,15 @@ const MERGE_SHA = "c".repeat(40);
 const WORKFLOW_BLOB_SHA = "d".repeat(40);
 const ACTIONS_APP_ID = 15368;
 const REVIEW_APP_ID = 98765;
+const PR_332_OFFLINE_PATHS = [
+  "eval/retrieval-precision-v1/README.md",
+  "eval/retrieval-precision-v1/harness.ts",
+  "tests/system/retrieval-precision-corpus.system.test.ts",
+] as const;
+const PR_332_APPROVED_TOOLING_PATHS = [
+  "scripts/ci/system-suite-execution.ts",
+  "tests/ci-system-suite-execution.test.ts",
+] as const;
 
 const policy: TrustedPrReviewPolicy = {
   repositoryId: SAYHEAR_REPOSITORY_ID,
@@ -224,6 +233,114 @@ function input(
 }
 
 describe("PR review gate", () => {
+  it("locates the exact offline and approved tooling paths from PR #332", () => {
+    const changedFiles = [
+      ...PR_332_OFFLINE_PATHS,
+      ...PR_332_APPROVED_TOOLING_PATHS,
+    ].map((path) => ({ path, status: "modified" as const }));
+    const approved = {
+      ...policy,
+      humanApprovedPaths: [...PR_332_APPROVED_TOOLING_PATHS],
+      humanApprovedNoRuntimeImpact: true,
+    };
+    const result = evaluatePrReviewGate(input({
+      pullRequest: { changedFiles },
+      review: { declaredImpacts: [] },
+      evidence: FIXED_PR_CI_BASELINE.map((id) => makeEvidence(id)),
+    }), approved);
+
+    expect(result.outcome).toBe("merge_candidate");
+    expect(result.requiredEvidenceIds).toEqual([...FIXED_PR_CI_BASELINE]);
+  });
+
+  it("keeps fixed CI and rejects unlisted eval or unauthorized tooling paths", () => {
+    const approved = {
+      ...policy,
+      humanApprovedPaths: [...PR_332_APPROVED_TOOLING_PATHS],
+      humanApprovedNoRuntimeImpact: true,
+    };
+    const allowedPaths = [
+      ...PR_332_OFFLINE_PATHS,
+      ...PR_332_APPROVED_TOOLING_PATHS,
+    ];
+    const unknownPaths = [
+      "eval/unlisted/new-harness.ts",
+      "scripts/ci/unapproved-helper.ts",
+    ];
+    for (const path of unknownPaths) {
+      const changedFiles = [
+        ...allowedPaths.map((allowedPath) => ({
+          path: allowedPath,
+          status: "modified" as const,
+        })),
+        { path, status: "modified" as const },
+      ];
+      const result = evaluatePrReviewGate(input({
+        pullRequest: { changedFiles },
+        review: { declaredImpacts: [] },
+        evidence: FIXED_PR_CI_BASELINE.map((id) => makeEvidence(id)),
+      }), approved);
+      expect(["awaiting_verification", "human_decision"]).toContain(result.outcome);
+    }
+    expect(evaluatePrReviewGate(input({
+      pullRequest: {
+        changedFiles: allowedPaths.map((path) => ({
+          path,
+          status: "modified" as const,
+        })),
+      },
+      review: { declaredImpacts: [] },
+      evidence: [],
+    }), approved).outcome).toBe("awaiting_verification");
+  });
+
+  it("keeps a protected path approval-gated inside an otherwise located diff", () => {
+    const protectedPath = "scripts/ci/system-suite-execution.ts";
+    const changedFiles = [
+      ...PR_332_OFFLINE_PATHS.map((path) => ({
+        path,
+        status: "modified" as const,
+      })),
+      { path: protectedPath, status: "modified" as const },
+    ];
+    const report = evaluatePrReviewGate(input({
+      pullRequest: { changedFiles },
+      review: { declaredImpacts: [] },
+      evidence: FIXED_PR_CI_BASELINE.map((id) => makeEvidence(id)),
+    }), {
+      ...policy,
+      humanApprovedPaths: [],
+      humanApprovedNoRuntimeImpact: true,
+    });
+
+    expect(report.outcome).toBe("human_decision");
+    expect(report.reasons[0]?.code).toBe("human_review_required");
+  });
+
+  it("requires normal targeted evidence when a bound no-runtime diff also changes runtime code", () => {
+    const changedPaths = [
+      ...PR_332_OFFLINE_PATHS,
+      ...PR_332_APPROVED_TOOLING_PATHS,
+      "packages/application/src/server/ordinary-change.ts",
+    ];
+    const changedFiles = changedPaths.map((path) => ({
+      path,
+      status: "modified" as const,
+    }));
+    const result = evaluatePrReviewGate(input({
+      pullRequest: { changedFiles },
+      review: { declaredImpacts: ["server-business"] },
+      evidence: FIXED_PR_CI_BASELINE.map((id) => makeEvidence(id)),
+    }), {
+      ...policy,
+      humanApprovedPaths: [...PR_332_APPROVED_TOOLING_PATHS],
+      humanApprovedNoRuntimeImpact: true,
+    });
+
+    expect(result.outcome).toBe("awaiting_verification");
+    expect(result.requiredEvidenceIds).toContain("server:deterministic-behavior");
+  });
+
   it("requires a trusted exact no-runtime decision for approval tooling", () => {
     const paths = ["scripts/pr-approval-controller.ts", "package.json"];
     const changedFiles = paths.map((path) => ({ path, status: "modified" as const }));

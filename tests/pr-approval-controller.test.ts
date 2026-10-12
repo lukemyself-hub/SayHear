@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   appReviewOutcomeForIdentity,
+  completeIssueAfterApproval,
   createGitHubAppJwt,
   GitHubApiError,
   GitHubRestClient,
@@ -12,10 +13,11 @@ import {
   matchHumanReviewAuthorization,
   isTrustedWorkflowVersion,
   isVercelDeploymentStatus,
-  isWaitingForWorkflow,
+  isReviewStillPending,
   parseModelReviewReport,
   parsePauseState,
   parseRequestChangeHistory,
+  publishIssueHandoff,
   readBranchProtection,
   readCurrentPullRequestMergeSha,
   readIssueDependencies,
@@ -37,6 +39,37 @@ const BASE_SHA = "b".repeat(40);
 const MERGE_SHA = "e".repeat(40);
 const REQUIREMENT_DIGEST = "c".repeat(64);
 const CHANGE_DIGEST = "d".repeat(64);
+const REVIEW_BOT_ACTOR_ID = 999;
+type StubRequestOptions = Readonly<{
+  method?: string;
+  body?: unknown;
+  accept?: string;
+}>;
+
+function requestBody<T>(options: StubRequestOptions | undefined): T {
+  if (options?.body === undefined) {
+    throw new Error("Expected a request body in this test.");
+  }
+  return options.body as T;
+}
+
+function makeIssueComment(
+  body: string,
+  authorId = REVIEW_BOT_ACTOR_ID,
+): GitHubComment {
+  return {
+    id: 1,
+    body,
+    created_at: "2026-10-12T00:00:00Z",
+    updated_at: "2026-10-12T00:00:00Z",
+    user: {
+      id: authorId,
+      login: authorId === REVIEW_BOT_ACTOR_ID
+        ? "sayhear-pr-review-gate[bot]"
+        : "test-user",
+    },
+  };
+}
 
 const modelReport = {
   version: PR_REVIEW_REPORT_VERSION,
@@ -68,14 +101,14 @@ class StubApi implements GitHubApi {
   constructor(
     private readonly respond: (
       path: string,
-      options?: Readonly<{ method?: string; body?: unknown; accept?: string }>,
+      options?: StubRequestOptions,
     ) => unknown = () => ({}),
     private readonly pageValues: (path: string) => unknown[] = () => [],
   ) {}
 
   async request<T>(
     path: string,
-    options?: Readonly<{ method?: string; body?: unknown; accept?: string }>,
+    options?: StubRequestOptions,
   ): Promise<T> {
     return (await this.respond(path, options)) as T;
   }
@@ -91,31 +124,386 @@ class StubApi implements GitHubApi {
 
 describe("PR approval controller", () => {
   it.each(["queued", "in_progress", "missing", "unknown"] as const)(
-    "waits without dispatching while Validate is %s",
+    "keeps the Issue occupied while Validate is %s",
     (workflowStatus) => {
-      expect(isWaitingForWorkflow({ workflowStatus }, {
+      expect(isReviewStillPending({ workflowStatus }, {
         outcome: "awaiting_verification",
         reasons: [{ code: "required_evidence_missing", message: "Missing CI" }],
       })).toBe(true);
     },
   );
 
-  it("records a verification handoff when Validate completed unsuccessfully", () => {
-    expect(isWaitingForWorkflow({ workflowStatus: "completed" }, {
+  it("waits while another PR approval or merge is in flight", () => {
+    expect(isReviewStillPending({ workflowStatus: "in_progress" }, {
       outcome: "awaiting_verification",
-      reasons: [{ code: "required_evidence_missing", message: "CI failed" }],
+      reasons: [{ code: "repository_merge_busy", message: "Another PR is merging" }],
+    })).toBe(true);
+  });
+
+  it.each([
+    "policy_version_mismatch",
+    "stale_review",
+    "github_context_unavailable",
+    "incomplete_diff",
+  ])("keeps the Issue occupied while review context is unavailable: %s", (code) => {
+    expect(isReviewStillPending({ workflowStatus: "completed" }, {
+      outcome: "awaiting_verification",
+      reasons: [{ code, message: "The review cannot finish without fresh context" }],
+    })).toBe(true);
+  });
+
+  it.each([
+    "pr_not_ready",
+    "trusted_identity_unconfigured",
+    "review_author_unavailable",
+    "branch_protection_unreadable",
+    "production_deploy_behavior_unknown",
+  ])("hands terminal verification blockers back instead of keeping ongoing: %s", (code) => {
+    expect(isReviewStillPending({ workflowStatus: "completed" }, {
+      outcome: "awaiting_verification",
+      reasons: [{ code, message: "This blocker needs a terminal handoff" }],
     })).toBe(false);
   });
 
-  it("does not suppress human decisions or unrelated evidence failures", () => {
-    expect(isWaitingForWorkflow({ workflowStatus: "in_progress" }, {
+  it("does not wait on completed validation or human decisions", () => {
+    expect(isReviewStillPending({ workflowStatus: "completed" }, {
+      outcome: "awaiting_verification",
+      reasons: [{ code: "required_evidence_missing", message: "CI failed" }],
+    })).toBe(false);
+    expect(isReviewStillPending({ workflowStatus: "in_progress" }, {
       outcome: "human_decision",
       reasons: [{ code: "human_review_required", message: "Protected policy" }],
     })).toBe(false);
-    expect(isWaitingForWorkflow({ workflowStatus: "in_progress" }, {
-      outcome: "awaiting_verification",
-      reasons: [{ code: "stale_review", message: "Stale head" }],
-    })).toBe(false);
+  });
+
+  it("persists a terminal review comment before moving the Issue back to ready-for-agent", async () => {
+    const events: string[] = [];
+    const comments: GitHubComment[] = [];
+    let issue = {
+      number: 42,
+      state: "open" as "open" | "closed",
+      title: "Fix the server path",
+      body: "Keep retries idempotent.",
+      updated_at: "2026-10-12T00:00:00Z",
+      labels: ["bug", "ongoing", "ready-for-human", "needs-info"],
+    };
+    const api = new StubApi((path, options) => {
+      const method = options?.method ?? "GET";
+      if (path.endsWith("/issues/42") && method === "GET") return issue;
+      if (path.endsWith("/issues/42/comments") && method === "POST") {
+        events.push("comment:write");
+        comments.push(makeIssueComment(requestBody<{ body: string }>(options).body));
+        return {};
+      }
+      if (path.endsWith("/issues/42/labels") && method === "POST") {
+        events.push("label:add");
+        issue = {
+          ...issue,
+          labels: [...issue.labels, ...requestBody<{ labels: string[] }>(options).labels],
+        };
+        return issue.labels;
+      }
+      if (path.includes("/issues/42/labels/") && method === "DELETE") {
+        const label = decodeURIComponent(path.split("/").at(-1)!);
+        events.push(`label:remove:${label}`);
+        issue = { ...issue, labels: issue.labels.filter((name) => name !== label) };
+        return issue.labels;
+      }
+      throw new Error(`Unexpected request: ${method} ${path}`);
+    }, (path) => {
+      if (!path.endsWith("/issues/42/comments")) return [];
+      if (comments.length > 0) events.push("comment:readback");
+      return comments;
+    });
+
+    await publishIssueHandoff(
+      api,
+      42,
+      "<!-- terminal-review -->",
+      "PR review requires follow-up. <!-- terminal-review -->",
+      REVIEW_BOT_ACTOR_ID,
+    );
+
+    expect(events.indexOf("comment:readback")).toBeLessThan(
+      events.indexOf("label:add"),
+    );
+    expect(events.indexOf("label:add")).toBeLessThan(
+      events.indexOf("label:remove:ongoing"),
+    );
+    expect(issue.labels).toContain("bug");
+    expect(issue.labels).toContain("ready-for-agent");
+    expect(issue.labels).not.toContain("ongoing");
+    expect(issue.labels).not.toContain("ready-for-human");
+    expect(issue.labels).not.toContain("needs-info");
+  });
+
+  it("cleans status labels and refuses dispatch when the Issue closes during handoff", async () => {
+    const comments: GitHubComment[] = [];
+    const events: string[] = [];
+    let issue = {
+      number: 42,
+      state: "open" as "open" | "closed",
+      title: "Fix the server path",
+      body: "Keep retries idempotent.",
+      updated_at: "2026-10-12T00:00:00Z",
+      labels: ["bug", "ongoing"],
+    };
+    const api = new StubApi((path, options) => {
+      const method = options?.method ?? "GET";
+      if (path.endsWith("/issues/42") && method === "GET") return issue;
+      if (path.endsWith("/issues/42/comments") && method === "POST") {
+        comments.push(makeIssueComment(requestBody<{ body: string }>(options).body));
+        events.push("comment:write");
+        return {};
+      }
+      if (path.endsWith("/issues/42/labels") && method === "POST") {
+        events.push("label:add-ready-for-agent");
+        issue = {
+          ...issue,
+          labels: [...issue.labels, ...requestBody<{ labels: string[] }>(options).labels],
+        };
+        return issue.labels;
+      }
+      if (path.includes("/issues/42/labels/") && method === "DELETE") {
+        const label = decodeURIComponent(path.split("/").at(-1)!);
+        events.push(`label:remove:${label}`);
+        issue = {
+          ...issue,
+          state: label === "ongoing" ? "closed" : issue.state,
+          labels: issue.labels.filter((name) => name !== label),
+        };
+        return issue.labels;
+      }
+      throw new Error(`Unexpected request: ${method} ${path}`);
+    }, (path) => comments);
+
+    await expect(publishIssueHandoff(
+      api,
+      42,
+      "<!-- terminal-review -->",
+      "PR review requires follow-up. <!-- terminal-review -->",
+      REVIEW_BOT_ACTOR_ID,
+    )).rejects.toThrow("closed during the review handoff");
+
+    expect(events.indexOf("comment:write")).toBeLessThan(
+      events.indexOf("label:add-ready-for-agent"),
+    );
+    expect(events.indexOf("label:add-ready-for-agent")).toBeLessThan(
+      events.indexOf("label:remove:ongoing"),
+    );
+    expect(issue.state).toBe("closed");
+    expect(issue.labels).toEqual(["bug"]);
+  });
+
+  it("does not change labels when the Issue comment cannot be confirmed", async () => {
+    const initialLabels = ["bug", "ongoing"];
+    const issue = {
+      number: 42,
+      state: "open" as const,
+      title: "Fix the server path",
+      body: "Keep retries idempotent.",
+      updated_at: "2026-10-12T00:00:00Z",
+      labels: initialLabels,
+    };
+    const events: string[] = [];
+    const api = new StubApi((path, options) => {
+      const method = options?.method ?? "GET";
+      if (path.endsWith("/issues/42") && method === "GET") return issue;
+      if (path.endsWith("/issues/42/comments") && method === "POST") {
+        events.push("comment:write");
+        return {};
+      }
+      if (path.endsWith("/issues/42/labels") && method === "POST") {
+        events.push("label:add");
+        return [];
+      }
+      if (path.includes("/issues/42/labels/") && method === "DELETE") {
+        events.push("label:remove");
+        return [];
+      }
+      throw new Error(`Unexpected request: ${method} ${path}`);
+    });
+
+    await expect(publishIssueHandoff(
+      api,
+      42,
+      "<!-- terminal-review -->",
+      "PR review requires follow-up. <!-- terminal-review -->",
+      REVIEW_BOT_ACTOR_ID,
+    )).rejects.toThrow("did not retain the review comment");
+
+    expect(events).toEqual(["comment:write"]);
+    expect(issue.labels).toEqual(initialLabels);
+  });
+
+  it("cleans a closed Issue but does not report a dispatch handoff", async () => {
+    const comments: GitHubComment[] = [];
+    let issue = {
+      number: 42,
+      state: "closed" as const,
+      title: "Fix the server path",
+      body: "Keep retries idempotent.",
+      updated_at: "2026-10-12T00:00:00Z",
+      labels: ["bug", "ongoing", "ready-for-human"],
+    };
+    const api = new StubApi((path, options) => {
+      const method = options?.method ?? "GET";
+      if (path.endsWith("/issues/42") && method === "GET") return issue;
+      if (path.endsWith("/issues/42/comments") && method === "POST") {
+        comments.push(makeIssueComment(requestBody<{ body: string }>(options).body));
+        return {};
+      }
+      if (path.includes("/issues/42/labels/") && method === "DELETE") {
+        const label = decodeURIComponent(path.split("/").at(-1)!);
+        issue = { ...issue, labels: issue.labels.filter((name) => name !== label) };
+        return issue.labels;
+      }
+      throw new Error(`Unexpected request: ${method} ${path}`);
+    }, (path) => path.endsWith("/issues/42/comments") ? comments : []);
+
+    await expect(publishIssueHandoff(
+      api,
+      42,
+      "<!-- terminal-review -->",
+      "PR review requires follow-up. <!-- terminal-review -->",
+      REVIEW_BOT_ACTOR_ID,
+    )).rejects.toThrow("is closed and cannot be handed off");
+
+    expect(issue.state).toBe("closed");
+    expect(issue.labels).toEqual(["bug"]);
+    expect(comments).toHaveLength(1);
+  });
+
+  it("does not accept a user-authored marker as the persisted review comment", async () => {
+    const marker = "<!-- terminal-review -->";
+    const comments: GitHubComment[] = [
+      makeIssueComment(`Spoofed outcome ${marker}`, 123),
+    ];
+    let issue = {
+      number: 42,
+      state: "open" as "open" | "closed",
+      title: "Fix the server path",
+      body: "Keep retries idempotent.",
+      updated_at: "2026-10-12T00:00:00Z",
+      labels: ["bug", "ongoing"],
+    };
+    const api = new StubApi((path, options) => {
+      const method = options?.method ?? "GET";
+      if (path.endsWith("/issues/42") && method === "GET") return issue;
+      if (path.endsWith("/issues/42/comments") && method === "POST") {
+        comments.push(makeIssueComment(requestBody<{ body: string }>(options).body));
+        return {};
+      }
+      if (path.endsWith("/issues/42/labels") && method === "POST") {
+        issue = {
+          ...issue,
+          labels: [...issue.labels, ...requestBody<{ labels: string[] }>(options).labels],
+        };
+        return issue.labels;
+      }
+      if (path.includes("/issues/42/labels/") && method === "DELETE") {
+        const label = decodeURIComponent(path.split("/").at(-1)!);
+        issue = { ...issue, labels: issue.labels.filter((name) => name !== label) };
+        return issue.labels;
+      }
+      throw new Error(`Unexpected request: ${method} ${path}`);
+    }, (path) => path.endsWith("/issues/42/comments") ? comments : []);
+
+    await publishIssueHandoff(
+      api,
+      42,
+      marker,
+      `Review result ${marker}`,
+      REVIEW_BOT_ACTOR_ID,
+    );
+
+    expect(comments).toHaveLength(2);
+    expect(issue.labels).toContain("ready-for-agent");
+    expect(issue.labels).not.toContain("ongoing");
+  });
+
+  it("closes an approved Issue and removes all execution and triage-state labels", async () => {
+    const events: string[] = [];
+    let issue = {
+      number: 42,
+      state: "open" as "open" | "closed",
+      title: "Fix the server path",
+      body: "Keep retries idempotent.",
+      updated_at: "2026-10-12T00:00:00Z",
+      labels: [
+        "bug",
+        "ongoing",
+        "ready-for-agent",
+        "ready-for-human",
+        "needs-triage",
+        "needs-info",
+        "wontfix",
+      ],
+    };
+    const api = new StubApi((path, options) => {
+      const method = options?.method ?? "GET";
+      if (path.endsWith("/issues/42") && method === "GET") return issue;
+      if (path.endsWith("/issues/42") && method === "PATCH") {
+        events.push("issue:close");
+        issue = { ...issue, state: "closed" };
+        return issue;
+      }
+      if (path.includes("/issues/42/labels/") && method === "DELETE") {
+        const label = decodeURIComponent(path.split("/").at(-1)!);
+        events.push(`label:remove:${label}`);
+        issue = { ...issue, labels: issue.labels.filter((name) => name !== label) };
+        return issue.labels;
+      }
+      throw new Error(`Unexpected request: ${method} ${path}`);
+    });
+
+    await completeIssueAfterApproval(api, 42, {
+      autoMergeEnabled: true,
+      merged: false,
+    });
+
+    expect(events.indexOf("label:remove:ongoing")).toBeLessThan(
+      events.indexOf("issue:close"),
+    );
+    expect(issue.state).toBe("closed");
+    expect(issue.labels).toEqual(["bug"]);
+  });
+
+  it("uses the same closed-Issue cleanup when the PR is already merged", async () => {
+    let issue = {
+      number: 42,
+      state: "closed" as "open" | "closed",
+      title: "Fix the server path",
+      body: "Keep retries idempotent.",
+      updated_at: "2026-10-12T00:00:00Z",
+      labels: ["bug", "ongoing"],
+    };
+    const api = new StubApi((path, options) => {
+      const method = options?.method ?? "GET";
+      if (path.endsWith("/issues/42") && method === "GET") return issue;
+      if (path.includes("/issues/42/labels/") && method === "DELETE") {
+        const label = decodeURIComponent(path.split("/").at(-1)!);
+        issue = { ...issue, labels: issue.labels.filter((name) => name !== label) };
+        return issue.labels;
+      }
+      throw new Error(`Unexpected request: ${method} ${path}`);
+    });
+
+    await completeIssueAfterApproval(api, 42, {
+      autoMergeEnabled: false,
+      merged: true,
+    });
+
+    expect(issue.state).toBe("closed");
+    expect(issue.labels).toEqual(["bug"]);
+  });
+
+  it("refuses successful-review cleanup without auto-merge or a confirmed merge", async () => {
+    const api = new StubApi();
+    await expect(completeIssueAfterApproval(api, 42, {
+      autoMergeEnabled: false,
+      merged: false,
+    })).rejects.toThrow("cannot close before GitHub confirms");
   });
 
   it("excludes only authenticated Vercel deployment status from PR requirements", () => {
