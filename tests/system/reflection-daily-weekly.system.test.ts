@@ -2527,11 +2527,6 @@ systemDescribe("Daily / Weekly Reflection — 1A.3b A3 (issue #199)", () => {
       policyVersion: READINESS_POLICY,
     });
     if (queued.outcome !== "queued") throw new Error("unreachable");
-    const commandRow = await database!.pool.query<{ generation_command_id: string }>(
-      "SELECT generation_command_id::text FROM generation_commands WHERE workflow_command_id = $1",
-      [queued.workflowCommandId],
-    );
-    const generationCommandId = commandRow.rows[0]!.generation_command_id;
     narrativeScript = () => ({ propositions: [], coverageKeys: [] });
     const commit = reflectionRepository!.commitReflection.bind(reflectionRepository!);
     const commitSpy = vi
@@ -2610,8 +2605,8 @@ systemDescribe("Daily / Weekly Reflection — 1A.3b A3 (issue #199)", () => {
     }>(
       `SELECT c.status, c.recovery_status FROM generation_commands c
        INNER JOIN model_run_attempts a ON a.generation_command_id = c.generation_command_id
-       WHERE c.generation_command_id = $1`,
-      [generationCommandId],
+       WHERE c.user_id = $1 AND c.intent_key = $2`,
+      [OWNER, `reflection-daily:${session.dailySessionId}:1:${digest!}`],
     );
     expect(command.rows[0]).toMatchObject({
       status: "succeeded",
@@ -2844,11 +2839,6 @@ systemDescribe("Daily / Weekly Reflection — 1A.3b A3 (issue #199)", () => {
       policyVersion: READINESS_POLICY,
     });
     if (queued.outcome !== "queued") throw new Error("unreachable");
-    const commandRow = await database!.pool.query<{ generation_command_id: string }>(
-      "SELECT generation_command_id::text FROM generation_commands WHERE workflow_command_id = $1",
-      [queued.workflowCommandId],
-    );
-    const generationCommandId = commandRow.rows[0]!.generation_command_id;
     narrativeScript = () => ({ propositions: [], coverageKeys: [] });
     const commit = reflectionRepository!.commitReflection.bind(reflectionRepository!);
     const commitSpy = vi
@@ -2906,8 +2896,8 @@ systemDescribe("Daily / Weekly Reflection — 1A.3b A3 (issue #199)", () => {
          ON c.generation_command_id = a.generation_command_id
        INNER JOIN reflection_runs r
          ON r.model_run_attempt_id = a.model_run_attempt_id
-       WHERE c.generation_command_id = $1`,
-      [generationCommandId],
+       WHERE c.user_id = $1 AND c.intent_key = $2`,
+      [OWNER, `reflection-weekly:${OWNER}:${week!.weekIdentifier}:${week!.sourceDigest}`],
     );
     expect(state.rows).toHaveLength(1);
     expect(state.rows[0]).toEqual({
