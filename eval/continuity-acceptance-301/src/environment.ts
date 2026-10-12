@@ -34,6 +34,11 @@ import {
   type RunOwnership,
 } from "./isolation";
 import {
+  REAL_MODEL_IDENTITY,
+  startProviderGate,
+  type ProviderGate,
+} from "./provider-gate";
+import {
   DETERMINISTIC_STUB_MODEL,
   startProviderStub,
   type ProviderStub,
@@ -70,6 +75,13 @@ export type AcceptanceEnvironment = Readonly<{
   /** Checks run identity, owner identity and seed capability, or throws. */
   assertOwned(): Promise<void>;
   dispose(): Promise<void>;
+  /**
+   * The run's side of the egress tap when the app uses its production
+   * OpenCode Go adapter (T08 #321); null when the Provider is the stub.
+   */
+  gate: ProviderGate | null;
+  /** Whether requests after seeding go to the real, paid Provider. */
+  live: boolean;
   /** Clears the legacy request timezone of one command (see `HistoryTurn`). */
   clearRequestTimezone(generationCommandId: string): Promise<void>;
   model: string;
@@ -131,6 +143,13 @@ async function readOwnership(
 
 export async function createAcceptanceEnvironment(input: {
   initialNow: Date;
+  /**
+   * Omitted: the loopback Responses API stub. `opencode-go`: the app's
+   * production adapter behind the egress tap; with `live` false every request
+   * is answered locally (a rehearsal that pays for nothing), with `live` true
+   * requests after seeding reach the real Provider with this credential.
+   */
+  provider?: Readonly<{ apiKey: string; kind: "opencode-go"; live: boolean }>;
   /** Overrides the deterministic request budget (latency measurements, #319). */
   requestBudgetMs?: number;
   target: IsolationTarget;
@@ -140,7 +159,9 @@ export async function createAcceptanceEnvironment(input: {
   const scratch = mkdtempSync(path.join(tmpdir(), "sayhear-acceptance-"));
   const clockFile = path.join(scratch, "now");
   writeControlledNow(clockFile, input.initialNow);
-  const stub = await startProviderStub();
+  const realProvider = input.provider ?? null;
+  const gate = realProvider ? await startProviderGate() : null;
+  const stub: ProviderStub = gate ?? (await startProviderStub());
 
   let database: IsolatedPostgresSchema | null = null;
   let markerDatabase: IsolatedPostgresSchema | null = null;
@@ -198,15 +219,28 @@ export async function createAcceptanceEnvironment(input: {
       // The deterministic stub can stall on purpose; a short budget shows the
       // request deadline working without a 30 second wait. Real-model runs keep
       // the product's own 30 seconds (#319).
-      requestBudgetMs: input.requestBudgetMs ?? DETERMINISTIC_REQUEST_BUDGET_MS,
+      ...(realProvider
+        ? input.requestBudgetMs === undefined
+          ? {}
+          : { requestBudgetMs: input.requestBudgetMs }
+        : { requestBudgetMs: input.requestBudgetMs ?? DETERMINISTIC_REQUEST_BUDGET_MS }),
       databaseUrl: database.connectionString,
       markerDatabaseUrl: markerDatabase.connectionString,
-      provider: {
-        apiKey: "continuity-acceptance-stub-credential",
-        baseUrl: stub.baseUrl,
-        model: DETERMINISTIC_STUB_MODEL,
-        timeoutMs: 20_000,
-      },
+      provider: realProvider
+        ? {
+            apiKey: realProvider.apiKey,
+            gateUrl: stub.baseUrl,
+            kind: "opencode-go",
+            // The product's documented default (.env.example); the chat path
+            // keeps its own 30 second request budget and Provider timeout.
+            timeoutMs: 60_000,
+          }
+        : {
+            apiKey: "continuity-acceptance-stub-credential",
+            baseUrl: stub.baseUrl,
+            model: DETERMINISTIC_STUB_MODEL,
+            timeoutMs: 20_000,
+          },
     });
   }
 
@@ -304,7 +338,9 @@ export async function createAcceptanceEnvironment(input: {
       if (!app) throw new Error("The SayHear app is not running.");
       return { origin: app.origin, sessionCookie: SESSION_COOKIE_NAME, sessionToken };
     },
-    model: DETERMINISTIC_STUB_MODEL,
+    gate,
+    live: realProvider?.live === true,
+    model: realProvider ? REAL_MODEL_IDENTITY : DETERMINISTIC_STUB_MODEL,
     async runScheduledScan() {
       if (!app) throw new Error("The SayHear app is not running.");
       const response = await fetch(`${app.origin}/api/internal/recovery/scan`, {

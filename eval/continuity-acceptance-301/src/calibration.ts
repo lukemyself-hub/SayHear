@@ -220,7 +220,7 @@ function correctObservation(reply: string): CaseObservation {
     },
     problems: [],
     providerRequests: [
-      { conversationTurn: true, sequence: 5, strings: ["system instructions", userText("k1"), userText("k2"), userText("k3"), "What did we talk about yesterday?"] },
+      { conversationTurn: true, sequence: 5, transport: "live", strings: ["system instructions", userText("k1"), userText("k2"), userText("k3"), "What did we talk about yesterday?"] },
     ],
     type: "say",
   };
@@ -246,7 +246,7 @@ function correctObservation(reply: string): CaseObservation {
     input: { clientEventId: "CAL-q2-event", clientTurnId: "CAL-q2-turn", locale: "en-US", text: "Actually, never mind that.", timezone: "America/Chicago" },
     inspection: null,
     problems: [],
-    providerRequests: [{ conversationTurn: true, sequence: 6, strings: ["system instructions", "Actually, never mind that."] }],
+    providerRequests: [{ conversationTurn: true, sequence: 6, transport: "live", strings: ["system instructions", "Actually, never mind that."] }],
     type: "say",
   };
   const q3: ObservedStep = {
@@ -541,7 +541,7 @@ export function calibrationSamples(): CalibrationSample[] {
             referencedEvents: q1.inspection!.referencedEvents.filter((event) => event.revisionId !== "k1-u-rev"),
           },
           providerRequests: [
-            { conversationTurn: true, sequence: 5, strings: ["system instructions", userText("k2"), userText("k3"), "What did we talk about yesterday?"] },
+            { conversationTurn: true, sequence: 5, transport: "live", strings: ["system instructions", userText("k2"), userText("k3"), "What did we talk about yesterday?"] },
           ],
         };
       }),
@@ -555,7 +555,7 @@ export function calibrationSamples(): CalibrationSample[] {
         draft.steps[0] = {
           ...q1,
           providerRequests: [
-            { conversationTurn: true, sequence: 5, strings: [...q1.providerRequests[0]!.strings, userText("k0")] },
+            { conversationTurn: true, sequence: 5, transport: "live", strings: [...q1.providerRequests[0]!.strings, userText("k0")] },
           ],
         };
       }),
@@ -569,7 +569,7 @@ export function calibrationSamples(): CalibrationSample[] {
         draft.steps[0] = {
           ...q1,
           providerRequests: [
-            { conversationTurn: true, sequence: 5, strings: [...q1.providerRequests[0]!.strings, `hint: ${ORACLE.topics[0]!.statement}`] },
+            { conversationTurn: true, sequence: 5, transport: "live", strings: [...q1.providerRequests[0]!.strings, `hint: ${ORACLE.topics[0]!.statement}`] },
           ],
         };
       }),

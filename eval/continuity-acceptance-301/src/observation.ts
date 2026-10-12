@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
 import type { RunMode } from "./fixture";
+import type { GateResponse, GateTransport } from "./provider-gate";
 import { DETERMINISTIC_STUB_MODEL } from "./provider-stub";
 
 /**
@@ -157,6 +158,14 @@ export type ObservedStep = Readonly<{
     messages?: readonly Readonly<{ role: string; text: string }>[];
     /** What the stand-in Provider answered this request with. */
     providerResponseId?: string;
+    /**
+     * T08 #321, real-model runs only. How the request was answered: `live` by
+     * the real Provider, `served` locally (seeding or a rehearsal), `fault`
+     * by an injected fault. Only a `live` answer is a model answer.
+     */
+    transport?: GateTransport;
+    /** The real Provider's answer, copied by the egress tap. */
+    response?: GateResponse | null;
     sequence: number;
     strings: readonly string[];
     toolsOffered?: readonly string[];

@@ -2,6 +2,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { appendFileSync, renameSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { acquireNextDevServerLock } from "@sayhear/test-support";
 
@@ -38,13 +39,29 @@ export type AppServerInput = Readonly<{
    * can be shown to stop without a 30 second wait (#319).
    */
   requestBudgetMs?: number;
-  provider: Readonly<{
-    apiKey: string;
-    baseUrl: string;
-    model: string;
-    timeoutMs: number;
-  }>;
+  provider:
+    | Readonly<{
+        apiKey: string;
+        baseUrl: string;
+        kind?: "responses-stub";
+        model: string;
+        timeoutMs: number;
+      }>
+    /**
+     * T08 #321: the production OpenCode Go adapter with its fixed endpoint.
+     * `gateUrl` is the run's loopback gate; the egress tap loaded into the app
+     * shows it every request before it leaves (see `egress-tap.mjs`).
+     */
+    | Readonly<{
+        apiKey: string;
+        gateUrl: string;
+        kind: "opencode-go";
+        timeoutMs: number;
+      }>;
 }>;
+
+/** The egress tap, loaded into the app process with `node --import`. */
+export const egressTapPath = path.join(import.meta.dirname, "egress-tap.mjs");
 
 export type RunningAppServer = Readonly<{
   origin: string;
@@ -69,11 +86,31 @@ export function buildAppEnvironment(
     const value = process.env[name];
     if (value !== undefined) passthrough[name] = value;
   }
+  const provider =
+    input.provider.kind === "opencode-go"
+      ? {
+          DEEPSEEK_API_KEY: "",
+          NODE_OPTIONS: `--import=${pathToFileURL(egressTapPath).href}`,
+          OPENCODE_GO_API_KEY: input.provider.apiKey,
+          SAYHEAR_ACCEPTANCE_EGRESS_GATE: input.provider.gateUrl,
+          SAYHEAR_CONVERSATION_TEXT_MODEL: "deepseek-v4.1-flash",
+          SAYHEAR_CONVERSATION_TEXT_MODEL_SNAPSHOT: "deepseek-v4.1-flash",
+          SAYHEAR_PROVIDER_ADAPTER: "opencode-go",
+        }
+      : {
+          DEEPSEEK_API_KEY: input.provider.apiKey,
+          // Pinned empty so a local .env cannot supply a second live Provider.
+          OPENCODE_GO_API_KEY: "",
+          SAYHEAR_CONVERSATION_TEXT_MODEL: input.provider.model,
+          SAYHEAR_CONVERSATION_TEXT_MODEL_SNAPSHOT: input.provider.model,
+          SAYHEAR_DEEPSEEK_BASE_URL: input.provider.baseUrl,
+          SAYHEAR_PROVIDER_ADAPTER: "deepseek",
+        };
   return {
     ...passthrough,
+    ...provider,
     CRON_SECRET: ACCEPTANCE_CRON_SECRET,
     DATABASE_URL: input.databaseUrl,
-    DEEPSEEK_API_KEY: input.provider.apiKey,
     GITHUB_CLIENT_ID: "continuity-acceptance-client",
     GITHUB_CLIENT_SECRET: "continuity-acceptance-client-secret",
     NEXTAUTH_SECRET: "continuity-acceptance-server-only-secret",
@@ -82,7 +119,6 @@ export function buildAppEnvironment(
     NODE_ENV: "development",
     // Pinned empty so a local .env cannot supply a second live Provider.
     OPENAI_API_KEY: "",
-    OPENCODE_GO_API_KEY: "",
     PURGE_MARKER_DATABASE_URL: input.markerDatabaseUrl,
     SAYHEAR_AUTH_SECRET_SOURCE: "managed",
     SAYHEAR_BACKUP_CONFIGURATION_FINGERPRINT: ACCEPTANCE_BACKUP_FINGERPRINT,
@@ -91,9 +127,6 @@ export function buildAppEnvironment(
     ...(input.requestBudgetMs === undefined
       ? {}
       : { SAYHEAR_CONVERSATION_REQUEST_BUDGET_MS: String(input.requestBudgetMs) }),
-    SAYHEAR_CONVERSATION_TEXT_MODEL: input.provider.model,
-    SAYHEAR_CONVERSATION_TEXT_MODEL_SNAPSHOT: input.provider.model,
-    SAYHEAR_DEEPSEEK_BASE_URL: input.provider.baseUrl,
     SAYHEAR_DEPLOYMENT: "test",
     SAYHEAR_EPISODE_BUILD_ENABLED: "false",
     // Background derivation (Evidence, fast-path Claims, consolidation,
@@ -108,7 +141,6 @@ export function buildAppEnvironment(
     SAYHEAR_INACTIVITY_TIMEOUT_MS: String(ACCEPTANCE_INACTIVITY_TIMEOUT_MS),
     SAYHEAR_JOURNAL_PUBLISH_ENABLED: "false",
     SAYHEAR_MEMORY_CONSOLIDATION_ENABLED: "false",
-    SAYHEAR_PROVIDER_ADAPTER: "deepseek",
     SAYHEAR_PROVIDER_TIMEOUT_MS: String(input.provider.timeoutMs),
     SAYHEAR_REFLECTION_ENABLED: "false",
     SAYHEAR_TEST_NOW_FILE: input.clockFile,

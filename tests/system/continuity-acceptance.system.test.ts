@@ -300,3 +300,62 @@ describe("Continuity acceptance over the real chat path", () => {
     }
   });
 });
+
+/**
+ * T08 #321: the real-model transport, rehearsed with no paid call. The app
+ * runs its production OpenCode Go adapter against the fixed endpoint; the tap
+ * shows the run each request and, because the run is not live, answers it
+ * locally. This proves the wiring end to end without proving anything about a
+ * model: a locally answered reply is never scored for meaning.
+ */
+describe("Real-model transport rehearsal over the real chat path", () => {
+  const smoke = loadCase("S01");
+  let environment: AcceptanceEnvironment;
+  let observation: CaseObservation;
+
+  beforeAll(async () => {
+    environment = await createAcceptanceEnvironment({
+      initialNow: new Date(smoke.fixture.history[0]!.at),
+      provider: { apiKey: "rehearsal-credential-not-a-key", kind: "opencode-go", live: false },
+      target,
+    });
+    observation = await runCase({
+      environment,
+      fixture: smoke.fixture,
+      fixtureSha256: smoke.fixtureSha256,
+      mode: "real-model",
+    });
+  });
+
+  afterAll(async () => {
+    await environment?.dispose();
+  });
+
+  it("drives the production OpenCode Go adapter and sees what it sends", () => {
+    expect(observation.environmentErrors).toEqual([]);
+    expect(observation.identity.model).toBe("opencode-go/deepseek-v4.1-flash");
+    expect(observation.seed.turns.map((turn) => turn.terminalEvent)).toEqual([
+      "assistant_committed",
+      "assistant_committed",
+    ]);
+
+    const step = observation.steps[0]!;
+    expect(step.chat).toMatchObject({ httpStatus: 200, terminalEvent: "assistant_committed" });
+    const turn = step.providerRequests.find((request) => request.conversationTurn);
+    expect(turn).toMatchObject({ response: null, transport: "served" });
+    expect(turn?.instructions).toContain("SayHear");
+    expect(turn?.strings).toContain(smoke.fixture.history[0]!.user);
+
+    const { byId } = statuses(observation, "S01");
+    for (const id of ["INV-seed-readback", "INV-oracle-not-in-outbound", "O-commit", "O-history", "O-background"]) {
+      expect(byId[id]?.status, id).toBe("pass");
+    }
+    // The reply was answered locally, not by the model: it cannot be reviewed,
+    // and its timing is not a model latency sample.
+    expect(byId["S-reply"]?.status).toBe("not-run");
+    expect(byId["S-reply"]?.reason).toMatch(/real Provider/);
+    expect(byId["O-deadline"]?.status).toBe("not-run");
+
+    expect(JSON.stringify(observation)).not.toContain("rehearsal-credential-not-a-key");
+  });
+});

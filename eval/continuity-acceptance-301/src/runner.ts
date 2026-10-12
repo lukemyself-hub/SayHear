@@ -380,6 +380,9 @@ export async function openCaseSession(input: RunCaseInput): Promise<CaseSession>
   }
   stub.setHistoricalReply(null);
   stub.setStepLabel(null);
+  // Seeding is over. In a live run everything from here on is answered by the
+  // real Provider; in a rehearsal it stays local.
+  environment.gate?.setLive(environment.live);
   const seedProviderStrings: string[] = [];
   for (const request of stub.requests().slice(seedRequestsBefore)) {
     collectStrings(request.body, seedProviderStrings);
@@ -444,6 +447,8 @@ export async function openCaseSession(input: RunCaseInput): Promise<CaseSession>
       timezone: submission.timezone,
     };
     async function finalize(chat: ChatObservation | null): Promise<ObservedStep> {
+      // Every live Provider answer for this step has been copied to the run.
+      await environment.gate?.settled();
       if (chat?.clientAborted) {
         aborted = true;
         // Give a wrongly surviving generation the chance to commit late, so the
@@ -487,26 +492,48 @@ export async function openCaseSession(input: RunCaseInput): Promise<CaseSession>
           .map((request) => {
             const strings: string[] = [];
             collectStrings(request.body, strings);
-            const messages = record(request.body)?.["input"];
-            const last = Array.isArray(messages) ? record(messages.at(-1)) : null;
+            // The stub speaks the Responses API; the gate records the Chat
+            // Completions request the OpenCode Go adapter built (T08 #321).
+            const viaGate = environment.gate
+              ?.requests()
+              .find((candidate) => candidate.sequence === request.sequence);
+            const input = record(request.body)?.["input"];
+            const messages = viaGate
+              ? viaGate.messages
+              : (Array.isArray(input) ? input : [])
+                  .map(record)
+                  .filter((entry): entry is Record<string, unknown> => entry !== null)
+                  .map((entry) => ({
+                    role: String(entry["role"]),
+                    text:
+                      typeof entry["content"] === "string"
+                        ? entry["content"]
+                        : JSON.stringify(entry["content"]),
+                  }));
             const tools = record(request.body)?.["tools"];
+            const lastUser = messages.findLast((message) => message.role === "user");
             return {
-              conversationTurn:
-                last?.["role"] === "user" && last["content"] === submission.text,
-              instructions: text(record(request.body)?.["instructions"]) ?? "",
-              messages: (Array.isArray(messages) ? messages : [])
-                .map(record)
-                .filter((entry): entry is Record<string, unknown> => entry !== null)
-                .map((entry) => ({
-                  role: String(entry["role"]),
-                  text: typeof entry["content"] === "string" ? entry["content"] : JSON.stringify(entry["content"]),
-                })),
-              providerResponseId: `stub-request-${request.sequence}`,
+              // The turn's own generation: the newest thing the person said in
+              // the request is this turn's text. (A continuation after a tool
+              // call appends assistant and tool messages after it.)
+              conversationTurn: viaGate
+                ? lastUser?.text === submission.text
+                : messages.at(-1)?.role === "user" && messages.at(-1)?.text === submission.text,
+              instructions: viaGate
+                ? viaGate.instructions
+                : (text(record(request.body)?.["instructions"]) ?? ""),
+              messages,
+              providerResponseId:
+                viaGate?.response?.providerRequestId ??
+                (viaGate ? `gate-request-${request.sequence}` : `stub-request-${request.sequence}`),
+              ...(viaGate ? { response: viaGate.response, transport: viaGate.transport } : {}),
               sequence: request.sequence,
               strings,
-              toolsOffered: (Array.isArray(tools) ? tools : [])
-                .map((tool) => text(record(tool)?.["name"]))
-                .filter((entry): entry is string => entry !== null),
+              toolsOffered: viaGate
+                ? viaGate.toolsOffered
+                : (Array.isArray(tools) ? tools : [])
+                    .map((tool) => text(record(tool)?.["name"]))
+                    .filter((entry): entry is string => entry !== null),
             };
           }),
         type,

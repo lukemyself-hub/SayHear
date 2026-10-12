@@ -207,6 +207,23 @@ function following(
   return undefined;
 }
 
+/**
+ * In a real-model run, whether this step's own reply came from the real
+ * Provider. A reply answered locally (a rehearsal, an injected fault) is not a
+ * model answer and its timing is not a model latency sample (T08 #321).
+ */
+function answeredByRealProvider(step: ObservedStep): boolean {
+  const own = step.providerRequests.filter((request) => request.conversationTurn);
+  return own.length > 0 && own.every((request) => request.transport === "live");
+}
+
+const NOT_FROM_REAL_PROVIDER: Verdict = {
+  evidence: [],
+  reason:
+    "This step's reply was not produced by the real Provider (it was answered locally), so it is neither a model answer nor a model latency sample.",
+  status: "not-run",
+};
+
 function findStep(observation: CaseObservation, id: string): ObservedStep | null {
   return observation.steps.find((step) => step.id === id) ?? null;
 }
@@ -503,6 +520,7 @@ function evaluateObjective(
         : { evidence, reason: "Recorded coverage for the date contradicts the expectation.", status: "fail" };
     }
     case "deadline": {
+      if (!answeredByRealProvider(step)) return NOT_FROM_REAL_PROVIDER;
       const first = chat?.timing.firstVisibleTextMs ?? null;
       const complete = chat?.timing.committedMs ?? null;
       const evidence = [
@@ -534,6 +552,9 @@ function evaluateReviewed(
   const step = findStep(observation, criterion.step);
   if (!step) return missingStep(criterion.step, observation);
   const reply = step.chat?.streamedText ?? "";
+  if (step.providerRequests.length > 0 && !answeredByRealProvider(step)) {
+    return NOT_FROM_REAL_PROVIDER;
+  }
   if (step.chat?.terminalEvent !== "assistant_committed" || !reply.trim()) {
     return {
       evidence: [`steps[${step.id}].chat.terminalEvent=${step.chat?.terminalEvent ?? "none"}`],
