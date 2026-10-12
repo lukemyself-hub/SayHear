@@ -50,6 +50,10 @@ node eval/continuity-acceptance-301/presentation-bench/summarize.mjs --round r1 
 | `summarize.mjs` | 按 布局 × fixture 汇总中位数与范围 |
 | `results/<round>/calls.jsonl` | 每次调用一行：token、时间点、回答原文、reasoning 原文、标注 |
 | `results/<round>/requests/` | 每个 布局 × fixture × 变体 实际发出的完整请求体样例 |
+| `decision-bench.mjs` | Decision 调用对照（见文末）：`extract` 从真实路径观测抽出 Decision 请求，`run` 只替换回顾函数的说明后直接调 Provider，`summarize` 汇总 |
+| `decision-fixtures/*.json` | 12 个真实发出过的 Decision 请求（指令、消息）与该回合应不应发起回顾 |
+| `decision-variants.json` | 各版本的回顾函数说明全文（v4、v5、候选 v5s） |
+| `results/<round>/decision-calls.jsonl.gz` | Decision 对照的逐次记录 |
 
 ## Fixture
 
@@ -208,3 +212,40 @@ V2 + a + 完整规则已落到产品（`history-reading:v3`，见 `docs/architec
 - 只测了「回顾之后写回答」这一次调用，fixture 是已经发生过的检索结果；Decision 是否发起回顾、检索是否取回该取的原文不在范围内。
 - holdout 已被看过；评审人是搭工具的 Agent；要点是正则粗筛。H12 的方向与新布局的失败项是逐条读的，其余没有逐条人工评审。
 - V3 的函数定义取自本分支当前代码（`history-recall:v5` 的函数说明），其余指令文本取自原型在 `f179b3d` 上的观测。
+
+## Decision 调用对照：`history-recall:v5` 的函数说明有没有代价（2026-10-12）
+
+`history-recall:v5` 给回顾函数的说明加了一句「对话里看得见的那件事，只有与当前这句话说的细节对得上才算已有上下文」，目的是让带线索的接续
+（H05 `cued`）发起回顾。真实路径上观察到普通回合里有推理去复核这句话，这里量化它。**同样是直接调 Provider 的设计证据，不是验收证据。**
+
+- **Fixture**：12 个真实路径上发出过的 Decision 请求（`evidence-321-presentation/runs/full1`），指令与消息原样。4 个应发起回顾
+  （H05 `cued`、H04 `ask`、H12 `work`、H08 `praise`），7 个不应发起（H10 `supplement`、H02 `market-when`、H09 `light`、H09 `turn`、
+  H03 `order`、H05 `garden`、H10 `after`），1 个两可（H01 `detail`）。其中 H10 `supplement`、H02 `market-when`、H09 `light`、H01 `detail`
+  在真实路径上是 Decision 超时的回合。应然分类是搭工具的 Agent 定的。
+- **变量**：只有 `review_conversation_history` 的 description。v4 = `f179b3d` 的措辞；v5 = 现行；v5s = 把 v5 新增那句缩短并去掉例子的候选。
+  其余函数、指令、消息、模型完全相同。每格 6 次，并发 4。
+- **花费**：216 次请求，记账上界 0.681 美元（本项上限 0.8）。
+
+| 措辞 | 应发起（24 次） | 其中 H05 `cued` | 不应发起（42 次）判断正确 | 普通回合 reasoning 中位 [范围] | 普通回合 reasoning 合计 | 普通回合超过 30 秒 | H01 `detail` reasoning 中位 / 超 30 秒 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| v4 | 14/24 | **0/6** | 35/42 | 623 [109–2583] | 32,186 | 0 | 1,491 / 1 |
+| v5 | 17/24 | **5/6** | 40/42 | 749 [74–5614] | 40,442 | 2 | 2,834 / 2 |
+| v5s | 15/24 | 3/6 | 37/42 | 591 [63–12016] | 47,024 | 2 | 3,317 / 3（含 1 次 120 秒无响应） |
+
+逐 fixture 的表在 `results/d1/decision-summary.md`（v4、v5）与 `results/d2/decision-summary.md`（v5s）。
+
+**读法**
+
+- v5 达到了目的：H05 `cued` 的发起率 0/6 → 5/6。顺带把 H09 `light` 上不该有的回顾从 6/6 降到 2/6。
+- v5 在普通回合上的中位推理高约 20%（749 对 623），合计高约 26%。差值几乎全部来自 H02 `market-when`（中位 1,206 对 439，一次 5,614）；
+  逐条读这 6 次的推理，4 次完全没有提到新增的那句话，多出来的是在算「前天」对应几号、星期几，以及对着时间表核对消息次序。
+  其余 6 个普通回合里 5 个 v5 持平或更低（H10 `supplement` 中位 348 对 1,516）。
+- 单次波动远大于措辞之间的差：v4 在 H05 `cued` 上出过 13,585，v5s 在 H02 `market-when` 上出过 12,016。每格 6 次分不清 20% 的差是真是假。
+- 超过 30 秒：v4 3 次、v5 5 次、v5s 5 次（含 1 次 120 秒无响应），都在并发 4 下测得，集中在 H01 `detail`（34 条消息的长对话，三种措辞都慢）。
+  Decision 超时这个失败模式不是 v5 的措辞造成的，v4 也有。
+- v5 可能的代价不在推理量而在 H08 `praise`：v4 3/6 发起，v5 0/6，v5s 0/6（真实路径上 v5 那次是发起了的）。这是「一句感受碰到几周前说过的事」
+  的回合，模型本来就一半一半；v5 之后更少为它去查。样本太小，不下结论，记作待观察。
+- v5s 没有更好：`cued` 降到 3/6，普通回合的中位略低但合计更高、尾部更长。去掉例子之后模型更不确定这句话指什么。
+
+**结论：保留 v5，不改写、不升版本。** 没有找到「`cued` 发起率不降、普通回合推理不升」的更短版本；v5 相对 v4 在普通回合上的推理差
+在噪声范围内，不能证明存在，也不能排除一个 20% 量级的小代价。预算只够试一个改写（第二个会超过 0.8 美元上限），未试第二个。

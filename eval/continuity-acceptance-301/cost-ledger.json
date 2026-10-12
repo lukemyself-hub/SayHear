@@ -660,6 +660,26 @@
       "requests": 5,
       "runId": "run-70bba8ae-a9f4-4471-b2fc-e0eb276f963d",
       "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 437976,
+      "date": "2026-10-12",
+      "inputTokens": 772047,
+      "note": "presentation-bench Decision benchmark round d1: variants v4,v5 x 12 fixture(s), repeat 6; direct Provider calls, design benchmark, not acceptance; conservative peak, uncached list price; per-call detail in presentation-bench/results/d1/decision-calls.jsonl",
+      "outputTokens": 171922,
+      "requests": 144,
+      "runId": "decision-bench-d1-73de57b1",
+      "ticket": "#301-presentation"
+    },
+    {
+      "costUsdMicros": 242566,
+      "date": "2026-10-12",
+      "inputTokens": 392844,
+      "note": "presentation-bench Decision benchmark round d2: variants v5s x 12 fixture(s), repeat 6; direct Provider calls, design benchmark, not acceptance; conservative peak, uncached list price; per-call detail in presentation-bench/results/d2/decision-calls.jsonl",
+      "outputTokens": 103899,
+      "requests": 72,
+      "runId": "decision-bench-d2-29fccd1f",
+      "ticket": "#301-presentation"
     }
   ]
 }
