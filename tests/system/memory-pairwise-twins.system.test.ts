@@ -226,6 +226,7 @@ describe("Memory-on / Memory-off twin capture (issue #126)", () => {
     "memory-on: fast-path Claims commit and the cross-day probe injects memory with pinned manifests",
     async () => {
       const { manifest, transcripts } = await runTwinCapture({
+        retrievalMonotonicNow: () => 0,
         arm: "on",
         champion: CHAMPION,
         conversationAdapter: CONVERSATION_ADAPTER,
@@ -324,6 +325,7 @@ describe("Memory-on / Memory-off twin capture (issue #126)", () => {
     "memory-off: the same frozen input writes no Claims, runs no retrieval, injects nothing",
     async () => {
       const { manifest, transcripts } = await runTwinCapture({
+        retrievalMonotonicNow: () => 0,
         arm: "off",
         champion: CHAMPION,
         conversationAdapter: CONVERSATION_ADAPTER,
@@ -359,6 +361,7 @@ describe("Memory-on / Memory-off twin capture (issue #126)", () => {
       // Re-run both arms over a fresh reset so the pair build sees stable
       // transcripts (the previous assertions already reset the schema state).
       const onRun = await runTwinCapture({
+        retrievalMonotonicNow: () => 0,
         arm: "on",
         champion: CHAMPION,
         conversationAdapter: CONVERSATION_ADAPTER,
@@ -371,6 +374,7 @@ describe("Memory-on / Memory-off twin capture (issue #126)", () => {
         scenarios: SCENARIOS,
       });
       const offRun = await runTwinCapture({
+        retrievalMonotonicNow: () => 0,
         arm: "off",
         champion: CHAMPION,
         conversationAdapter: CONVERSATION_ADAPTER,
@@ -434,6 +438,7 @@ describe("Memory-on / Memory-off twin capture (issue #126)", () => {
     "rollback demo: the code revert freezes the memory data face in place",
     async () => {
       const result = await runRollbackDemo({
+        retrievalMonotonicNow: () => 0,
         champion: CHAMPION,
         conversationAdapter: CONVERSATION_ADAPTER,
         pool: database.pool,

@@ -357,13 +357,18 @@ export async function runReflectionWeeklyBuild(input: Readonly<{
       rejectionCode: "scope_mismatch",
     });
   }
-  const weekIdentifier = input.command.weekIdentifier ?? "";
-  if (!weekIdentifier) {
+  const weekIdentifier = input.command.weekIdentifier;
+  if (
+    !weekIdentifier ||
+    !input.command.windowStartDate ||
+    !input.command.windowEndDate ||
+    !input.command.sourceDigest
+  ) {
     return entrypointResult({
       subjectId: input.command.subjectId,
       scope: "weekly",
       outcome: "rejected",
-      rejectionCode: "week_identifier_missing",
+      rejectionCode: "week_identifier_or_window_missing",
     });
   }
 
@@ -377,9 +382,9 @@ export async function runReflectionWeeklyBuild(input: Readonly<{
   const evaluated = await input.dependencies.repository.readWeeklySnapshot({
     userId,
     weekIdentifier,
-    windowStartDate: input.command.windowStartDate ?? "",
-    windowEndDate: input.command.windowEndDate ?? "",
-    sourceDigest: input.command.sourceDigest ?? "",
+    windowStartDate: input.command.windowStartDate,
+    windowEndDate: input.command.windowEndDate,
+    sourceDigest: input.command.sourceDigest,
     policyVersion: input.command.policyVersion,
   });
   if (evaluated.outcome !== "evaluated") {
@@ -404,7 +409,7 @@ export async function runReflectionWeeklyBuild(input: Readonly<{
       intentKey: `reflection-weekly:${userId}:${weekIdentifier}:${evaluated.frozen.sourceDigest ?? ""}`,
       subjectType: "app_user",
       subjectId: userId,
-      sourceRevision: dateOrdinal(evaluated.frozen.windowStartDate ?? ""),
+      sourceRevision: dateOrdinal(evaluated.frozen.windowStartDate!),
       sourceSnapshot: `week:${weekIdentifier}:${(evaluated.frozen.sourceDigest ?? "").slice(0, 16)}`,
       inputManifest: manifestForFrozen(evaluated.frozen),
       expectedDataEpoch: input.command.expectedDataEpoch,
@@ -561,7 +566,7 @@ async function executeReflectionAttempt(input: Readonly<{
   const commandSourceRevision =
     input.frozen.scopeType === "daily_session"
       ? (input.frozen.days[0]?.sourceRevision ?? 0)
-      : dateOrdinal(input.frozen.windowStartDate ?? "");
+      : dateOrdinal(input.frozen.windowStartDate!);
   const sourceRevision =
     input.frozen.scopeType === "daily_session" ? commandSourceRevision : 0;
   const subjectId = input.frozen.dailySessionId ?? input.userId;
@@ -698,12 +703,20 @@ async function executeReflectionAttempt(input: Readonly<{
                 current.snapshot.ownerEpoch === input.expectedDataEpoch
               );
             }
+            if (
+              !input.frozen.weekIdentifier ||
+              !input.frozen.windowStartDate ||
+              !input.frozen.windowEndDate ||
+              !input.frozen.sourceDigest
+            ) {
+              return false;
+            }
             const current = await repository.readWeeklySnapshot({
               userId: input.userId,
-              weekIdentifier: input.frozen.weekIdentifier ?? "",
-              windowStartDate: input.frozen.windowStartDate ?? "",
-              windowEndDate: input.frozen.windowEndDate ?? "",
-              sourceDigest: input.frozen.sourceDigest ?? "",
+              weekIdentifier: input.frozen.weekIdentifier,
+              windowStartDate: input.frozen.windowStartDate,
+              windowEndDate: input.frozen.windowEndDate,
+              sourceDigest: input.frozen.sourceDigest,
               policyVersion: input.sourcePolicyVersion,
             });
             return (

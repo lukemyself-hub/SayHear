@@ -299,6 +299,7 @@ export async function runRollbackDemo(input: {
   champion: ConversationTextChampion;
   conversationAdapter: TwinConversationAdapter;
   log?: (line: string) => void;
+  retrievalMonotonicNow?: () => number;
   pool: Pool;
   roleRegistry: TwinRoleRegistry;
   scenarios?: readonly TwinScenario[];
@@ -315,6 +316,9 @@ export async function runRollbackDemo(input: {
   // ── Phase A: post-cutover, memory on ──────────────────────────────────────
   const phaseA = await runTwinCapture({
     arm: "on",
+    ...(input.retrievalMonotonicNow
+      ? { retrievalMonotonicNow: input.retrievalMonotonicNow }
+      : {}),
     champion: input.champion,
     conversationAdapter: input.conversationAdapter,
     log,

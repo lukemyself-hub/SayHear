@@ -8,6 +8,7 @@ artifacts/
 .env.*
 !.env.example
 *.tsbuildinfo
+/scripts/pr-approval.local.json
 
 .codex/
 .claude/

@@ -31,7 +31,6 @@
  * environment declarations as the authority for a deployment.
  */
 import { readFile, writeFile } from "node:fs/promises";
-import { pathToFileURL } from "node:url";
 
 import { sha256Hex } from "@sayhear/application";
 
@@ -888,9 +887,10 @@ export async function main(
   return failed ? 1 : 0;
 }
 
+const entryPoint = process.argv[1]?.replace(/\\/g, "/");
 const isDirectRun =
-  typeof process.argv[1] === "string" &&
-  import.meta.url === pathToFileURL(process.argv[1]).href;
+  entryPoint === "scripts/effective-runtime-config-gate.ts" ||
+  entryPoint?.endsWith("/scripts/effective-runtime-config-gate.ts") === true;
 
 if (isDirectRun) {
   main()
