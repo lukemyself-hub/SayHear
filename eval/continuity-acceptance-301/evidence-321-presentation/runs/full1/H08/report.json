@@ -1,0 +1,265 @@
+{
+  "budget": {
+    "blockers": [],
+    "capUsdMicros": 10000000,
+    "estimatedCostUsdMicros": 4377600,
+    "inputTokenUpperBound": 3648000,
+    "mode": "real-model",
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "outputTokenUpperBound": 2736000,
+    "paidRequestUpperBound": 228,
+    "remainingUsdMicros": 7883024,
+    "requestsPerStepUpperBound": 4,
+    "shape": {
+      "generationSteps": 36,
+      "scheduledScans": 42,
+      "seedTurns": 112
+    },
+    "status": "ready",
+    "unknownCostEntries": 0,
+    "waivedPreconditions": [
+      {
+        "by": "Luke",
+        "date": "2026-10-11",
+        "statement": "Relayed to the T08 agent by the coordinating agent as Luke's words: \"#307 的遗留问题,应当在 T01–T07 开发期间解决了(包括耗时问题和回忆历史消息等),因此 T08 可以正常启动\" and \"授权 T08 调用 OpenCode Go 跑真实 DeepSeek V4.1 Flash 模型\". This is a decision to proceed. It is not a record that the #307 online acceptance was completed: #307 was closed with its online acceptance not passed.",
+        "id": "issue-307-online-acceptance"
+      }
+    ]
+  },
+  "case": {
+    "caseId": "H08",
+    "criteria": [
+      {
+        "description": "Seeded history is read back verbatim through the normal history API.",
+        "evidence": [],
+        "id": "INV-seed-readback",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "All 3 seeded turns are present exactly once.",
+        "status": "pass"
+      },
+      {
+        "description": "No oracle text, scenario title or expected answer appears in any Provider request.",
+        "evidence": [],
+        "id": "INV-oracle-not-in-outbound",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "Scanned 412 outbound strings; none carries oracle text.",
+        "status": "pass"
+      },
+      {
+        "description": "Authoritative history contains every message exactly once.",
+        "evidence": [],
+        "id": "INV-no-duplicate-messages",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "8 messages, no duplicates.",
+        "status": "pass"
+      },
+      {
+        "description": "The turn streams and commits.",
+        "evidence": [
+          "steps[praise].chat.httpStatus=200",
+          "steps[praise].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-commit",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "The month-old statement and its setting reach the Provider.",
+        "evidence": [
+          "say-a:user: providerRequest=present, inspector.referencedEvents=present",
+          "say-b:user: providerRequest=present, inspector.referencedEvents=present"
+        ],
+        "id": "O-meaning-source",
+        "kind": "objective",
+        "owner": "#318",
+        "reason": "Every required source reached the Provider and is recorded by the Inspector.",
+        "status": "pass"
+      },
+      {
+        "description": "Sharing a feeling triggers no Trust Action.",
+        "evidence": [
+          "steps[praise].chat.actions=[]"
+        ],
+        "id": "O-no-action",
+        "kind": "objective",
+        "owner": null,
+        "reason": "No Action was admitted for this turn.",
+        "status": "pass"
+      },
+      {
+        "description": "Response-time contract.",
+        "evidence": [
+          "steps[praise].chat.timing.firstVisibleTextMs=17239.652584000025 (CLI network, limit 3000)",
+          "steps[praise].chat.timing.committedMs=17825.897375 (CLI network, limit 10000)"
+        ],
+        "id": "O-deadline",
+        "kind": "objective",
+        "owner": "#319",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed.",
+        "status": "fail"
+      },
+      {
+        "description": "The present feeling is met and connected to what the person said matters to them.",
+        "evidence": [],
+        "id": "S-meaning",
+        "kind": "semantic",
+        "owner": "#318",
+        "reason": "No independent review was supplied for this answer.",
+        "status": "needs-review"
+      },
+      {
+        "description": "Empathy without advice, labelling or cheerleading.",
+        "evidence": [],
+        "id": "P-stance",
+        "kind": "subjective",
+        "owner": "#318",
+        "reason": "No independent review was supplied for this answer.",
+        "status": "needs-review"
+      }
+    ],
+    "mode": "real-model",
+    "pipelineOnly": [],
+    "reviewer": null,
+    "runId": "run-a95d14b2-d864-40ea-b790-131cef742a86",
+    "status": "fail"
+  },
+  "diagnosis": [
+    {
+      "diagnosis": {
+        "disagreements": [
+          "The Inspector records a history read but the answering payload carries none."
+        ],
+        "payloadReadStatus": null,
+        "readState": "complete",
+        "sources": [
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: present",
+              "provider payload: earlier-messages entry 1",
+              "day of entry 1: 2026-09-18 (expected 2026-09-18)",
+              "semantic review: none yet; the source reached the model intact, its use is not judged"
+            ],
+            "fault": "undetermined",
+            "source": "say-a:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-7",
+              "requestSequence": 7
+            }
+          },
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: present",
+              "provider payload: earlier-messages entry 3",
+              "day of entry 3: 2026-09-18 (expected 2026-09-18)",
+              "semantic review: none yet; the source reached the model intact, its use is not judged"
+            ],
+            "fault": "undetermined",
+            "source": "say-b:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-7",
+              "requestSequence": 7
+            }
+          }
+        ]
+      },
+      "stepId": "praise"
+    }
+  ],
+  "identity": {
+    "fixtureSha256": "7fcf619a07d4e5dc060387882747b76eb7727e6e6a59abc80e6117032ea9fc09",
+    "fixtureVersion": "final-1",
+    "gitCommit": "600c061cd32839355c7036e867fa0b00d0990e2c",
+    "gitDirty": true,
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "historyRecallGovernance": "active",
+    "recentContextGovernance": "active",
+    "runId": "run-a95d14b2-d864-40ea-b790-131cef742a86",
+    "oracleSha256": "522888c6ec6ac5ac1e846329a0d8363b2556419ae44f7aa7ceefae32fe42d246",
+    "title": "H08 Holdout: complimented for being no trouble and feeling diminished"
+  },
+  "remainingRisks": [
+    "The working tree had uncommitted changes; the commit alone does not identify the code that ran.",
+    "Timings are CLI network observations, not browser rendering times (T08 #321 covers the browser)."
+  ],
+  "reproducibilityDigest": "d445c9c26f4350588bac7719ef6e5335ec085b4b9e490e4d8545818e8217cbca",
+  "schemaVersion": "continuity-acceptance-report:v1",
+  "sourceManifest": [
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "say-a:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "say-a:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "say-b:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "say-b:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "ferry:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "ferry:assistant"
+        }
+      ],
+      "stepId": "praise"
+    }
+  ],
+  "timings": [
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 34.427250000007916,
+      "cliCommittedMs": 17825.897375,
+      "cliFirstVisibleTextMs": 17239.652584000025,
+      "cliStreamClosedMs": 17825.932042,
+      "providerLatencyMs": 0,
+      "stepId": "praise"
+    }
+  ],
+  "transcript": [
+    {
+      "assistant": "Meant kindly, and it still landed. A whole table laughing along with it makes it stick more, not less.\n\nI don't know if this is it, but I keep coming back to what you told me in September — that you'd rather be asked and fight it out than be the one who just goes along. \"Never any fuss\" is the family's word for the going-along version. Maybe she just meant easy to be around. Still, I can see how being handed that label at your own table would leave you feeling small.",
+      "at": "2026-10-17T23:10:00.000Z",
+      "stepId": "praise",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "At dinner tonight Imogen told everyone I am the easiest person in the family, never any fuss. They all laughed and agreed. I know it was meant kindly and I just feel small."
+    }
+  ],
+  "usage": {
+    "inputTokens": 3236,
+    "outputTokens": 1496,
+    "paidCostUsdMicros": null,
+    "providerRequests": 2
+  }
+}

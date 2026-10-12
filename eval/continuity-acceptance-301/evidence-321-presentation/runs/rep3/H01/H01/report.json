@@ -1,0 +1,1833 @@
+{
+  "budget": {
+    "blockers": [],
+    "capUsdMicros": 10000000,
+    "estimatedCostUsdMicros": 384000,
+    "inputTokenUpperBound": 320000,
+    "mode": "real-model",
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "outputTokenUpperBound": 240000,
+    "paidRequestUpperBound": 20,
+    "remainingUsdMicros": 7388949,
+    "requestsPerStepUpperBound": 4,
+    "shape": {
+      "generationSteps": 2,
+      "scheduledScans": 6,
+      "seedTurns": 60
+    },
+    "status": "ready",
+    "unknownCostEntries": 0,
+    "waivedPreconditions": [
+      {
+        "by": "Luke",
+        "date": "2026-10-11",
+        "statement": "Relayed to the T08 agent by the coordinating agent as Luke's words: \"#307 的遗留问题,应当在 T01–T07 开发期间解决了(包括耗时问题和回忆历史消息等),因此 T08 可以正常启动\" and \"授权 T08 调用 OpenCode Go 跑真实 DeepSeek V4.1 Flash 模型\". This is a decision to proceed. It is not a record that the #307 online acceptance was completed: #307 was closed with its online acceptance not passed.",
+        "id": "issue-307-online-acceptance"
+      }
+    ]
+  },
+  "case": {
+    "caseId": "H01",
+    "criteria": [
+      {
+        "description": "Seeded history is read back verbatim through the normal history API.",
+        "evidence": [],
+        "id": "INV-seed-readback",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "All 60 seeded turns are present exactly once.",
+        "status": "pass"
+      },
+      {
+        "description": "No oracle text, scenario title or expected answer appears in any Provider request.",
+        "evidence": [],
+        "id": "INV-oracle-not-in-outbound",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "Scanned 14692 outbound strings; none carries oracle text.",
+        "status": "pass"
+      },
+      {
+        "description": "Authoritative history contains every message exactly once.",
+        "evidence": [],
+        "id": "INV-no-duplicate-messages",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "123 messages, no duplicates.",
+        "status": "pass"
+      },
+      {
+        "description": "The recap request streams and commits.",
+        "evidence": [
+          "steps[recap].chat.httpStatus=200",
+          "steps[recap].chat.terminalEvent=response_failed"
+        ],
+        "id": "O-commit",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn did not end in a committed assistant reply.",
+        "status": "fail"
+      },
+      {
+        "description": "The follow-up streams and commits.",
+        "evidence": [
+          "steps[detail].chat.httpStatus=200",
+          "steps[detail].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-detail-commit",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "The first and last of yesterday's messages are filed under 18 November and today's under 19 November.",
+        "evidence": [
+          "seed.turns[car-1] -> session 01a1ebf8-97e0-7e02-a6e8-19f5c4702ee4 logicalDate 2026-11-18 (expected 2026-11-18)",
+          "seed.turns[grad-30] -> session 01a1ebf8-97e0-7e02-a6e8-19f5c4702ee4 logicalDate 2026-11-18 (expected 2026-11-18)",
+          "seed.turns[today-1] -> session 01a1f171-59a0-755c-a7ff-ac5712ff9d67 logicalDate 2026-11-19 (expected 2026-11-19)"
+        ],
+        "id": "O-ownership",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Every message is owned by the expected Daily Session date.",
+        "status": "pass"
+      },
+      {
+        "description": "Yesterday is read as a non-empty day.",
+        "evidence": [
+          "steps[recap].inspection.dateCoverage[2026-11-18] empty=false readBounded=true candidateRows=116"
+        ],
+        "id": "O-day-read",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Recorded coverage for the date matches the expectation.",
+        "status": "pass"
+      },
+      {
+        "description": "At least the opening message of each of the five subjects reaches the Provider for the recap.",
+        "evidence": [
+          "car-1:user: providerRequest=present, inspector.referencedEvents=present",
+          "sched-1:user: providerRequest=present, inspector.referencedEvents=present",
+          "bro-1:user: providerRequest=present, inspector.referencedEvents=present",
+          "exam-1:user: providerRequest=present, inspector.referencedEvents=present",
+          "grad-1:user: providerRequest=present, inspector.referencedEvents=present"
+        ],
+        "id": "O-topic-coverage",
+        "kind": "objective",
+        "owner": "#315",
+        "reason": "Every required source reached the Provider and is recorded by the Inspector.",
+        "status": "pass"
+      },
+      {
+        "description": "The messages holding the asked-for work detail reach the Provider for the follow-up.",
+        "evidence": [
+          "sched-3:user: providerRequest=present, inspector.referencedEvents=present",
+          "sched-4:user: providerRequest=present, inspector.referencedEvents=present"
+        ],
+        "id": "O-detail-source",
+        "kind": "objective",
+        "owner": "#315",
+        "reason": "Every required source reached the Provider and is recorded by the Inspector.",
+        "status": "pass"
+      },
+      {
+        "description": "The recap meets the response-time contract: first meaningful text within 3 seconds, complete and committed within 10.",
+        "evidence": [
+          "steps[recap].chat.timing.firstVisibleTextMs=null (CLI network, limit 3000)",
+          "steps[recap].chat.timing.committedMs=null (CLI network, limit 10000)"
+        ],
+        "id": "O-recap-deadline",
+        "kind": "objective",
+        "owner": "#319",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed.",
+        "status": "fail"
+      },
+      {
+        "description": "The follow-up meets the response-time contract.",
+        "evidence": [
+          "steps[detail].chat.timing.firstVisibleTextMs=19889.248667 (CLI network, limit 3000)",
+          "steps[detail].chat.timing.committedMs=23810.746708 (CLI network, limit 10000)"
+        ],
+        "id": "O-detail-deadline",
+        "kind": "objective",
+        "owner": "#319",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed.",
+        "status": "fail"
+      },
+      {
+        "description": "The recap covers all five subjects, on the right day, without today's problem.",
+        "evidence": [
+          "steps[recap].chat.terminalEvent=response_failed"
+        ],
+        "id": "S-topics",
+        "kind": "semantic",
+        "owner": "#315",
+        "reason": "There is no committed answer to review.",
+        "status": "fail"
+      },
+      {
+        "description": "The follow-up answer is grounded in the original words.",
+        "evidence": [],
+        "id": "S-detail",
+        "kind": "semantic",
+        "owner": "#315",
+        "reason": "No independent review was supplied for this answer.",
+        "status": "needs-review"
+      }
+    ],
+    "mode": "real-model",
+    "pipelineOnly": [],
+    "reviewer": null,
+    "runId": "run-70bba8ae-a9f4-4471-b2fc-e0eb276f963d",
+    "status": "fail"
+  },
+  "diagnosis": [
+    {
+      "diagnosis": {
+        "disagreements": [],
+        "payloadReadStatus": "partial",
+        "readState": "partial",
+        "sources": [
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: present",
+              "provider payload: earlier-messages entry 1",
+              "day of entry 1: 2026-11-18 (expected 2026-11-18)",
+              "semantic review: the answer is wrong although the source and its time arrived intact"
+            ],
+            "fault": "generation_error",
+            "source": "car-1:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-72",
+              "requestSequence": 72
+            }
+          },
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: present",
+              "provider payload: earlier-messages entry 9",
+              "day of entry 9: 2026-11-18 (expected 2026-11-18)",
+              "semantic review: the answer is wrong although the source and its time arrived intact"
+            ],
+            "fault": "generation_error",
+            "source": "sched-1:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-72",
+              "requestSequence": 72
+            }
+          },
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: present",
+              "provider payload: earlier-messages entry 21",
+              "day of entry 21: 2026-11-18 (expected 2026-11-18)",
+              "semantic review: the answer is wrong although the source and its time arrived intact"
+            ],
+            "fault": "generation_error",
+            "source": "bro-1:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-72",
+              "requestSequence": 72
+            }
+          },
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: present",
+              "provider payload: earlier-messages entry 29",
+              "day of entry 29: 2026-11-18 (expected 2026-11-18)",
+              "semantic review: the answer is wrong although the source and its time arrived intact"
+            ],
+            "fault": "generation_error",
+            "source": "exam-1:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-72",
+              "requestSequence": 72
+            }
+          },
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: present",
+              "provider payload: earlier-messages entry 37",
+              "day of entry 37: 2026-11-18 (expected 2026-11-18)",
+              "semantic review: the answer is wrong although the source and its time arrived intact"
+            ],
+            "fault": "generation_error",
+            "source": "grad-1:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-72",
+              "requestSequence": 72
+            }
+          }
+        ]
+      },
+      "stepId": "recap"
+    },
+    {
+      "diagnosis": {
+        "disagreements": [],
+        "payloadReadStatus": "partial",
+        "readState": "partial",
+        "sources": [
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: present",
+              "provider payload: earlier-messages entry 13",
+              "day of entry 13: 2026-11-18 (expected 2026-11-18)",
+              "semantic review: none yet; the source reached the model intact, its use is not judged"
+            ],
+            "fault": "undetermined",
+            "source": "sched-3:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-74",
+              "requestSequence": 74
+            }
+          },
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: present",
+              "provider payload: earlier-messages entry 15",
+              "day of entry 15: 2026-11-18 (expected 2026-11-18)",
+              "semantic review: none yet; the source reached the model intact, its use is not judged"
+            ],
+            "fault": "undetermined",
+            "source": "sched-4:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-74",
+              "requestSequence": 74
+            }
+          }
+        ]
+      },
+      "stepId": "detail"
+    }
+  ],
+  "identity": {
+    "fixtureSha256": "d40c53fd23474b9924850cf09934248df8ba28f57526caebed73c62e9e7359c0",
+    "fixtureVersion": "final-1",
+    "gitCommit": "600c061cd32839355c7036e867fa0b00d0990e2c",
+    "gitDirty": true,
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "historyRecallGovernance": "active",
+    "recentContextGovernance": "active",
+    "runId": "run-70bba8ae-a9f4-4471-b2fc-e0eb276f963d",
+    "oracleSha256": "c43310d2d4ebb5e5240e98f55bef4b5f5bbb030d0c4b250c6bd056ea5f1c6d8f",
+    "title": "H01 Holdout: recap of a crowded day whose last subject is very long, then one detail"
+  },
+  "remainingRisks": [
+    "The working tree had uncommitted changes; the commit alone does not identify the code that ran.",
+    "Timings are CLI network observations, not browser rendering times (T08 #321 covers the browser)."
+  ],
+  "reproducibilityDigest": "38366d3704f25332a079634bc5ff3df841cf7e9c8735dc4f576428050ee71b1a",
+  "schemaVersion": "continuity-acceptance-report:v1",
+  "sourceManifest": [
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "car-1:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "car-1:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "car-2:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "car-2:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "car-3:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "car-3:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "car-4:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "car-4:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "sched-1:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "sched-1:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "sched-2:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "sched-2:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "sched-3:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "sched-3:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "sched-4:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "sched-4:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "sched-5:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "sched-5:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "sched-6:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "sched-6:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "bro-1:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "bro-1:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "bro-2:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "bro-2:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "bro-3:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "bro-3:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "bro-4:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "bro-4:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "exam-1:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "exam-1:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "exam-2:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "exam-2:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "exam-3:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "exam-3:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "exam-4:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "exam-4:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-1:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-1:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-2:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-2:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-3:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-3:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-4:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-4:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-5:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-5:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-6:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-6:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-7:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-7:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-8:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-8:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-9:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-9:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-10:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-10:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "side-1:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "side-1:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-11:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-11:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "side-2:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "side-2:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-12:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-12:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "side-3:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "side-3:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-13:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-13:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "side-4:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "side-4:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-14:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-14:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "side-5:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "side-5:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-15:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-15:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "side-6:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "side-6:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-16:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-16:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "side-7:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "side-7:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-17:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-17:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "side-8:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "side-8:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-18:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-18:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "side-9:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "side-9:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-19:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": true,
+          "source": "grad-19:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-20:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-20:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-21:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-21:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "side-10:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "side-10:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-22:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-22:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-23:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-23:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-24:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-24:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-25:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-25:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-26:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-26:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-27:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-27:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-28:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-28:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-29:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-29:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-30:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-30:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "today-1:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "today-1:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "today-2:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "today-2:assistant"
+        }
+      ],
+      "stepId": "recap"
+    },
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "car-1:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "car-1:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "car-2:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "car-2:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "car-3:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "car-3:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "car-4:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "car-4:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "sched-1:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "sched-1:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "sched-2:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "sched-2:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "sched-3:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "sched-3:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "sched-4:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "sched-4:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "sched-5:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "sched-5:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "sched-6:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "sched-6:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "bro-1:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "bro-1:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "bro-2:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "bro-2:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "bro-3:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "bro-3:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "bro-4:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "bro-4:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "exam-1:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "exam-1:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "exam-2:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "exam-2:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "exam-3:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "exam-3:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "exam-4:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "exam-4:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-1:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-1:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-2:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-2:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-3:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-3:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-4:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-4:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-5:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-5:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-6:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-6:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-7:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-7:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-8:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-8:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-9:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-9:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-10:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-10:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "side-1:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "side-1:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-11:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-11:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "side-2:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "side-2:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-12:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-12:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "side-3:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "side-3:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-13:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-13:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "side-4:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "side-4:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-14:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-14:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "side-5:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "side-5:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-15:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-15:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "side-6:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "side-6:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-16:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-16:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "side-7:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "side-7:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-17:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-17:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "side-8:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "side-8:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-18:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-18:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "side-9:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "side-9:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-19:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": true,
+          "source": "grad-19:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-20:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-20:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-21:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-21:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "side-10:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "side-10:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-22:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-22:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-23:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-23:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-24:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-24:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-25:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-25:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-26:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-26:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-27:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-27:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-28:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-28:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-29:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-29:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "grad-30:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "grad-30:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "today-1:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "today-1:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "today-2:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "today-2:assistant"
+        }
+      ],
+      "stepId": "detail"
+    }
+  ],
+  "timings": [
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 26.038416000001234,
+      "cliCommittedMs": null,
+      "cliFirstVisibleTextMs": null,
+      "cliStreamClosedMs": 30054.171000000002,
+      "providerLatencyMs": 0,
+      "stepId": "recap"
+    },
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 21.807542000002286,
+      "cliCommittedMs": 23810.746708,
+      "cliFirstVisibleTextMs": 19889.248667,
+      "cliStreamClosedMs": 23810.863666999998,
+      "providerLatencyMs": 0,
+      "stepId": "detail"
+    }
+  ],
+  "transcript": [
+    {
+      "assistant": "",
+      "at": "2026-11-19T02:25:00.000Z",
+      "stepId": "recap",
+      "terminalEvent": "response_failed",
+      "type": "say",
+      "user": "昨天从早到晚我都跟你说了些什么？帮我从头顺一遍。"
+    },
+    {
+      "assistant": "昨天你跟我说的，我这儿只留着一部分，不是全的，我先按记得的顺一遍。早上八点多车打不着火，咔哒咔哒响，楼下开面包车的邻居拿线搭了电，后来顺路去修理店测，说是电瓶到寿命了，换新的四百八，那天先充了半小时凑着用，约了周六上午去换。上午十点二十到学校排下周课表，系统一导出来就报冲突：高二三班周四下午第六节同时挂着物理和体育；你先以为体育馆场地轮换表改过，从头核了一遍没毛病，只好把调课记录一条条往回翻，才看出物理组贺老师那张调课单被录了两回——一回是他自己在系统里提交的，一回是文员照着纸质单又敲了一遍；档案室的秦姐把那一周的纸质调课单全抱出来对着签字看，确定原件只有一张；撤销重复记录的申请你交上去了，等教务主任签字。中午你弟打电话说爸耳朵越来越背，电视音量开到三十多，他想带爸去配助听器，他同学在验配中心，那边报价一对九千六，他刚换工作手头紧绕了半天没好意思直说，你说这钱你出大头。下午请了一个钟头假陪儿子考钢琴四级，抽到的练习曲前半段挺稳，后面左手按错一个和弦，停下来重弹了一遍，老师说成绩两个礼拜后出，听那口气多半得明年再来，他出了考场一直低着头抠琴谱边角，你没讲道理，带他到校门口买了个烤红薯。晚上儿子睡了以后你一个人在书房坐着，想的都是那个在职研究生：师大教育管理方向，周六周日全天上课，两年半，报名截止十二月十号；你今年三十九，本科毕业十六年，学费六万八分三次交；你拿了张A4纸画竖线，左边读右边不读各写了五条，数完打平；你还试了一套往年英语真题，阅读四篇做了一个小时，对的不到一半；你想到你先生那声叹气，想到你妈爬五楼，想到你爸那句“折腾什么”，想到老吴，想到自己的身体，想到那个读博同学，想到老冯；研究设想你在备忘录里起了个头，叫走班制下排课公平性的校本观察，写了两百多字；最后你给自己定了四条：这周不做任何决定，礼拜五晚上跟先生正经谈一次，周末去你妈那儿只说“在想”，下礼拜找个下午去老吴办公室坐十分钟。至于课表撞车那件，查出来的原因就是那张调课单被录了两回，一回是贺老师自己在系统里提交的，一回是文员照着纸质单又敲了一遍，所以同一张单子走了两条路进来，才在系统里撞上。我手上就这些，你要是想细说哪一件，我就着你自己说的话跟你往下捋。",
+      "at": "2026-11-19T02:28:00.000Z",
+      "stepId": "detail",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "课表撞车那件事，我最后是怎么查出原因的？"
+    }
+  ],
+  "usage": {
+    "inputTokens": null,
+    "outputTokens": null,
+    "paidCostUsdMicros": null,
+    "providerRequests": 4
+  }
+}
