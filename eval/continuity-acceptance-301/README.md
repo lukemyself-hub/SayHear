@@ -63,6 +63,7 @@ context 与 memory **retrieval** 不受影响。
 cases/<ID>.fixture.json   模型可见的一半：历史回合、时刻、IANA 时区、后续输入、故障
 oracle/<ID>.oracle.json   独立预期账本：能力、允许/禁止事实、主题、时间、来源资格、判据
 known-red.json            当前已知 red 清单（案例、判据、负责的票、原因）
+owner-rulings.json        owner 对判据的裁定（不计入 / 读法），评分时套用；不改 fixture 与 oracle
 cost-ledger.json          共享费用账本：上限、单价、前置条件、历史调用
 sample-report/            一份 smoke（S01）与一份历史案例（C04）的 deterministic 样例报告
 src/                      runner、评分、门禁

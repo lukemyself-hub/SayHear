@@ -15,6 +15,14 @@
 - 不带任何脚本化 Decision（`historyReview` / `toolCall`）：是否回顾、查哪天、用什么检索词
   都由真实模型自己决定。`validate` 会拒绝带脚本的 final fixture。
 
+## 冻结之后的 owner 裁定（2026-10-12）
+
+冻结规则不变：`cases/`、`oracle/` 与 `FREEZE.json` 的哈希不为任何结果而改。2026-10-12，在真实模型结果已经出来之后，Luke 对若干判据
+做了裁定（不计入无线索的自然接续；几种回答形态算通过）。这些是**冻结后的判据修订**，以叠加文件
+[`../owner-rulings.json`](../owner-rulings.json) 记录并在评分时套用，本目录的文件一字未改。原文、适用版本与影响见
+[`../evidence-321-presentation/LUKE-RULINGS.md`](../evidence-321-presentation/LUKE-RULINGS.md)。此后凡引用 holdout 结果，都应说明用的是
+裁定前还是裁定后的口径。
+
 ## 与开发包的对应
 
 | holdout | 对应 | 语言 | 类别 |

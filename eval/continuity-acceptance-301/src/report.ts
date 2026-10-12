@@ -303,6 +303,7 @@ const STATUS_LABEL: Record<CriterionStatus, string> = {
   "environment-error": "ENVIRONMENT-ERROR",
   fail: "FAIL",
   "needs-review": "NEEDS-REVIEW",
+  "not-counted": "NOT-COUNTED",
   "not-run": "NOT-RUN",
   pass: "PASS",
 };

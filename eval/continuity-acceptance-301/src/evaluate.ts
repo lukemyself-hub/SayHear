@@ -1,3 +1,7 @@
+import { packRoot } from "./fixture";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
 import {
   ORACLE_LEAK_MIN_LENGTH,
   oracleStrings,
@@ -34,7 +38,13 @@ export type CriterionStatus =
   | "fail"
   | "not-run"
   | "environment-error"
-  | "needs-review";
+  | "needs-review"
+  /**
+   * An owner ruling took the criterion out of acceptance (`owner-rulings.json`).
+   * The criterion and what was observed stay on the record; the verdict of the
+   * case is decided by the others.
+   */
+  | "not-counted";
 
 export const REVIEW_SCHEMA_VERSION = "continuity-acceptance-review:v1";
 export const RUBRIC_VERSION = "continuity-rubric:v1";
@@ -91,16 +101,74 @@ export type CaseReport = Readonly<{
 export function aggregateStatus(
   statuses: readonly CriterionStatus[],
 ): CriterionStatus {
-  if (statuses.length === 0) return "not-run";
+  const counted = statuses.filter((status) => status !== "not-counted");
+  if (counted.length === 0) return "not-run";
   for (const status of [
     "environment-error",
     "fail",
     "needs-review",
     "not-run",
   ] as const) {
-    if (statuses.includes(status)) return status;
+    if (counted.includes(status)) return status;
   }
   return "pass";
+}
+
+export type OwnerRulings = Readonly<{
+  interpretations: readonly Readonly<{ caseId: string; criterionId: string; reading: string; ruling: string }>[];
+  notCounted: readonly Readonly<{ caseId: string; criterionId: string; reason: string; ruling: string }>[];
+  rulings: readonly Readonly<{ by: string; date: string; id: string; statement: string }>[];
+}>;
+
+let cachedOwnerRulings: OwnerRulings | null = null;
+
+/** The product owner's rulings on how criteria are counted and read. */
+export function loadOwnerRulings(): OwnerRulings {
+  cachedOwnerRulings ??= JSON.parse(
+    readFileSync(path.join(packRoot, "owner-rulings.json"), "utf8"),
+  ) as OwnerRulings;
+  return cachedOwnerRulings;
+}
+
+/**
+ * Applies the owner's rulings to one scored criterion. A criterion ruled out
+ * of acceptance becomes `not-counted` and keeps what was observed as evidence;
+ * a ruling on how to read a criterion is attached for whoever reviews the
+ * answer. The oracle files themselves are never edited for a ruling, so the
+ * frozen holdout pack keeps its recorded hashes.
+ */
+export function applyOwnerRulings(
+  caseId: string,
+  result: CriterionResult,
+): CriterionResult {
+  const rulings = loadOwnerRulings();
+  const cite = (id: string) => {
+    const ruling = rulings.rulings.find((candidate) => candidate.id === id);
+    return ruling ? `${ruling.id}, ${ruling.by} ${ruling.date}` : id;
+  };
+  const excluded = rulings.notCounted.find(
+    (entry) => entry.caseId === caseId && entry.criterionId === result.id,
+  );
+  if (excluded) {
+    return {
+      ...result,
+      evidence: [...result.evidence, `observed: ${result.status} — ${result.reason}`],
+      reason: `Not counted by owner ruling (${cite(excluded.ruling)}): ${excluded.reason}`,
+      status: "not-counted",
+    };
+  }
+  const readings = rulings.interpretations.filter(
+    (entry) => entry.caseId === caseId && entry.criterionId === result.id,
+  );
+  return readings.length === 0
+    ? result
+    : {
+        ...result,
+        evidence: [
+          ...result.evidence,
+          ...readings.map((entry) => `owner ruling (${cite(entry.ruling)}): ${entry.reading}`),
+        ],
+      };
 }
 
 /**
@@ -769,7 +837,7 @@ export function evaluateCase(input: {
         : null;
     const hindsightClues =
       scriptedStep === null ? [] : (hindsightByStep.get(scriptedStep) ?? []);
-    criteria.push({
+    criteria.push(applyOwnerRulings(observation.caseId, {
       description: criterion.description,
       evidence:
         hindsightClues.length > 0
@@ -784,7 +852,7 @@ export function evaluateCase(input: {
       reason: verdict.reason,
       ...(hindsightClues.length > 0 ? { scope: "pipeline-only" as const } : {}),
       status: verdict.status,
-    });
+    }));
   }
 
   const pipelineOnly = criteria

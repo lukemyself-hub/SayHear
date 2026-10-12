@@ -1,3 +1,7 @@
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -6,10 +10,14 @@ import {
 } from "../eval/continuity-acceptance-301/src/calibration";
 import {
   aggregateStatus,
+  applyOwnerRulings,
   evaluateCase,
   exitCodeForStatus,
+  loadOwnerRulings,
 } from "../eval/continuity-acceptance-301/src/evaluate";
 import {
+  loadCase,
+  packRoot,
   validateCase,
   type ObjectiveCheck,
 } from "../eval/continuity-acceptance-301/src/fixture";
@@ -301,6 +309,71 @@ describe("continuity acceptance evaluation", () => {
     expect(aggregateStatus(["needs-review", "fail", "not-run"])).toBe("fail");
     expect(aggregateStatus(["fail", "environment-error"])).toBe("environment-error");
     expect(aggregateStatus([])).toBe("not-run");
+  });
+
+  it("leaves a criterion an owner ruling took out of acceptance out of the verdict, without deleting it", () => {
+    // Not counted is neither a pass nor a gap: the rest decides.
+    expect(aggregateStatus(["pass", "not-counted"])).toBe("pass");
+    expect(aggregateStatus(["fail", "not-counted"])).toBe("fail");
+    expect(aggregateStatus(["not-counted"])).toBe("not-run");
+
+    // Luke 2026-10-12: a natural continuation with no clue at all is not an acceptance requirement.
+    for (const [caseId, criterionId] of [
+      ["H05", "S-bare"],
+      ["H05", "O-bare-older"],
+      ["C05", "S-bare"],
+      ["C05", "O-bare-older"],
+    ] as const) {
+      const ruled = applyOwnerRulings(caseId, {
+        description: "d",
+        evidence: ["e"],
+        id: criterionId,
+        kind: criterionId.startsWith("S-") ? "semantic" : "objective",
+        owner: null,
+        reason: "The model named neither matter.",
+        status: "fail",
+      });
+      expect(ruled.status).toBe("not-counted");
+      expect(ruled.reason).toMatch(/Luke 2026-10-12/);
+      // What was observed stays on the record.
+      expect(ruled.evidence.join("\n")).toContain("observed: fail");
+      expect(ruled.evidence.join("\n")).toContain("The model named neither matter.");
+    }
+    // The cued continuation is still required.
+    const cued = applyOwnerRulings("H05", {
+      description: "d", evidence: [], id: "S-cued", kind: "semantic", owner: null, reason: "r", status: "needs-review",
+    });
+    expect(cued.status).toBe("needs-review");
+    // A ruling on how to read a criterion travels with it for whoever reviews the answer.
+    expect(cued.evidence.join("\n")).toMatch(/owner ruling .*Luke 2026-10-12.*did not ask what the letter says/i);
+    const controls = applyOwnerRulings("H12", {
+      description: "d", evidence: [], id: "S-controls", kind: "semantic", owner: null, reason: "r", status: "needs-review",
+    });
+    expect(controls.evidence.join("\n")).toMatch(/earlier wording.*passes/i);
+  });
+
+  it("names only criteria that still exist in the oracles, and leaves the frozen holdout files untouched", () => {
+    const rulings = loadOwnerRulings();
+    expect(rulings.rulings.every((ruling) => ruling.by === "Luke" && ruling.date === "2026-10-12")).toBe(true);
+    for (const entry of [...rulings.notCounted, ...rulings.interpretations]) {
+      const loaded = entry.caseId.startsWith("H")
+        ? loadCase(entry.caseId, {
+            cases: path.join(packRoot, "holdout", "cases"),
+            oracle: path.join(packRoot, "holdout", "oracle"),
+          })
+        : loadCase(entry.caseId);
+      expect(loaded.oracle.criteria.map((criterion) => criterion.id)).toContain(entry.criterionId);
+      expect(rulings.rulings.map((ruling) => ruling.id)).toContain(entry.ruling);
+    }
+    const freeze = JSON.parse(
+      readFileSync(new URL("../eval/continuity-acceptance-301/holdout/FREEZE.json", import.meta.url), "utf8"),
+    ) as { cases: Record<string, { oracleSha256: string }> };
+    for (const caseId of ["H05", "H06", "H07", "H10", "H12"]) {
+      const bytes = readFileSync(
+        new URL(`../eval/continuity-acceptance-301/holdout/oracle/${caseId}.oracle.json`, import.meta.url),
+      );
+      expect(createHash("sha256").update(bytes).digest("hex")).toBe(freeze.cases[caseId]!.oracleSha256);
+    }
   });
 
   it("gives failed, incomplete and broken runs different exit codes", () => {
