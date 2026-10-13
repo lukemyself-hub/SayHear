@@ -110,6 +110,7 @@ Issue 是唯一执行真源；[`specs/README.md`](specs/README.md) 只维护发�
 
 ## 决策、任务与 Agent 操作
 
+- 本地功能验收入口与 feature map：[`verification/README.md`](verification/README.md)
 - ADR 索引与主题路由：[`decisions.md`](decisions.md)
 - working spec 示例：[`tasks/example-working-spec.md`](tasks/example-working-spec.md)
 - 领域文档使用规则：[`agents/domain.md`](agents/domain.md)

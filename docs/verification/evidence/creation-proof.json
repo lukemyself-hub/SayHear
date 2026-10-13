@@ -1,0 +1,123 @@
+{
+  "latestRun": "skill-proof-closed",
+  "latestTextJourney": {
+    "feature": "text",
+    "passed": true,
+    "entries": [
+      "/internal",
+      "/internal?date=2026-07-27"
+    ],
+    "events": 2,
+    "provider": "deterministic",
+    "oauth": "fixture only",
+    "unverified": [
+      "past-date navigation requires a past-date fixture",
+      "Enter, Shift+Enter and IME",
+      "older-message pagination",
+      "interruption/retry",
+      "cross-midnight exchange",
+      "live Provider"
+    ],
+    "externalBrowserRequests": [],
+    "pageErrors": []
+  },
+  "commandCoverageRun": "skill-proof-final",
+  "journeys": [
+    {
+      "feature": "access",
+      "passed": true,
+      "entries": [
+        "/",
+        "/api/internal/access"
+      ],
+      "oauth": "not exercised",
+      "externalBrowserRequests": [
+        "https://authjs.dev/img/providers/github.svg"
+      ],
+      "pageErrors": []
+    },
+    {
+      "feature": "text",
+      "passed": true,
+      "entries": [
+        "/internal",
+        "/internal?date=2026-07-27"
+      ],
+      "events": 2,
+      "provider": "deterministic",
+      "oauth": "fixture only",
+      "unverified": [
+        "past-date navigation requires a past-date fixture",
+        "Enter, Shift+Enter and IME",
+        "older-message pagination",
+        "interruption/retry",
+        "cross-midnight exchange",
+        "live Provider"
+      ],
+      "externalBrowserRequests": [],
+      "pageErrors": []
+    },
+    {
+      "feature": "journal",
+      "passed": true,
+      "entries": [
+        "/internal/journals"
+      ],
+      "coverage": "empty state only",
+      "unverified": [
+        "automatic delivery",
+        "date selection with published entries",
+        "copy",
+        "PNG export",
+        "Conversation backlink"
+      ],
+      "externalBrowserRequests": [],
+      "pageErrors": []
+    },
+    {
+      "feature": "context",
+      "passed": true,
+      "entries": [
+        "/internal/context-inspector"
+      ],
+      "coverage": "entry only",
+      "unverified": [
+        "real compiled Context inspection",
+        "message 查看 context link",
+        "capability and step-up denial",
+        "exact Evidence and audit"
+      ],
+      "externalBrowserRequests": [],
+      "pageErrors": []
+    },
+    {
+      "feature": "reflection",
+      "passed": true,
+      "entries": [
+        "/internal/reflection-inspector"
+      ],
+      "coverage": "entry only",
+      "unverified": [
+        "Daily/Weekly trace",
+        "source expansion and audit",
+        "GitHub step-up"
+      ],
+      "externalBrowserRequests": [],
+      "pageErrors": []
+    }
+  ],
+  "allScratchRemoved": true,
+  "allPortsClosed": true,
+  "evidenceRetained": true,
+  "limitations": [
+    "Synthetic auth session; real GitHub OAuth not exercised",
+    "Deterministic Provider; live Provider and server egress not proved",
+    "Journal generation, Reflection trace and hosted Workflow not proved",
+    "Existing dev Edge Instrumentation errors retained in next.log; production build not verified"
+  ],
+  "provenance": {
+    "baselineCommit": "b31cc25a5a1ac6936daae7c867f5cd6715f94a3a",
+    "scope": "Creation-time local deterministic proof before the PR commit; not a production or exact-PR CI acceptance record",
+    "fullArtifacts": "Local gitignored artifacts/verify/skill-proof-closed/"
+  }
+}
