@@ -27,11 +27,15 @@ Preconditions: fresh empty conversation and an allowed write gate. For paginatio
 and scroll journeys, populate enough synthetic messages through the composer to
 exceed the bounded window. Past-date navigation needs a completed prior-day exchange.
 
-- Run `node scripts/verify-control.mjs drive "$VERIFY_RUN" text`. It fills
+- Run `node scripts/verify-control.mjs drive "$VERIFY_RUN" text` on `local`,
+  `live` or `provider`. It fills
   `page.getByRole('textbox', { name: '想聊些什么？' })`, chooses the exact `发送`
   button, observes the real response endpoint and reply, and reloads.
 - Require exactly one rendered user message and settled assistant message;
-  `text-stored.json` must independently show matching canonical rows.
+  `text-stored.json` must independently show matching canonical rows and the
+  reply's model run attempt. On `provider` the attempt's Provider must be the
+  launched one, the rendered reply must equal the stored reply, and the result
+  records `visibleReplyMs` beside the stored first-token and completion times.
 - The canned journey visits the session's date URL and requires
   `page.getByRole('region', { name: '历史聊天记录' })`, no composer, preserved text,
   then chooses the exact `返回今天` link and requires the composer again.
@@ -40,7 +44,9 @@ exceed the bounded window. Past-date navigation needs a completed prior-day exch
   require one response. During actual IME composition, Enter must not submit;
   a plain keypress alone does not verify IME behavior.
 - Past-date entry: click the exact `a[href='/internal?date=YYYY-MM-DD']` using the
-  actual seeded date. Require the same read-only history as the URL entry.
+  actual seeded date. Require the same read-only history as the URL entry. The
+  `delivery` journey does this for the ended exchange's date; a date before today
+  still needs a controlled clock.
 - Long-history journey: choose `page.getByRole('button', { name: '加载更早消息' })`;
   require older distinct messages and preserved reading position. Reading old
   content while a reply arrives must not force-scroll; `回到最新` must restore follow.
@@ -58,4 +64,8 @@ exceed the bounded window. Past-date navigation needs a completed prior-day exch
 - The fixed clock is July 27, 2026 in Los Angeles; do not expect host-date labels.
   Crossing midnight requires a controlled-clock journey, not editing session rows.
 - Deterministic reply text proves transport/UI/persistence only. It cannot prove
-  model behavior, source interpretation, or natural conversation quality.
+  model behavior, source interpretation, or natural conversation quality. One
+  `provider` reply adds real transport and latency, still not quality or
+  continuity; those belong to the continuity acceptance of Issue #321.
+- The composer stays disabled while a reply is in flight. Wait for it to enable.
+  Awaiting `response.finished()` on the NDJSON stream hung this driver.
