@@ -72,9 +72,11 @@ clock and no exchange ever ends there.
   ([#340](https://github.com/lukemyself-hub/SayHear/issues/340); 3 of 13 runs).
   The journey then fails and writes `delivery-unpublished.json`; confirm with
   `grep "deadlock detected" postgres.log` before suspecting the driver.
-- After the exchange ends, `今天` shows an empty chat and that day's messages move
-  behind a dated navigation link. The journey records this as
-  `todayShowsEndedExchange`.
+- After the exchange ends, `今天` incorrectly shows an empty chat while the dated
+  navigation link still exposes that day's messages
+  ([#344](https://github.com/lukemyself-hub/SayHear/issues/344)). The journey records
+  `todayShowsEndedExchange: false`. After the product fix, require `true` and add
+  a same-day follow-up message assertion before calling this path verified.
 - Journal is not freely editable or manually approved. Do not invent a generate
   button or weaken automatic delivery to a service-method invocation.
 - Export is plain text and refuses Journals over 20,000 characters or a stale

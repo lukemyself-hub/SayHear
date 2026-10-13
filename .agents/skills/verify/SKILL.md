@@ -153,8 +153,12 @@ ten minutes for sign-in, and for the Owner up to four minutes for the account
 confirmation of the Evidence verification, whose intent expires after five. It
 proceeds only after the real `/api/auth/callback/github` response. The driver
 acts only on SayHear's own pages. The stranger refusal must carry Auth.js's
-`OAuthCreateAccount` error; that literal comes from reading next-auth and the
-adapter, and the first run with a person confirms it. The GitHub session
+`OAuthCreateAccount` error. The manual `oauth-stranger-1` run on 2026-10-13
+confirmed that error, zero sessions and one Owner mapping. Owner login, Evidence
+verification, allowed reading and sign-out passed separately in `oauth-owner-1`.
+Both runs prove server-side results from the database and log; the headed
+journey's post-login code and Reflection excerpt expansion remain unverified.
+The GitHub session
 persists in `~/.sayhear-verify/github-browser-profile`
 (`SAYHEAR_VERIFY_BROWSER_PROFILE` overrides it), outside the repository, so a
 later run needs no password. This journey records no Playwright trace, since a
