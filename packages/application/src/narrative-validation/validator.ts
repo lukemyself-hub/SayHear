@@ -393,30 +393,131 @@ async function executeNarrativeAttempt(input: Readonly<{
     );
   }
 
-  const comparison = compareNarrativeManifests({
-    generatorManifest: request.generatorManifest,
-    sourceEntries: request.sourceEntries,
-    plannedCoverageKeys: request.plannedCoverageKeys,
-    independentPropositions: modelOutput.propositions,
-    coverageKeys: modelOutput.coverageKeys,
-  });
-  const result: NarrativeValidationResult = evaluateNarrativeValidation({
-    artifactKind: request.artifactKind,
-    validationPolicyVersion: request.validationPolicyVersion,
-    schemaVersion: request.schemaVersion,
-    promptVersion: request.promptVersion,
-    comparison,
-    independentPropositions: modelOutput.propositions,
-    sourceEntries: request.sourceEntries,
-  });
-
-  const committed = await input.dependencies.repository.commitResult({
-    narrativeValidatorRequestId: input.narrativeValidatorRequestId,
-    userId: request.userId,
-    generationCommandId,
-    modelRunAttemptId,
-    result,
-  });
+  // Guard the whole post-Provider path up to the attempt settlement (issue
+  // #257): a throw while decomposing/evaluating or committing must still
+  // settle the attempt and record the usage the already-successful Provider
+  // call consumed, instead of leaving it `running`. The repository rolls back
+  // its own transaction before rethrowing, so no partial validator result can
+  // survive. The failure code stays an existing terminal one (`unknown`): it
+  // is not a Provider transport failure, so `planModelRoleRecovery` schedules
+  // no technical retry, and the issue decision adds no new code.
+  let result: NarrativeValidationResult;
+  let committed: Awaited<
+    ReturnType<NarrativeValidationRepository["commitResult"]>
+  >;
+  try {
+    const comparison = compareNarrativeManifests({
+      generatorManifest: request.generatorManifest,
+      sourceEntries: request.sourceEntries,
+      plannedCoverageKeys: request.plannedCoverageKeys,
+      independentPropositions: modelOutput.propositions,
+      coverageKeys: modelOutput.coverageKeys,
+    });
+    result = evaluateNarrativeValidation({
+      artifactKind: request.artifactKind,
+      validationPolicyVersion: request.validationPolicyVersion,
+      schemaVersion: request.schemaVersion,
+      promptVersion: request.promptVersion,
+      comparison,
+      independentPropositions: modelOutput.propositions,
+      sourceEntries: request.sourceEntries,
+    });
+    committed = await input.dependencies.repository.commitResult({
+      narrativeValidatorRequestId: input.narrativeValidatorRequestId,
+      userId: request.userId,
+      generationCommandId,
+      modelRunAttemptId,
+      result,
+    });
+  } catch (error) {
+    if (
+      error instanceof RecoveryGateClosedError &&
+      error.result.status === "unavailable"
+    ) {
+      throw error;
+    }
+    // COMMIT may be durable even if the repository lost its acknowledgement.
+    // The read uses the exact owner/draft locator and rechecks retention; only
+    // the command and attempt that wrote this result can confirm it.
+    let persisted: NarrativeValidationResultRecord | null = null;
+    try {
+      const readBack = await input.dependencies.repository.readResult({
+        userId: request.userId,
+        artifactKind: request.artifactKind,
+        draftRef: request.draftRef,
+        now: input.dependencies.clock(),
+      });
+      if (
+        readBack.outcome === "ok" &&
+        readBack.result.narrativeValidatorRequestId === input.narrativeValidatorRequestId &&
+        readBack.result.generationCommandId === generationCommandId &&
+        readBack.result.modelRunAttemptId === modelRunAttemptId &&
+        readBack.result.userId === request.userId
+      ) {
+        persisted = readBack.result;
+      }
+    } catch {
+      // Read-back failure leaves the existing terminal failure path in force.
+    }
+    if (persisted) {
+      const recorded = await input.dependencies.modelRoleCommandService.recordAttemptResult({
+        userId: request.userId,
+        generationCommandId,
+        modelRunAttemptId,
+        role: "narrative.validate",
+        attemptNo: input.attemptNo,
+        technicalRetriesUsed: input.technicalRetriesUsed,
+        semanticRepairsUsed: 0,
+        outcome: "succeeded",
+        currentSourceRevision: 0,
+        expectedDataEpoch: input.expectedDataEpoch,
+        now: input.dependencies.clock(),
+        usage: normalizeModelRoleCallUsage(callUsage),
+      });
+      return entrypointResult(
+        request.draftRef,
+        recorded.outcome === "discarded" ? "fenced" : "completed",
+        recorded.outcome === "discarded" ? (recorded.reason ?? "already_settled") : null,
+        null,
+        recorded.outcome === "discarded" ? null : persisted.result.outcome,
+        ledger,
+        null,
+        callUsage,
+      );
+    }
+    const failureCode: ModelRoleFailureCode = "unknown";
+    const recorded = await input.dependencies.modelRoleCommandService.recordAttemptResult({
+      userId: request.userId,
+      generationCommandId,
+      modelRunAttemptId,
+      role: "narrative.validate",
+      attemptNo: input.attemptNo,
+      technicalRetriesUsed: input.technicalRetriesUsed,
+      semanticRepairsUsed: 0,
+      outcome: "failed",
+      failureCode,
+      currentSourceRevision: 0,
+      expectedDataEpoch: input.expectedDataEpoch,
+      now: input.dependencies.clock(),
+      usage: normalizeModelRoleCallUsage(callUsage),
+    });
+    const outcome: NarrativeValidationEntrypointResult["outcome"] =
+      recorded.outcome === "discarded"
+        ? "fenced"
+        : recorded.outcome === "retry_scheduled"
+          ? "retryable_failed"
+          : "failed";
+    return entrypointResult(
+      request.draftRef,
+      outcome,
+      outcome === "fenced" ? (recorded.reason ?? failureCode) : failureCode,
+      null,
+      null,
+      ledger,
+      null,
+      callUsage,
+    );
+  }
   if (committed.outcome === "fenced") {
     await input.dependencies.modelRoleCommandService.recordAttemptResult({
       userId: request.userId,

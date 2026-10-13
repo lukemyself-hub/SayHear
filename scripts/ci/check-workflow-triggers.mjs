@@ -92,6 +92,13 @@ if (recoveryScan) {
     if (!/http_code/.test(originalScanStep) || !/!= "200"/.test(originalScanStep)) {
       fail("original recovery scan step must fail on a non-200 response");
     }
+    if (
+      !/derivedLatency\?\.oldestPendingSeconds/.test(originalScanStep) ||
+      !/Number\.isSafeInteger\(latency\)/.test(originalScanStep) ||
+      !/latency > 7200/.test(originalScanStep)
+    ) {
+      fail("derived-latency gate must fail above 7200 seconds");
+    }
   }
 
   const scopedStep = stepBlock(recoveryScan, "Verify scoped production endpoint");

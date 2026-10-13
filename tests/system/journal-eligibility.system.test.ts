@@ -1733,6 +1733,7 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
         startWorkflow: async () => ({ workflowReceiptId: "cron-receipt" }),
       }),
       scannerSecret: "cron-secret",
+      readDerivedLatency: async () => ({ oldestPendingSeconds: 0, pendingSessions: 0 }),
     });
 
     const response = await recoveryHandler(

@@ -8,6 +8,7 @@ import type {
   OwnerFullPurgeService,
   RollingSummaryService,
 } from "@sayhear/application";
+import type { RecoveryDerivedLatency } from "@sayhear/data";
 
 export function createRecoveryScannerHandler(dependencies: {
   conversationResponseService: ConversationResponseService;
@@ -40,6 +41,7 @@ export function createRecoveryScannerHandler(dependencies: {
   candidateReviewRecoveryService?: {
     scanPendingRemaps(): Promise<Readonly<{ remapCommandsCreated: number }>>;
   };
+  readDerivedLatency: () => Promise<RecoveryDerivedLatency>;
 }): (request: Request) => Promise<Response> {
   return async (request) => {
     if (
@@ -98,6 +100,7 @@ export function createRecoveryScannerHandler(dependencies: {
         ? await dependencies.candidateReviewRecoveryService.scanPendingRemaps()
         : { remapCommandsCreated: 0 };
       const outbox = await dependencies.outboxDispatcherService.dispatchPending();
+      const derivedLatency = await dependencies.readDerivedLatency();
 
       return Response.json({
         inactivity,
@@ -110,6 +113,7 @@ export function createRecoveryScannerHandler(dependencies: {
         episode,
         reflection,
         candidateRemaps,
+        derivedLatency,
         outbox,
       });
     } catch (error) {
