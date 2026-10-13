@@ -1,0 +1,483 @@
+{
+  "recordedAt": "2026-10-13T20:01:08.656Z",
+  "baseCommit": "575cd63b74e0346c0eb186ff80fd50df10290ee4",
+  "receiptGeneratedFromCommit": "0b1b799886827f91062857601d600836da4ef9e2",
+  "driverSha256": {
+    "scripts/verify-control.mjs": "3e1837faf0cf79ca65f1f41f5c321956d63367c2c295a6d9e4613499d9f67f1d",
+    "scripts/verify-fixture.mjs": "5edd2e7bc719d506aa46c300fde3d82131d0400a5dbb3cc623a498b4f6087807",
+    "scripts/verify-browser.mjs": "802f313ae3a56fc7eb28a4be1de684a31125b984a2141d562f529601b5bfff4f"
+  },
+  "host": "macOS, Node 24.18.0, PostgreSQL 17.10, playwright-core 1.61.1 with cached Chrome for Testing build 1200, no locale in the environment",
+  "runs": {
+    "local": {
+      "run": "final-local-112725",
+      "doctor": {
+        "commit": "575cd63b74e0346c0eb186ff80fd50df10290ee4",
+        "profile": "local",
+        "deployment": "test",
+        "clock": "fixed",
+        "provider": "deterministic",
+        "oauth": "inert",
+        "session": "fixture",
+        "owner": "synthetic",
+        "anonymousStatus": 401,
+        "ownerFixture": true,
+        "authenticatedStatus": 200,
+        "composerPresent": true,
+        "businessMigrations": 78,
+        "markerMigrations": 2
+      },
+      "journeys": [
+        {
+          "feature": "text",
+          "profile": "local",
+          "passed": true,
+          "entries": [
+            "/internal",
+            "/internal?date=2026-07-27"
+          ],
+          "events": 2,
+          "provider": "deterministic",
+          "visibleReplyMs": 357,
+          "oauth": "fixture only",
+          "unverified": [
+            "past-date navigation requires a past-date fixture",
+            "Enter, Shift+Enter and IME",
+            "older-message pagination",
+            "interruption/retry",
+            "cross-midnight exchange",
+            "live Provider"
+          ]
+        },
+        {
+          "feature": "access",
+          "profile": "local",
+          "passed": true,
+          "entries": [
+            "/",
+            "/api/internal/access"
+          ],
+          "oauth": "not exercised"
+        },
+        {
+          "feature": "journal",
+          "profile": "local",
+          "passed": true,
+          "entries": [
+            "/internal/journals"
+          ],
+          "coverage": "empty state only",
+          "unverified": [
+            "automatic delivery",
+            "date selection with published entries",
+            "copy",
+            "export",
+            "Conversation backlink"
+          ]
+        },
+        {
+          "feature": "context",
+          "profile": "local",
+          "passed": true,
+          "entries": [
+            "/internal/context-inspector"
+          ],
+          "coverage": "entry only",
+          "unverified": [
+            "real compiled Context inspection",
+            "message 查看 context link",
+            "capability and step-up denial",
+            "exact Evidence and audit"
+          ]
+        },
+        {
+          "feature": "reflection",
+          "profile": "local",
+          "passed": true,
+          "entries": [
+            "/internal/reflection-inspector"
+          ],
+          "coverage": "entry only",
+          "unverified": [
+            "Daily/Weekly trace",
+            "source expansion and audit",
+            "GitHub step-up"
+          ]
+        },
+        {
+          "feature": "context-trace",
+          "profile": "local",
+          "passed": true,
+          "entries": [
+            "message 查看 context link",
+            "/internal/context-inspector typed lookup",
+            "GET /api/internal/inspection/conversation-content"
+          ],
+          "commandId": "019fa44d-f400-70d8-a149-e506d174ab30",
+          "provider": "openai / gpt-5.4",
+          "sensitiveReadWithoutStepUp": "403 elevated_capability_required",
+          "unverified": [
+            "exact-content read after a real GitHub step-up (run the oauth journey)"
+          ]
+        },
+        {
+          "feature": "signout",
+          "profile": "local",
+          "passed": true,
+          "entries": [
+            "/api/auth/signout"
+          ],
+          "session": "fixture session, removed by the real sign-out",
+          "note": "This ends the run's only session; launch again before other journeys."
+        }
+      ],
+      "scratchRemoved": true
+    },
+    "live": {
+      "run": "final-live-112725",
+      "doctor": {
+        "commit": "575cd63b74e0346c0eb186ff80fd50df10290ee4",
+        "profile": "live",
+        "deployment": "test",
+        "clock": "real",
+        "provider": "deterministic",
+        "oauth": "inert",
+        "session": "fixture",
+        "owner": "synthetic",
+        "anonymousStatus": 401,
+        "ownerFixture": true,
+        "authenticatedStatus": 200,
+        "composerPresent": true,
+        "businessMigrations": 78,
+        "markerMigrations": 2
+      },
+      "journeys": [
+        {
+          "feature": "delivery",
+          "profile": "live",
+          "passed": true,
+          "entries": [
+            "/internal composer",
+            "inactivity window + scheduled scan",
+            "/internal/journals",
+            "/internal/journals?date=2026-10-13",
+            "复制",
+            "导出",
+            "查看当天聊天",
+            "/internal?date=2026-10-13 navigation link"
+          ],
+          "journalProvider": "deterministic",
+          "proseLength": 185,
+          "clipboardLength": 185,
+          "exportFile": "sayhear-journal-2026-10-13.txt",
+          "scansUntilPublished": 2,
+          "failedScans": 0,
+          "todayShowsEndedExchange": false,
+          "substitutions": [
+            "60s inactivity window instead of the configured production window",
+            "driver-invoked scan instead of the GitHub Actions schedule",
+            "local Workflow runtime instead of hosted Vercel Workflows"
+          ],
+          "unverified": [
+            "hosted Workflow delivery",
+            "a second date, so date selection only proves one day's own prose"
+          ]
+        },
+        {
+          "feature": "context-trace",
+          "profile": "live",
+          "passed": true,
+          "entries": [
+            "message 查看 context link",
+            "/internal/context-inspector typed lookup",
+            "GET /api/internal/inspection/conversation-content"
+          ],
+          "commandId": "01a13685-e72f-7524-b974-7fb2ebfe906b",
+          "provider": "openai / gpt-5.4",
+          "sensitiveReadWithoutStepUp": "403 elevated_capability_required",
+          "unverified": [
+            "exact-content read after a real GitHub step-up (run the oauth journey)"
+          ]
+        },
+        {
+          "feature": "signout",
+          "profile": "live",
+          "passed": true,
+          "entries": [
+            "/api/auth/signout"
+          ],
+          "session": "fixture session, removed by the real sign-out",
+          "note": "This ends the run's only session; launch again before other journeys."
+        }
+      ],
+      "scratchRemoved": true
+    },
+    "oauth": {
+      "run": "final-oauth-112725",
+      "doctor": {
+        "commit": "575cd63b74e0346c0eb186ff80fd50df10290ee4",
+        "profile": "oauth",
+        "deployment": "test",
+        "clock": "real",
+        "provider": "deterministic",
+        "oauth": "github",
+        "session": "none",
+        "owner": "configured",
+        "anonymousStatus": 401,
+        "ownerFixture": false,
+        "authorizeEndpoint": "https://github.com/login/oauth/authorize",
+        "redirectUri": "http://localhost:3000/api/auth/callback/github",
+        "scope": "read:user user:email",
+        "businessMigrations": 78,
+        "markerMigrations": 2
+      },
+      "journeys": [
+        {
+          "feature": "access",
+          "profile": "oauth",
+          "passed": true,
+          "entries": [
+            "/",
+            "/api/internal/access"
+          ],
+          "oauth": "not exercised"
+        }
+      ],
+      "scratchRemoved": true
+    },
+    "oauth-stranger": {
+      "run": "final-oauth-stranger-112725",
+      "doctor": {
+        "commit": "575cd63b74e0346c0eb186ff80fd50df10290ee4",
+        "profile": "oauth-stranger",
+        "deployment": "test",
+        "clock": "real",
+        "provider": "deterministic",
+        "oauth": "github",
+        "session": "none",
+        "owner": "synthetic",
+        "anonymousStatus": 401,
+        "ownerFixture": false,
+        "authorizeEndpoint": "https://github.com/login/oauth/authorize",
+        "redirectUri": "http://localhost:3000/api/auth/callback/github",
+        "scope": "read:user user:email",
+        "businessMigrations": 78,
+        "markerMigrations": 2
+      },
+      "journeys": [
+        {
+          "feature": "access",
+          "profile": "oauth-stranger",
+          "passed": true,
+          "entries": [
+            "/",
+            "/api/internal/access"
+          ],
+          "oauth": "not exercised"
+        }
+      ],
+      "scratchRemoved": true
+    },
+    "provider": {
+      "run": "final-provider-112725",
+      "doctor": {
+        "commit": "575cd63b74e0346c0eb186ff80fd50df10290ee4",
+        "profile": "provider",
+        "deployment": "test",
+        "clock": "real",
+        "provider": "opencode-go",
+        "oauth": "inert",
+        "session": "fixture",
+        "owner": "synthetic",
+        "anonymousStatus": 401,
+        "ownerFixture": true,
+        "authenticatedStatus": 200,
+        "composerPresent": true,
+        "businessMigrations": 78,
+        "markerMigrations": 2
+      },
+      "journeys": [
+        {
+          "feature": "access",
+          "profile": "provider",
+          "passed": true,
+          "entries": [
+            "/",
+            "/api/internal/access"
+          ],
+          "oauth": "not exercised"
+        }
+      ],
+      "scratchRemoved": true
+    }
+  },
+  "realOAuthRuns": {
+    "stranger": {
+      "run": "oauth-stranger-1",
+      "commit": "0b1b799886827f91062857601d600836da4ef9e2",
+      "sourceStatus": "",
+      "result": {
+        "feature": "oauth-manual",
+        "profile": "oauth-stranger",
+        "passed": true,
+        "entries": [
+          "/internal",
+          "GitHub OAuth callback"
+        ],
+        "browser": "operated by a person; verified from the database and server log",
+        "outcome": "non-Owner refused",
+        "authError": "OAuthCreateAccount",
+        "sessions": 0
+      },
+      "callbackCount": 1,
+      "scratchRemoved": true
+    },
+    "owner": {
+      "run": "oauth-owner-1",
+      "commit": "0b1b799886827f91062857601d600836da4ef9e2",
+      "sourceStatus": "",
+      "result": {
+        "feature": "oauth-manual",
+        "profile": "oauth",
+        "passed": true,
+        "entries": [
+          "/internal",
+          "GitHub OAuth callback",
+          "Evidence verification roundtrip",
+          "GET /api/internal/inspection/conversation-content",
+          "/api/auth/signout"
+        ],
+        "browser": "operated by a person; verified from the database and server log",
+        "outcome": "Owner signed in, verified, read, signed out",
+        "audits": [
+          "denied:elevated_capability_required",
+          "allowed:authorized"
+        ],
+        "unverified": [
+          "what the browser displayed at each step; no screenshot is taken of a person's own browser",
+          "Reflection Evidence excerpt expansion, which needs a generated Reflection"
+        ]
+      },
+      "stored": {
+        "grant": [
+          {
+            "capability": "conversation_content:read",
+            "recent": true
+          }
+        ],
+        "audits": [
+          {
+            "capability": "conversation_content:read",
+            "target_type": "generation_command",
+            "disposition": "denied",
+            "reason": "elevated_capability_required",
+            "policy_version": "sensitive-inspection:v1",
+            "accessed_at": "2026-10-13T12:12:08.292-07:00"
+          },
+          {
+            "capability": "conversation_content:read",
+            "target_type": "generation_command",
+            "disposition": "allowed",
+            "reason": "authorized",
+            "policy_version": "sensitive-inspection:v1",
+            "accessed_at": "2026-10-13T12:12:36.12-07:00"
+          }
+        ]
+      },
+      "callbackCount": 2,
+      "scratchRemoved": true
+    }
+  },
+  "paidProviderRuns": {
+    "note": "Run on 2026-10-13 under a 0.50 USD ceiling, on a driver revision that predates the oauth-manual journey; the text and context-trace code paths are unchanged since.",
+    "text": {
+      "run": "provider-text-111042",
+      "journeys": [
+        {
+          "feature": "text",
+          "profile": "provider",
+          "passed": true,
+          "entries": [
+            "/internal",
+            "/internal?date=2026-10-13"
+          ],
+          "events": 2,
+          "provider": "opencode-go / deepseek-v4.1-flash",
+          "visibleReplyMs": 2644,
+          "oauth": "fixture only",
+          "unverified": [
+            "past-date navigation requires a past-date fixture",
+            "Enter, Shift+Enter and IME",
+            "older-message pagination",
+            "interruption/retry",
+            "cross-midnight exchange",
+            "reply quality and continuity; this proves transport, rendering and persistence of one live reply"
+          ]
+        },
+        {
+          "feature": "context-trace",
+          "profile": "provider",
+          "passed": true,
+          "entries": [
+            "message 查看 context link",
+            "/internal/context-inspector typed lookup",
+            "GET /api/internal/inspection/conversation-content"
+          ],
+          "commandId": "01a13675-e0ac-724b-aebb-6ffe2d3c4fef",
+          "provider": "opencode-go / deepseek-v4.1-flash",
+          "sensitiveReadWithoutStepUp": "403 elevated_capability_required",
+          "unverified": [
+            "exact-content read after a real GitHub step-up (run the oauth journey)"
+          ]
+        }
+      ],
+      "conversationAttempts": [
+        {
+          "total_tokens": null,
+          "output_tokens": 102,
+          "cost_micros": null,
+          "reasoning_tokens": null,
+          "cached_tokens": null,
+          "input_tokens": 3118,
+          "provider": "opencode-go",
+          "model": "deepseek-v4.1-flash",
+          "status": "succeeded",
+          "operation_type": "conversation.text"
+        }
+      ]
+    },
+    "deliveryAttempt": {
+      "run": "provider-delivery-111150",
+      "result": {
+        "feature": "delivery",
+        "profile": "provider",
+        "passed": false,
+        "error": "The scheduled recovery scan failed.\n\n500 !== 200\n"
+      },
+      "note": "The second scan returned 500 after a ten-second wait for the Owner row lock (issue 341). The journey then treated any failed scan as fatal; it now records it and continues. Token usage of this attempt was not captured."
+    }
+  },
+  "knownDefect": {
+    "issue": "https://github.com/lukemyself-hub/SayHear/issues/340",
+    "deliveryRuns": {
+      "reachedTheScan": 13,
+      "loggedADeadlock": 11,
+      "journalNotPublished": 3
+    },
+    "observation": "The first scan dispatches three workflows for the same session and their transactions deadlock. When the Journal path is the victim, no Journal is published within four minutes of scans. A delivery pass in this receipt is one run, not a rate."
+  },
+  "notRun": [
+    {
+      "journey": "post-login code of the headed oauth journey",
+      "reason": "Owner and non-Owner oauth-manual passed (see realOAuthRuns). Google refused the automated browser, so the separate headed journey remains unexecuted after login"
+    },
+    {
+      "journey": "delivery on the provider profile",
+      "reason": "one attempt ended on a failed scan (see paidProviderRuns); a rerun is another paid call and was not made"
+    },
+    {
+      "journey": "hosted Journal, Episode and Daily/Weekly Reflection",
+      "reason": "the acceptance alias is behind Vercel Authentication, its deployed commit and G1 state are unread, and this checkout holds no active G1 manifest"
+    }
+  ]
+}

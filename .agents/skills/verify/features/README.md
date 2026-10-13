@@ -5,13 +5,16 @@ not the root README's historical Foundation-only feature description.
 
 ## Baseline preconditions
 
-- Launch with `node scripts/verify-control.mjs launch "$VERIFY_RUN"` from the root.
+- Launch with `node scripts/verify-control.mjs launch "$VERIFY_RUN" [profile]` from
+  the root. The profile decides which journeys can run; the skill's Profiles
+  table lists them.
 - Require `node scripts/verify-control.mjs doctor "$VERIFY_RUN"` to pass.
 - Use only this run's URL and synthetic session, never the normal Owner profile.
 - The empty seed includes auth and backup policy, but no product content. Episode
   and Reflection writes remain off. This is not a hosted acceptance environment.
-- Use a fresh run for the text mutation journey. Keyboard/IME, fault injection,
-  longer history, published Journals, and generated Reflections need extra journeys.
+- Use a fresh run for `text`, `delivery` and `oauth`. Keyboard/IME, fault
+  injection, longer history, a second Journal date, and generated Reflections
+  need extra journeys.
 
 ## Driving conventions
 

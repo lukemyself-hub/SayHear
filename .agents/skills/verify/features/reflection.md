@@ -39,12 +39,24 @@ authorization; do not enable G1 or invent pins as verification scaffolding.
   and record its content-free audit. Complete normal GitHub step-up, expand one
   excerpt, and verify only that requested excerpt plus audit. Prose should remain
   readable with its Owner capability without repeated step-up.
+- The `oauth` journey chooses `Verify again to view original Evidence`, completes
+  the GitHub roundtrip, and requires the return to this page with a recent
+  `conversation_content:read` grant. That proves the verification itself. Excerpt
+  expansion still needs a generated Reflection.
 
 ## Gotchas
 
-- The baseline has no Reflections and closes their write switch. Daily/Weekly
+- Every local profile closes the Episode and Reflection switches. Daily/Weekly
   trace and Evidence journeys fail their seed/authorization preconditions here;
   an empty list or visible button does not verify them.
+- Opening the switches needs the active G1 release manifest, its database pins
+  and a non-deterministic Provider. The manifest is an untracked release
+  artifact; this checkout holds none. Reuse the accepted one in the isolated
+  acceptance environment rather than building pins for a test.
+- Daily readiness is a quiescent session with a settled Journal outcome
+  (`packages/application/src/reflection/readiness.ts`), which is the end state of
+  the `delivery` journey. Weekly works on Monday-start weeks; read its due rule
+  before planning a run that must finish in one sitting.
 - Normal Owner login and sensitive Evidence verification are distinct. Do not
   manually set a grant timestamp to claim successful reauthentication.
 - Published prose and later regeneration failure are different states; verify
