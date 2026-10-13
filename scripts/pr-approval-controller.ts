@@ -1,6 +1,7 @@
 import {
   createHash,
   createSign,
+  createPublicKey,
 } from "node:crypto";
 import { execFile } from "node:child_process";
 import type { Stats } from "node:fs";
@@ -11,9 +12,12 @@ import {
   rmdir,
   unlink,
   stat,
+  lstat,
   chmod,
   realpath,
 } from "node:fs/promises";
+import { homedir } from "node:os";
+import { SignedCompletionStore, recoverCompletion, CompletionMismatch, CompletionUnavailable, type CompletionStore, type CompletionRecord, type CompletionIdentity } from "./pr-approval/completion.ts";
 import { promisify } from "node:util";
 import { inflateRawSync } from "node:zlib";
 import { isAbsolute, relative, resolve } from "node:path";
@@ -27,12 +31,14 @@ import {
   PR_VALIDATE_WORKFLOW_PATH,
   parsePrReviewGateInput,
   requirementDigest,
+  parseIssueClosureExclusions,
   SAYHEAR_REPOSITORY_ID,
   SAYHEAR_REPOSITORY_NAME,
   type PrReviewGateInput,
   type PrReviewGateReport,
   type TrustedPrReviewPolicy,
 } from "./pr-review-gate.ts";
+import { collectPullRequestDiff, readPullRequestFileManifest, type CollectedPrDiff } from "./pr-approval/diff.ts";
 import {
   FIXED_PR_CI_BASELINE,
   planDailyReleaseValidation,
@@ -40,6 +46,17 @@ import {
   RELEASE_CHECKS,
   type ReleaseImpactKind,
 } from "./daily-release-validation.ts";
+
+export { SignedCompletionStore, recoverCompletion, CompletionMismatch, CompletionUnavailable, COMPLETION_RETRY_POLICY } from "./pr-approval/completion.ts";
+
+declare const __PR_APPROVAL_BUILD_INFO__: Readonly<{ sourceCommit: string; nodeVersion: string; esbuildVersion: string }>;
+export function controllerBuildIdentity(): Readonly<Record<string, unknown>> {
+  return {
+    ...(typeof __PR_APPROVAL_BUILD_INFO__ === "undefined" ? { sourceCommit: "unbundled" } : __PR_APPROVAL_BUILD_INFO__),
+    completionVersion: "sayhear-pr-completion:v1", policyVersion: PR_REVIEW_GATE_POLICY_VERSION,
+    diffCollectionVersion: "sayhear-pr-diff:v2", baseSyncHandoffVersion: "sayhear-pr-base-sync:v1",
+  };
+}
 
 const execFileAsync = promisify(execFile);
 const API_ROOT = "https://api.github.com";
@@ -65,7 +82,6 @@ const TRUSTED_CONFIG_DIRECTORIES = [
 ] as const;
 const KEYCHAIN_SERVICE = "SayHear PR Approval GitHub App";
 const KEYCHAIN_ACCOUNT = SAYHEAR_REPOSITORY_NAME;
-const MAX_DIFF_BYTES = 800_000;
 const MAX_REPORT_BYTES = 20_000;
 const MAX_ARTIFACT_ARCHIVE_BYTES = 50_000_000;
 const REVIEW_TASK_STALE_AFTER_MS = 6 * 60 * 60 * 1_000;
@@ -107,11 +123,26 @@ export interface GitHubApi {
   ): Promise<Uint8Array>;
 }
 
+export function githubRetryAfterMs(headers: Headers, now = Date.now()): number {
+  const retry = headers.get("retry-after");
+  if (retry !== null) {
+    const seconds = Number(retry);
+    const until = Number.isFinite(seconds) ? now + Math.max(0, seconds) * 1_000 : Date.parse(retry);
+    if (Number.isFinite(until)) return Math.max(0, until - now);
+  }
+  if (headers.get("x-ratelimit-remaining") === "0") {
+    const reset = Number(headers.get("x-ratelimit-reset"));
+    if (Number.isFinite(reset)) return Math.max(0, reset * 1_000 - now);
+  }
+  return 0;
+}
+
 export class GitHubApiError extends Error {
   constructor(
     readonly status: number,
     method: string,
     path: string,
+    readonly retryAfterMs = 0,
   ) {
     super(`GitHub API ${method} ${path} failed with HTTP ${status}.`);
     this.name = "GitHubApiError";
@@ -209,7 +240,7 @@ export type ModelReviewReport = Readonly<{
 type ReviewPacket = Readonly<{
   repository: PrReviewGateInput["repository"];
   pullRequest: PrReviewGateInput["pullRequest"];
-  issue: PrReviewGateInput["issue"];
+  issues: PrReviewGateInput["issues"];
   evidence: PrReviewGateInput["evidence"];
   branchProtection: PrReviewGateInput["branchProtection"];
   runtime: PrReviewGateInput["runtime"];
@@ -219,13 +250,7 @@ type ReviewPacket = Readonly<{
     status: "queued" | "in_progress" | "completed" | "missing" | "unknown";
     conclusion: string | null;
   }>;
-  diff: Readonly<{
-    complete: boolean;
-    changedFiles: number;
-    text: string;
-    digest: string;
-    changeDigest: string;
-  }>;
+  diff: CollectedPrDiff & Readonly<{ changeDigest: string }>;
   reviewContext: Readonly<{
     reportVersion: string;
     policyVersion: string;
@@ -237,6 +262,7 @@ type ReviewPacket = Readonly<{
 
 type ControllerConfig = Readonly<{
   api: GitHubApi;
+  completionStore?: CompletionStore;
   app: GitHubAppConfig;
   policy: TrustedPrReviewPolicy;
   botActorId: number;
@@ -378,6 +404,7 @@ export class GitHubRestClient implements GitHubApi {
         response.status,
         options.method ?? "GET",
         path,
+        githubRetryAfterMs(response.headers),
       );
     }
     if (response.status === 204) return undefined as T;
@@ -424,11 +451,23 @@ export class GitHubRestClient implements GitHubApi {
     if (Number.isFinite(contentLength) && contentLength > maxBytes) {
       throw new Error(`GitHub response exceeds the ${maxBytes}-byte limit.`);
     }
-    const bytes = new Uint8Array(await response.arrayBuffer());
-    if (bytes.byteLength > maxBytes) {
-      throw new Error(`GitHub response exceeds the ${maxBytes}-byte limit.`);
-    }
-    return bytes;
+    if (!response.body) throw new Error("GitHub response has no body.");
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    try {
+      while (true) {
+        const chunk = await reader.read();
+        if (chunk.done) break;
+        size += chunk.value.byteLength;
+        if (size > maxBytes) {
+          await reader.cancel();
+          throw new Error(`GitHub response exceeds the ${maxBytes}-byte limit.`);
+        }
+        chunks.push(chunk.value);
+      }
+    } finally { reader.releaseLock(); }
+    return Buffer.concat(chunks, size);
   }
 }
 
@@ -714,12 +753,19 @@ function digestDiscussion(
 
 function extractIssueReferences(title: string, body: string): number[] {
   const references = new Set<number>();
-  const pattern = /(?:^|[^A-Za-z0-9_])#([1-9]\d{0,8})\b|\/issues\/([1-9]\d{0,8})\b/g;
-  for (const match of `${title}\n${body}`.matchAll(pattern)) {
-    const issueNumber = Number(match[1] ?? match[2]);
-    if (Number.isSafeInteger(issueNumber)) references.add(issueNumber);
+  const text = `${title}\n${body}`.replace(/https?:\/\/[^\s<>\)]+/g, (url) => {
+    const match = url.match(/^https:\/\/github\.com\/lukemyself-hub\/SayHear\/issues\/([1-9]\d{0,8})(?:[?#].*)?$/i);
+    if (match) references.add(Number(match[1]));
+    return " ";
+  }).replace(/(?:[A-Za-z0-9_.-]+\/)?[A-Za-z0-9_.-]+#[1-9]\d{0,8}\b/g, (reference) => {
+    const local = reference.match(/^lukemyself-hub\/SayHear#([1-9]\d{0,8})$/i);
+    if (local) references.add(Number(local[1]));
+    return " ";
+  });
+  for (const match of text.matchAll(/(?:^|[^A-Za-z0-9_])#([1-9]\d{0,8})\b/g)) {
+    references.add(Number(match[1]));
   }
-  return [...references];
+  return [...references].sort((left, right) => left - right);
 }
 
 function labelNames(issue: GitHubIssue): string[] {
@@ -786,6 +832,8 @@ function diffChangeDigest(
         line.startsWith("rename to ") ||
         line.startsWith("new file mode ") ||
         line.startsWith("deleted file mode ") ||
+        line.startsWith("old mode ") ||
+        line.startsWith("new mode ") ||
         ((line.startsWith("+") || line.startsWith("-")) &&
           !line.startsWith("+++") &&
           !line.startsWith("---")),
@@ -1142,14 +1190,19 @@ async function createControllerConfig(
 async function createRuntimeControllerConfig(): Promise<ControllerConfig> {
   const appConfig = await readLocalAppConfig();
   const api = await createApiClient(appConfig);
-  return createControllerConfig(appConfig, api);
+  const config = await createControllerConfig(appConfig, api);
+  const privateKey = await readAppPrivateKey();
+  const publicKey = createPublicKey(privateKey).export({ type: "spki", format: "pem" }).toString();
+  return { ...config, completionStore: new SignedCompletionStore(
+    resolve(homedir(), "Library/Application Support/SayHear/PRApproval/completions"), privateKey, publicKey,
+  ) };
 }
 
 export function parsePauseState(
   comments: readonly GitHubComment[],
   ownerActorId: number,
   botActorId: number,
-): PrReviewGateInput["issue"]["pause"] {
+): PrReviewGateInput["issues"][number]["pause"] {
   const events: Array<Readonly<{
     at: string;
     active: boolean;
@@ -1275,10 +1328,10 @@ function currentCheckSummary(
   };
 }
 
-async function resolveLinkedIssue(
+export async function resolveLinkedIssues(
   api: GitHubApi,
   pullRequest: GitHubPullRequest,
-): Promise<GitHubIssue> {
+): Promise<GitHubIssue[]> {
   const references = extractIssueReferences(
     pullRequest.title,
     pullRequest.body ?? "",
@@ -1290,12 +1343,12 @@ async function resolveLinkedIssue(
     );
     if (!("pull_request" in item)) issues.push(item as GitHubIssue);
   }
-  if (issues.length !== 1) {
+  if (issues.length === 0) {
     throw new Error(
-      "The PR must contain exactly one reference to an Issue in SayHear.",
+      "The PR must reference at least one Issue in SayHear.",
     );
   }
-  return issues[0]!;
+  return issues.sort((left, right) => left.number - right.number);
 }
 
 export async function readCurrentPullRequestMergeSha(
@@ -1680,13 +1733,7 @@ type Snapshot = Readonly<{
   trustedWorkflowBlobSha: string | null;
   workflowStatus: "queued" | "in_progress" | "completed" | "missing" | "unknown";
   workflowConclusion: string | null;
-  diff: Readonly<{
-    complete: boolean;
-    changedFiles: number;
-    text: string;
-    digest: string;
-    changeDigest: string;
-  }>;
+  diff: CollectedPrDiff & Readonly<{ changeDigest: string }>;
 }>;
 
 async function readSnapshot(
@@ -1722,36 +1769,30 @@ async function readSnapshot(
     : null;
   if (!defaultBranchSha) throw new Error("The current main SHA is unavailable.");
 
-  const [issue, mergeSha] = await Promise.all([
-    resolveLinkedIssue(config.api, pullRequest),
+  const [issues, mergeSha] = await Promise.all([
+    resolveLinkedIssues(config.api, pullRequest),
     readCurrentPullRequestMergeSha(config.api, pullRequest),
   ]);
   const [
-    changedFileRecords,
-    fullDiffBytes,
+    fileManifest,
     commits,
-    issueComments,
+    issueContexts,
     prComments,
     reviewComments,
     reviews,
-    blockedBy,
     hasHumanReviewThread,
   ] = await Promise.all([
-    config.api.pages<JsonRecord>(
-      repositoryPath(`/pulls/${pullNumber}/files`),
-    ),
-    config.api
-      .bytes(repositoryPath(`/pulls/${pullNumber}`), {
-        accept: "application/vnd.github.diff",
-        maxBytes: MAX_DIFF_BYTES,
-      })
-      .catch(() => null),
+    readPullRequestFileManifest(config.api, pullNumber),
     config.api.pages<JsonRecord>(
       repositoryPath(`/pulls/${pullNumber}/commits`),
     ),
-    config.api.pages<GitHubComment>(
-      repositoryPath(`/issues/${issue.number}/comments`),
-    ),
+    Promise.all(issues.map(async (issue) => {
+      const [comments, blockedBy] = await Promise.all([
+        config.api.pages<GitHubComment>(repositoryPath(`/issues/${issue.number}/comments`)),
+        readIssueDependencies(config.api, issue.number),
+      ]);
+      return { issue, comments, blockedBy };
+    })),
     config.api.pages<GitHubComment>(
       repositoryPath(`/issues/${pullNumber}/comments`),
     ),
@@ -1761,7 +1802,6 @@ async function readSnapshot(
     config.api.pages<GitHubReview>(
       repositoryPath(`/pulls/${pullNumber}/reviews`),
     ),
-    readIssueDependencies(config.api, issue.number),
     readReviewThreadState(
       config.api,
       pullNumber,
@@ -1769,6 +1809,7 @@ async function readSnapshot(
     ),
   ]);
 
+  const changedFileRecords = fileManifest.files;
   const latestCommit = commits.at(-1);
   const latestCommitAuthor =
     latestCommit && isRecord(latestCommit.author) ? latestCommit.author : null;
@@ -1819,35 +1860,15 @@ async function readSnapshot(
       },
     ];
   });
-  const diffText =
-    fullDiffBytes === null
-      ? ""
-      : Buffer.from(fullDiffBytes).toString("utf8");
-  const diffHeaderCount = [...diffText.matchAll(/^diff --git /gm)].length;
-  const hasBinaryContent = /^Binary files .+ differ$/m.test(diffText);
-  const diffBytesRoundTrip =
-    fullDiffBytes !== null &&
-    Buffer.compare(Buffer.from(diffText, "utf8"), Buffer.from(fullDiffBytes)) ===
-      0;
-  const diffComplete =
-    changedFileRecords.length > 0 &&
-    changedFileRecords.length === pullRequest.changed_files &&
-    diffHeaderCount === changedFileRecords.length &&
-    diffBytesRoundTrip &&
-    !hasBinaryContent;
-  const diffDigest = createHash("sha256")
-    .update(
-      fullDiffBytes ??
-        JSON.stringify(
-          changedFileRecords.map((file) => ({
-            path: file.filename,
-            previousPath: file.previous_filename ?? null,
-            status: file.status,
-            patch: typeof file.patch === "string" ? file.patch : null,
-          })),
-        ),
-    )
-    .digest("hex");
+  const diffResult = await collectPullRequestDiff(config.api, {
+    number: pullNumber,
+    headSha: pullRequest.head.sha.toLowerCase(),
+    baseSha: pullRequest.base.sha.toLowerCase(),
+    changedFiles: pullRequest.changed_files,
+  }, changedFileRecords, resolve(REVIEW_ARTIFACT_DIRECTORY, "git-blobs"));
+  const collectedDiff = fileManifest.error === null ? diffResult : { ...diffResult, reason: `GitHub file manifest unavailable: ${fileManifest.error}` };
+  const diffComplete = collectedDiff.complete;
+  const diffDigest = collectedDiff.digest;
 
   const prDiscussionDigest = digestDiscussion(
     [...prComments, ...reviewComments].filter(
@@ -1855,32 +1876,25 @@ async function readSnapshot(
     ),
     reviews.filter((review) => review.user.id !== config.botActorId),
   );
-  const issueDiscussionDigest = digestDiscussion(
-    issueComments.filter((comment) => comment.user.id !== config.botActorId),
-  );
   const currentPullRequests = openPullRequests.filter(
     (candidate) =>
       candidate.number !== pullNumber &&
       candidate.base.ref === "main" &&
       isRecord(candidate.auto_merge),
   );
-  const linkedNumbers = [issue.number];
-  const issuePause = parsePauseState(
-    [...issueComments, ...prComments],
-    config.ownerActorId,
-    config.botActorId,
-  );
-  const normalizedIssue: PrReviewGateInput["issue"] = {
+  const linkedNumbers = issues.map((issue) => issue.number);
+  const normalizedIssues: PrReviewGateInput["issues"] = issueContexts.map(({ issue, comments, blockedBy }) => ({
     number: issue.number,
     state: issue.state,
     title: issue.title,
     body: issue.body ?? "",
     updatedAt: issue.updated_at,
-    discussionDigest: issueDiscussionDigest,
+    discussionDigest: digestDiscussion(comments.filter((comment) => comment.user.id !== config.botActorId)),
     labels: labelNames(issue),
     blockedBy,
-    pause: issuePause,
-  };
+    pause: parsePauseState([...comments, ...prComments], config.ownerActorId, config.botActorId),
+  }));
+  const issueClosure = parseIssueClosureExclusions(pullRequest.title, pullRequest.body ?? "");
   const normalizedPullRequest: PrReviewGateInput["pullRequest"] = {
     number: pullRequest.number,
     state: pullRequest.state,
@@ -1899,6 +1913,8 @@ async function readSnapshot(
     authorId: pullRequest.user.id,
     lastCommitAuthorId,
     linkedIssueNumbers: linkedNumbers,
+    keepOpenIssueNumbers: issueClosure.keepOpenIssueNumbers,
+    issueClosureAmbiguous: issueClosure.ambiguous,
     changedFiles,
   };
   const normalizedRepository: PrReviewGateInput["repository"] = {
@@ -1920,7 +1936,7 @@ async function readSnapshot(
     matchHumanReviewAuthorization(config.app.humanReviewAuthorizations ?? [], {
       pullRequestNumber: pullNumber,
       diffDigest,
-      requirementDigest: requirementDigest(normalizedIssue, normalizedPullRequest),
+      requirementDigest: requirementDigest(normalizedIssues, normalizedPullRequest),
       diffComplete,
     }),
   );
@@ -1928,7 +1944,7 @@ async function readSnapshot(
     gateInput: {
       repository: normalizedRepository,
       pullRequest: normalizedPullRequest,
-      issue: normalizedIssue,
+      issues: normalizedIssues,
       branchProtection: protection,
       runtime: {
         reviewAppInstalledForRepository: true,
@@ -1943,11 +1959,9 @@ async function readSnapshot(
     workflowStatus: collected.workflowStatus,
     workflowConclusion: collected.workflowConclusion,
     diff: {
-      complete: diffComplete,
-      changedFiles: changedFileRecords.length,
-      text: diffComplete ? diffText : "",
-      digest: diffDigest,
-      changeDigest: diffChangeDigest(diffText, changedFiles),
+      ...collectedDiff,
+      changeDigest: collectedDiff.source === "github-blobs"
+        ? collectedDiff.digest : diffChangeDigest(collectedDiff.text, changedFiles),
     },
   };
 }
@@ -1991,7 +2005,7 @@ function evaluateSnapshot(
   const humanAuthorization = matchHumanReviewAuthorization(config.app.humanReviewAuthorizations ?? [], {
     pullRequestNumber: snapshot.gateInput.pullRequest.number,
     diffDigest: snapshot.diff.digest,
-    requirementDigest: requirementDigest(snapshot.gateInput.issue, snapshot.gateInput.pullRequest),
+    requirementDigest: requirementDigest(snapshot.gateInput.issues, snapshot.gateInput.pullRequest),
     diffComplete: snapshot.diff.complete,
   });
   const policy = {
@@ -2038,7 +2052,7 @@ function reviewPacket(
       policyVersion:
         reportContext?.policyVersion ?? PR_REVIEW_GATE_POLICY_VERSION,
       requirementDigest: requirementDigest(
-        snapshot.gateInput.issue,
+        snapshot.gateInput.issues,
         snapshot.gateInput.pullRequest,
       ),
     },
@@ -2200,11 +2214,15 @@ export function parseModelReviewReport(value: unknown): ModelReviewReport {
   };
 }
 
-async function removeStaleLock(): Promise<boolean> {
+async function removeStaleLock(directory: string): Promise<boolean> {
+  const lockInfo = await lstat(directory).catch(() => null);
+  if (!lockInfo || !lockInfo.isDirectory() || lockInfo.isSymbolicLink() || lockInfo.uid !== process.getuid?.() || (lockInfo.mode & 0o077) !== 0) return false;
   try {
-    const ownerPath = `${LOCK_DIRECTORY}/owner.json`;
+    const ownerPath = `${directory}/owner.json`;
+    const ownerInfo = await lstat(ownerPath);
+    if (!ownerInfo.isFile() || ownerInfo.isSymbolicLink() || ownerInfo.uid !== process.getuid?.() || (ownerInfo.mode & 0o077) !== 0 || ownerInfo.size > 1_000) return false;
     const owner = JSON.parse(await readFile(ownerPath, "utf8")) as unknown;
-    if (!isRecord(owner) || typeof owner.pid !== "number") return false;
+    if (!isRecord(owner) || typeof owner.pid !== "number" || !Number.isSafeInteger(owner.pid) || owner.pid <= 0) return false;
     try {
       process.kill(owner.pid, 0);
       return false;
@@ -2218,13 +2236,13 @@ async function removeStaleLock(): Promise<boolean> {
       }
     }
     await unlink(ownerPath);
-    await rmdir(LOCK_DIRECTORY);
+    await rmdir(directory);
     return true;
   } catch {
     try {
-      const lock = await stat(LOCK_DIRECTORY);
+      const lock = await stat(directory);
       if (Date.now() - lock.mtimeMs < 60_000) return false;
-      await rmdir(LOCK_DIRECTORY);
+      await rmdir(directory);
       return true;
     } catch {
       return false;
@@ -2232,16 +2250,16 @@ async function removeStaleLock(): Promise<boolean> {
   }
 }
 
-async function withGlobalLock<T>(operation: () => Promise<T>): Promise<T> {
+export async function withGlobalLock<T>(operation: () => Promise<T>, directory = LOCK_DIRECTORY): Promise<T> {
   try {
-    await mkdir(LOCK_DIRECTORY, { mode: 0o700 });
+    await mkdir(directory, { mode: 0o700 });
   } catch {
-    if (!(await removeStaleLock())) {
+    if (!(await removeStaleLock(directory))) {
       throw new Error("Another PR approval operation holds the repository lock.");
     }
-    await mkdir(LOCK_DIRECTORY, { mode: 0o700 });
+    await mkdir(directory, { mode: 0o700 });
   }
-  const ownerPath = `${LOCK_DIRECTORY}/owner.json`;
+  const ownerPath = `${directory}/owner.json`;
   try {
     await writeFile(
       ownerPath,
@@ -2256,7 +2274,7 @@ async function withGlobalLock<T>(operation: () => Promise<T>): Promise<T> {
       // The lock directory may have been removed while recovering a stale lock.
     }
     try {
-      await rmdir(LOCK_DIRECTORY);
+      await rmdir(directory);
     } catch {
       // Another operation owns the lock now.
     }
@@ -2445,7 +2463,7 @@ async function startReviewCheckRun(
 ): Promise<"started" | "already_running" | "blocked"> {
   const pullRequest = snapshot.gateInput.pullRequest;
   const requirement = requirementDigest(
-    snapshot.gateInput.issue,
+    snapshot.gateInput.issues,
     pullRequest,
   );
   const externalId = checkExternalId(
@@ -2529,7 +2547,7 @@ async function readSavedReviewReport(
 }> | null> {
   const pullRequest = snapshot.gateInput.pullRequest;
   const requirement = requirementDigest(
-    snapshot.gateInput.issue,
+    snapshot.gateInput.issues,
     pullRequest,
   );
   const externalId = checkExternalId(
@@ -2772,9 +2790,17 @@ async function applyIssueHandoff(
   api: GitHubApi,
   issueNumber: number,
   target: "ready-for-agent",
+  preserveHumanState = false,
 ): Promise<void> {
   const issuePath = repositoryPath(`/issues/${issueNumber}`);
+  const assertNoHumanState = (candidate: GitHubIssue) => {
+    if (preserveHumanState && labelNames(candidate).some((label) =>
+      ["ready-for-human", "needs-info", "needs-triage", "wontfix"].includes(label.toLowerCase()))) {
+      throw new Error("The Issue acquired a human triage state during base synchronization.");
+    }
+  };
   const issue = await api.request<GitHubIssue>(issuePath);
+  assertNoHumanState(issue);
   let currentLabels = new Set(
     labelNames(issue).map((label) => label.toLowerCase()),
   );
@@ -2793,6 +2819,7 @@ async function applyIssueHandoff(
   for (const label of ISSUE_STATUS_LABELS) {
     if (label !== target && currentLabels.has(label)) {
       const latest = await api.request<GitHubIssue>(issuePath);
+      assertNoHumanState(latest);
       if (latest.state !== "open") {
         await clearIssueStatusLabels(api, issueNumber);
         throw new Error(`Issue #${issueNumber} closed during the review handoff.`);
@@ -2811,6 +2838,7 @@ async function applyIssueHandoff(
   }
 
   const readback = await api.request<GitHubIssue>(issuePath);
+  assertNoHumanState(readback);
   if (readback.state !== "open") {
     await clearIssueStatusLabels(api, issueNumber);
     throw new Error(`Issue #${issueNumber} closed during the review handoff.`);
@@ -2844,6 +2872,29 @@ export async function publishIssueHandoff(
   await applyIssueHandoff(api, issueNumber, "ready-for-agent");
 }
 
+export async function forEachLinkedIssue(
+  issueNumbers: readonly number[],
+  action: (number: number) => Promise<void>,
+): Promise<void> {
+  const failures: string[] = [];
+  for (const number of [...new Set(issueNumbers)].sort((left, right) => left - right)) {
+    try { await action(number); }
+    catch (error) { failures.push(`Issue #${number}: ${error instanceof Error ? error.message : String(error)}`); }
+  }
+  if (failures.length > 0) throw new Error(`Issue updates incomplete: ${failures.join("; ")}`);
+}
+
+export async function completeLinkedIssuesAfterMerge(
+  api: GitHubApi,
+  issueNumbers: readonly number[],
+  proof: Readonly<{ autoMergeEnabled: boolean; merged: boolean }>,
+): Promise<void> {
+  // An enabled auto-merge can still be cancelled or blocked. Keep Issues occupied
+  // until GitHub confirms the merge; scan retries the completion after that.
+  if (!proof.merged) return;
+  await forEachLinkedIssue(issueNumbers, (number) => completeIssueAfterApproval(api, number, proof));
+}
+
 export async function completeIssueAfterApproval(
   api: GitHubApi,
   issueNumber: number,
@@ -2852,8 +2903,8 @@ export async function completeIssueAfterApproval(
     merged: boolean;
   }>,
 ): Promise<void> {
-  if (!proof.autoMergeEnabled && !proof.merged) {
-    throw new Error("The Issue cannot close before GitHub confirms auto-merge or merge.");
+  if (!proof.merged) {
+    throw new Error("The Issue cannot close before GitHub confirms merge.");
   }
   const issuePath = repositoryPath(`/issues/${issueNumber}`);
   let issue = await api.request<GitHubIssue>(issuePath);
@@ -2887,47 +2938,48 @@ async function recordReviewHandoff(
   gate: PrReviewGateReport,
   review: GitHubReview,
 ): Promise<void> {
-  const issueNumber = snapshot.gateInput.issue.number;
-  const history = parseRequestChangeHistory(
-    await config.api.pages<GitHubComment>(
-      repositoryPath(`/issues/${issueNumber}/comments`),
-    ),
-    report.pullRequestNumber,
-    config.botActorId,
-  );
-  const round = nextRequestChangeRound(
-    history,
-    snapshot.diff.changeDigest,
-  );
-  const diffDigest = snapshot.diff.changeDigest;
-  const outcome =
-    report.decision === "request_changes" ? "request_changes" : "approve";
-  const marker = `${AUTO_REVIEW_COMMENT_MARKER} pr=${report.pullRequestNumber} review=${review.id} head=${report.headSha} base=${report.baseSha}`;
-  const finalMarker =
-    `${AUTO_REVIEW_COMMENT_MARKER} pr=${report.pullRequestNumber} review=${review.id} head=${report.headSha} base=${report.baseSha} round=${round} diff=${diffDigest} outcome=${outcome} -->`;
-  const body = [
-    `PR [#${report.pullRequestNumber}](https://github.com/${SAYHEAR_REPOSITORY_NAME}/pull/${report.pullRequestNumber}), review [${review.id}](https://github.com/${SAYHEAR_REPOSITORY_NAME}/pull/${report.pullRequestNumber}#pullrequestreview-${review.id}).`,
-    `Reviewed head: \`${report.headSha}\`.`,
-    `Gate: \`${gate.outcome}\`.`,
-    ...gate.reasons.map((reason) => `- ${cleanUserText(reason.message)}`),
-    ...report.findings
-      .filter((finding) => finding.severity !== "P3")
-      .map(
-        (finding) =>
-          `- **${finding.severity}** \`${cleanUserText(finding.file)}:${finding.line}\`: ${cleanUserText(finding.trigger)}. Impact: ${cleanUserText(finding.userImpact)}. Evidence: ${cleanUserText(finding.evidence)}`,
+  await forEachLinkedIssue(snapshot.gateInput.issues.filter((issue) => issue.state === "open" && !snapshot.gateInput.pullRequest.keepOpenIssueNumbers.includes(issue.number)).map((issue) => issue.number), async (issueNumber) => {
+    const history = parseRequestChangeHistory(
+      await config.api.pages<GitHubComment>(
+        repositoryPath(`/issues/${issueNumber}/comments`),
       ),
-    ...(round >= 3
-      ? [
-          "",
-          "Automatic follow-up is paused after three post-fix reviews with blocking findings. Luke must resume it explicitly.",
-          `@lukemyself-hub`,
-          `${PAUSE_MARKER} pr=${report.pullRequestNumber} active=true round=${round} -->`,
-        ]
-      : []),
-    "",
-    finalMarker,
-  ].join("\n");
-  await publishIssueHandoff(config.api, issueNumber, marker, body, config.botActorId);
+      report.pullRequestNumber,
+      config.botActorId,
+    );
+    const round = nextRequestChangeRound(
+      history,
+      snapshot.diff.changeDigest,
+    );
+    const diffDigest = snapshot.diff.changeDigest;
+    const outcome =
+      report.decision === "request_changes" ? "request_changes" : "approve";
+    const marker = `${AUTO_REVIEW_COMMENT_MARKER} pr=${report.pullRequestNumber} review=${review.id} head=${report.headSha} base=${report.baseSha}`;
+    const finalMarker =
+      `${AUTO_REVIEW_COMMENT_MARKER} pr=${report.pullRequestNumber} review=${review.id} head=${report.headSha} base=${report.baseSha} round=${round} diff=${diffDigest} outcome=${outcome} -->`;
+    const body = [
+      `PR [#${report.pullRequestNumber}](https://github.com/${SAYHEAR_REPOSITORY_NAME}/pull/${report.pullRequestNumber}), review [${review.id}](https://github.com/${SAYHEAR_REPOSITORY_NAME}/pull/${report.pullRequestNumber}#pullrequestreview-${review.id}).`,
+      `Reviewed head: \`${report.headSha}\`.`,
+      `Gate: \`${gate.outcome}\`.`,
+      ...gate.reasons.map((reason) => `- ${cleanUserText(reason.message)}`),
+      ...report.findings
+        .filter((finding) => finding.severity !== "P3")
+        .map(
+          (finding) =>
+            `- **${finding.severity}** \`${cleanUserText(finding.file)}:${finding.line}\`: ${cleanUserText(finding.trigger)}. Impact: ${cleanUserText(finding.userImpact)}. Evidence: ${cleanUserText(finding.evidence)}`,
+        ),
+      ...(round >= 3
+        ? [
+            "",
+            "Automatic follow-up is paused after three post-fix reviews with blocking findings. Luke must resume it explicitly.",
+            `@lukemyself-hub`,
+            `${PAUSE_MARKER} pr=${report.pullRequestNumber} active=true round=${round} -->`,
+          ]
+        : []),
+      "",
+      finalMarker,
+    ].join("\n");
+    await publishIssueHandoff(config.api, issueNumber, marker, body, config.botActorId);
+  });
 }
 
 export async function requestProtectedMerge(
@@ -2935,6 +2987,7 @@ export async function requestProtectedMerge(
   pullRequestNumber: number,
   headSha: string,
   mergeMethod: "MERGE" | "SQUASH" | "REBASE",
+  recoverLostResponse = true,
 ): Promise<void> {
   let result: JsonRecord;
   try {
@@ -2944,6 +2997,7 @@ export async function requestProtectedMerge(
         body: { sha: headSha, merge_method: mergeMethod.toLowerCase() },
       });
   } catch (error) {
+    if (!recoverLostResponse) throw error;
     const readback = await api.request<JsonRecord>(
       repositoryPath(`/pulls/${pullRequestNumber}`),
     ).catch(() => null);
@@ -2975,7 +3029,7 @@ async function requestPullRequestAutoMerge(
   // GitHub exposes auto-merge only while requirements remain pending. Once
   // clean, use its protected merge endpoint with the reviewed head pinned.
   if (pullRequest.mergeable === true && pullRequest.mergeable_state === "clean") {
-    await requestProtectedMerge(config.api, report.pullRequestNumber, report.headSha, mergeMethod);
+    await requestProtectedMerge(config.api, report.pullRequestNumber, report.headSha, mergeMethod, false);
     return;
   }
   const mutation = `mutation($input:EnablePullRequestAutoMergeInput!){
@@ -2983,26 +3037,10 @@ async function requestPullRequestAutoMerge(
       pullRequest{number autoMergeRequest{enabledAt mergeMethod}}
     }
   }`;
-  try {
-    const result = await readGraphql<{
-      enablePullRequestAutoMerge?: { pullRequest?: JsonRecord | null } | null;
-    }>(config.api, mutation, {
-      input: {
-        pullRequestId: pullRequestNodeId,
-        mergeMethod,
-      },
-    });
-    if (!result.enablePullRequestAutoMerge?.pullRequest) {
-      throw new Error("GitHub did not confirm auto-merge activation.");
-    }
-  } catch (error) {
-    const refreshed = await config.api.request<GitHubPullRequest>(
-      repositoryPath(`/pulls/${report.pullRequestNumber}`),
-    ).catch(() => null);
-    if (refreshed && (isRecord(refreshed.auto_merge) ||
-        (refreshed.merged === true && refreshed.head.sha === report.headSha))) return;
-    throw error;
-  }
+  const result = await readGraphql<{
+    enablePullRequestAutoMerge?: { pullRequest?: JsonRecord | null } | null;
+  }>(config.api, mutation, { input: { pullRequestId: pullRequestNodeId, mergeMethod } });
+  if (!result.enablePullRequestAutoMerge?.pullRequest) throw new Error("GitHub did not confirm auto-merge activation.");
 }
 
 export function isReviewStillPending(
@@ -3035,7 +3073,6 @@ async function postNonBlockingOutcome(
   report: ModelReviewReport,
   gate: PrReviewGateReport,
 ): Promise<void> {
-  const issueNumber = snapshot.gateInput.issue.number;
   const marker = `<!-- sayhear-pr-auto-approval-outcome:v1 pr=${report.pullRequestNumber} head=${report.headSha} requirement=${report.requirementDigest} outcome=${gate.outcome} -->`;
   const body = [
     `Automated review of PR #${report.pullRequestNumber} stopped at \`${gate.outcome}\`.`,
@@ -3054,7 +3091,222 @@ async function postNonBlockingOutcome(
     "",
     marker,
   ].join("\n");
-  await publishIssueHandoff(config.api, issueNumber, marker, body, config.botActorId);
+  await forEachLinkedIssue(snapshot.gateInput.issues.filter((issue) => issue.state === "open" && !snapshot.gateInput.pullRequest.keepOpenIssueNumbers.includes(issue.number)).map((issue) => issue.number),
+    (issueNumber) => publishIssueHandoff(config.api, issueNumber, marker, body, config.botActorId));
+}
+
+export async function handoffStalePullRequestBase(
+  api: GitHubApi,
+  expected: PrReviewGateInput["pullRequest"],
+  actors: Readonly<{ botActorId: number; ownerActorId: number }>,
+): Promise<Readonly<{
+  status: "handed_off" | "current_base" | "state_changed" | "held_for_human" | "no_open_issue";
+  currentMainSha: string;
+  issueNumbers: readonly number[];
+  heldIssueNumbers: readonly number[];
+}>> {
+  const [pull, refs] = await Promise.all([
+    api.request<GitHubPullRequest>(repositoryPath(`/pulls/${expected.number}`)),
+    api.request<JsonRecord>(repositoryPath("/git/ref/heads/main")),
+  ]);
+  const currentMainSha = isRecord(refs.object) ? recordString(refs.object, "sha").toLowerCase() : "";
+  if (!/^[0-9a-f]{40}$/.test(currentMainSha)) throw new Error("The current main SHA is unavailable for Issue handoff.");
+  const heldIssueNumbers: number[] = [];
+  const result = (status: "handed_off" | "current_base" | "state_changed" | "held_for_human" | "no_open_issue", issueNumbers: readonly number[] = []) =>
+    ({ status, currentMainSha, issueNumbers, heldIssueNumbers });
+  const matches = (candidate: GitHubPullRequest) => candidate.state === "open" && !candidate.draft &&
+    candidate.base.ref === "main" && candidate.head.repo?.id === SAYHEAR_REPOSITORY_ID &&
+    candidate.head.sha.toLowerCase() === expected.headSha && candidate.base.sha.toLowerCase() === expected.baseSha &&
+    candidate.title === expected.title && (candidate.body ?? "") === expected.body && !isRecord(candidate.auto_merge);
+  if (!matches(pull)) return result("state_changed");
+  if (pull.base.sha.toLowerCase() === currentMainSha) return result("current_base");
+
+  const exclusions = parseIssueClosureExclusions(pull.title, pull.body ?? "");
+  if (exclusions.ambiguous) return result("held_for_human");
+  const issues = await resolveLinkedIssues(api, pull);
+  const numbers = issues.map((issue) => issue.number);
+  if ([...expected.linkedIssueNumbers].sort((a, b) => a - b).join() !== numbers.join() ||
+    [...expected.keepOpenIssueNumbers].sort((a, b) => a - b).join() !== exclusions.keepOpenIssueNumbers.join()) {
+    return result("state_changed");
+  }
+  const targets = issues.filter((issue) => issue.state === "open" && !exclusions.keepOpenIssueNumbers.includes(issue.number));
+  if (targets.length === 0) return result("no_open_issue");
+  const prComments = await api.pages<GitHubComment>(repositoryPath(`/issues/${pull.number}/comments`));
+  const contexts = await Promise.all(targets.map(async (issue) => ({
+    issue,
+    pause: parsePauseState([
+      ...await api.pages<GitHubComment>(repositoryPath(`/issues/${issue.number}/comments`)), ...prComments,
+    ], actors.ownerActorId, actors.botActorId),
+  })));
+  const held = /\b(?:do not merge|do not auto[- ]merge|not for merge|not to be merged)\b|不要(?:自动)?合入|暂停自动审批/i.test(
+    [pull.title, pull.body ?? "", ...issues.flatMap((issue) => [issue.title, issue.body ?? ""])].join("\n"),
+  );
+  if (held || contexts.some(({ pause }) => pause.active || pause.source === "unknown")) return result("held_for_human");
+
+  const marker = `<!-- sayhear-pr-base-sync:v1 pr=${pull.number} head=${expected.headSha} base=${expected.baseSha} main=${currentMainSha} -->`;
+  const body = [
+    `PR [#${pull.number}](https://github.com/${SAYHEAR_REPOSITORY_NAME}/pull/${pull.number}) 尚未基于当前 main，交回实现 Agent 接续。`,
+    `被核验 head: \`${expected.headSha}\`；PR base: \`${expected.baseSha}\`；当前 main: \`${currentMainSha}\`。`,
+    "",
+    "请接续原 PR 和原分支，执行前重新读取最新 main、Issue 评论、依赖与暂停状态。同步最新 main，处理冲突，并在更新后的 head/base 上重新运行可信 PR Validate 与受影响专项，完成后继续提交原 PR 审核；不要创建重复 PR。",
+    "旧 head/base 的绿色 CI、审核报告或人工绑定不能代替当前版本的验证；同步后 controller 会重新核验差异、需求摘要与授权。",
+    "如 Issue 带 ready-for-human、needs-info、needs-triage 或 wontfix，本提醒保留原人工状态，等待维护者决定，不自动交给实现 Agent。",
+    "这只是基线同步交接，不是代码缺陷 request changes，不增加三轮修改失败计数，也不解除暂停、人工决定、迁移或生产验收门禁。",
+    "",
+    marker,
+  ].join("\n");
+  const assertUnchanged = async () => {
+    const current = await api.request<GitHubPullRequest>(repositoryPath(`/pulls/${pull.number}`));
+    if (!matches(current)) throw new Error("The PR changed during the base-sync handoff; fresh context is required.");
+  };
+  const completionMarker = marker.replace(" -->", " completed=true -->");
+  const handedOff: number[] = [];
+  await forEachLinkedIssue(targets.map((issue) => issue.number), async (number) => {
+    await assertUnchanged();
+    const issue = await api.request<GitHubIssue>(repositoryPath(`/issues/${number}`));
+    if (issue.state !== "open") return;
+    const assertIssueUnpaused = async () => {
+      const latestIssue = await api.request<GitHubIssue>(repositoryPath(`/issues/${number}`));
+      if (latestIssue.state !== "open") throw new Error("The Issue closed during the base-sync handoff.");
+      if (/\b(?:do not merge|do not auto[- ]merge|not for merge|not to be merged)\b|不要(?:自动)?合入|暂停自动审批/i.test(`${latestIssue.title}\n${latestIssue.body ?? ""}`)) {
+        throw new Error("The Issue requires a maintainer before base synchronization.");
+      }
+      const latestPause = parsePauseState([
+        ...await api.pages<GitHubComment>(repositoryPath(`/issues/${number}/comments`)),
+        ...await api.pages<GitHubComment>(repositoryPath(`/issues/${pull.number}/comments`)),
+      ], actors.ownerActorId, actors.botActorId);
+      if (latestPause.active || latestPause.source === "unknown") throw new Error("The Issue paused during the base-sync handoff.");
+      return latestIssue;
+    };
+    const initialIssue = await assertIssueUnpaused();
+    const existingComments = await api.pages<GitHubComment>(repositoryPath(`/issues/${number}/comments`));
+    if (existingComments.some((comment) => comment.user.id === actors.botActorId && comment.body?.includes(completionMarker) === true)) {
+      handedOff.push(number);
+      return;
+    }
+    const priorCompletedHandoff = existingComments.some((comment) => comment.user.id === actors.botActorId &&
+      comment.body?.includes(`<!-- sayhear-pr-base-sync:v1 pr=${pull.number} head=${expected.headSha} base=${expected.baseSha} main=`) === true &&
+      comment.body.includes(" completed=true -->"));
+    if (priorCompletedHandoff && labelNames(initialIssue).includes("ongoing") && !labelNames(initialIssue).includes("ready-for-agent")) {
+      await postIssueCommentOnce(api, number, marker, body, actors.botActorId);
+      handedOff.push(number);
+      return;
+    }
+    if (existingComments.some((comment) => comment.user.id === actors.botActorId && comment.body?.includes(marker) === true) &&
+      labelNames(initialIssue).includes("ongoing") && !labelNames(initialIssue).includes("ready-for-agent")) {
+      throw new Error("An earlier handoff is unconfirmed and ongoing may be a new Agent claim; preserve occupancy and resolve the handoff manually.");
+    }
+    await postIssueCommentOnce(api, number, marker, body, actors.botActorId);
+    await assertUnchanged();
+    const latestIssue = await assertIssueUnpaused();
+    if (labelNames(latestIssue).some((label) => ["ready-for-human", "needs-info", "needs-triage", "wontfix"].includes(label.toLowerCase()))) {
+      heldIssueNumbers.push(number);
+      return;
+    }
+    await applyIssueHandoff(api, number, "ready-for-agent", true);
+    await postIssueCommentOnce(api, number, completionMarker,
+      `PR #${pull.number} 的本轮 main 同步交接已完成，评论与 ready-for-agent 标签均已回读。后续认领保留 ongoing，不重复释放。\n\n${completionMarker}`, actors.botActorId);
+    handedOff.push(number);
+  });
+  return result(heldIssueNumbers.length > 0 ? "held_for_human" : "handed_off", handedOff);
+}
+
+export async function reconcileIssueCompletion(
+  api: GitHubApi,
+  identity: CompletionIdentity,
+): Promise<"waiting_for_merge" | "issues_completed"> {
+  if (await confirmCompletionMerge(api, identity) === null) return "waiting_for_merge";
+  await verifyCompletionRequirements(api, identity);
+  await completeLinkedIssuesAfterMerge(api, identity.issueNumbers, { autoMergeEnabled: false, merged: true });
+  return "issues_completed";
+}
+
+export async function confirmCompletionMerge(api: GitHubApi, identity: CompletionIdentity): Promise<string | null> {
+  let raw: unknown;
+  try { raw = await api.request<unknown>(repositoryPath(`/pulls/${identity.pullRequestNumber}`)); }
+  catch (error) {
+    if (error instanceof GitHubApiError) {
+      if (error.status !== 429 && error.status !== 403 && error.status < 500) throw new CompletionMismatch(`completion_http_${error.status}`);
+      throw new CompletionUnavailable("completion_http_retry", error.retryAfterMs);
+    }
+    throw new CompletionUnavailable("completion_network_unavailable");
+  }
+  if (!isRecord(raw) || !isRecord(raw.head) || !isRecord(raw.base) || !isRecord(raw.head.repo) || !isRecord(raw.base.repo) ||
+    typeof raw.number !== "number" || typeof raw.node_id !== "string" || typeof raw.head.sha !== "string" ||
+    typeof raw.head.repo.id !== "number" || typeof raw.base.repo.id !== "number" || typeof raw.base.ref !== "string" ||
+    typeof raw.merged !== "boolean" || (raw.state !== "open" && raw.state !== "closed")) {
+    throw new CompletionUnavailable("completion_fields_missing");
+  }
+  const mismatches = [
+    [raw.number === identity.pullRequestNumber && raw.node_id === identity.pullRequestNodeId, "pr_identity_mismatch"],
+    [raw.head.repo.id === identity.repositoryId && raw.base.repo.id === identity.baseRepositoryId, "repository_mismatch"],
+    [raw.head.sha.toLowerCase() === identity.headSha, "head_mismatch"],
+    [raw.base.ref === identity.baseRef, "base_mismatch"],
+  ] as const;
+  for (const [matches, reason] of mismatches) if (!matches) throw new CompletionMismatch(reason);
+  if (raw.merged && raw.state !== "closed") throw new CompletionUnavailable("completion_state_contradictory");
+  if (!raw.merged) {
+    if (raw.state === "closed") throw new CompletionMismatch("closed_without_merge");
+    return null;
+  }
+  if (typeof raw.merge_commit_sha !== "string" || !/^[a-f0-9]{40}$/i.test(raw.merge_commit_sha)) throw new CompletionUnavailable("merge_sha_missing");
+  const reviews = await api.pages<GitHubReview>(repositoryPath(`/pulls/${identity.pullRequestNumber}/reviews`));
+  const review = reviews.find((value) => value.id === identity.reviewId);
+  if (!review) throw new CompletionUnavailable("approval_readback_missing");
+  if (!isRecord(review.user) || typeof review.user.id !== "number" || typeof review.commit_id !== "string" || typeof review.state !== "string") throw new CompletionUnavailable("approval_fields_missing");
+  const reportIdentity = { pullRequestNumber: identity.pullRequestNumber, headSha: identity.headSha, baseSha: identity.approvedBaseSha, requirementDigest: identity.requirementDigest };
+  if (review.user.id !== identity.botActorId || review.commit_id.toLowerCase() !== identity.headSha || review.state !== "APPROVED" ||
+    appReviewOutcomeForIdentity(review.body, reportIdentity) !== "approve" ||
+    reviews.some((candidate) => candidate.id > identity.reviewId && candidate.user.id === identity.botActorId && candidate.commit_id.toLowerCase() === identity.headSha && candidate.state === "CHANGES_REQUESTED")) {
+    throw new CompletionMismatch("reviewer_mismatch");
+  }
+  return raw.merge_commit_sha.toLowerCase();
+}
+
+export async function verifyCompletionRequirements(api: GitHubApi, identity: CompletionIdentity): Promise<void> {
+  const pull = await api.request<GitHubPullRequest>(repositoryPath(`/pulls/${identity.pullRequestNumber}`));
+  const issues = await resolveLinkedIssues(api, pull);
+  const [comments, reviewComments, reviews] = await Promise.all([
+    api.pages<GitHubComment>(repositoryPath(`/issues/${pull.number}/comments`)),
+    api.pages<GitHubComment>(repositoryPath(`/pulls/${pull.number}/comments`)),
+    api.pages<GitHubReview>(repositoryPath(`/pulls/${pull.number}/reviews`)),
+  ]);
+  const requirements = await Promise.all(issues.map(async (issue) => ({
+    number: issue.number, title: issue.title, body: issue.body ?? "", updatedAt: issue.updated_at,
+    discussionDigest: digestDiscussion((await api.pages<GitHubComment>(repositoryPath(`/issues/${issue.number}/comments`))).filter((comment) => comment.user.id !== identity.botActorId)),
+  })));
+  const content = requirementDigest(requirements, { number: pull.number, title: pull.title, body: pull.body ?? "", updatedAt: pull.updated_at, discussionDigest: digestDiscussion(
+    [...comments, ...reviewComments].filter((comment) => comment.user.id !== identity.botActorId && !isVercelDeploymentStatus(comment)),
+    reviews.filter((review) => review.user.id !== identity.botActorId),
+  ) });
+  if (content !== identity.requirementDigest) throw new CompletionMismatch("requirement_content_mismatch");
+}
+
+async function recoverControllerCompletion(config: ControllerConfig, receipt: CompletionRecord): Promise<CompletionRecord> {
+  if (!config.completionStore) throw new Error("Trusted completion store unavailable.");
+  return recoverCompletion(config.completionStore, receipt, {
+    confirmMerge: async (identity) => {
+      if (identity.repositoryId !== SAYHEAR_REPOSITORY_ID || identity.baseRepositoryId !== SAYHEAR_REPOSITORY_ID || identity.baseRef !== "main" ||
+        identity.botActorId !== config.botActorId || identity.appId !== config.app.appId || identity.policyVersion !== PR_REVIEW_GATE_POLICY_VERSION) throw new CompletionMismatch("trusted_identity_mismatch");
+      return confirmCompletionMerge(config.api, identity);
+    },
+    completeIssues: async (identity) => {
+      await verifyCompletionRequirements(config.api, identity);
+      await completeLinkedIssuesAfterMerge(config.api, identity.issueNumbers, { autoMergeEnabled: false, merged: true });
+    },
+  });
+}
+
+async function retryPendingIssueCompletions(config: ControllerConfig, prepareOnly: boolean): Promise<Array<Readonly<Record<string, unknown>>>> {
+  if (!config.completionStore) throw new Error("Trusted completion store unavailable.");
+  const results: Array<Readonly<Record<string, unknown>>> = [];
+  for (const receipt of await config.completionStore.list()) {
+    if (receipt.phase === "complete") continue;
+    const recovered = prepareOnly ? receipt : await recoverControllerCompletion(config, receipt);
+    results.push({ pullRequest: receipt.identity.pullRequestNumber, status: recovered.phase === "complete" ? "issues_completed" : "issue_completion_pending",
+      phase: recovered.phase, attempts: recovered.attempts, nextRetryAt: recovered.nextRetryAt, reason: recovered.reason, mergeSha: recovered.mergeSha });
+  }
+  return results;
 }
 
 async function reportReviewResult(
@@ -3062,6 +3314,9 @@ async function reportReviewResult(
   input: unknown,
 ): Promise<Readonly<{ outcome: string; message: string }>> {
   const report = parseModelReviewReport(input);
+  const pending = await retryPendingIssueCompletions(config, false);
+  if (pending.length > 0) return { outcome: "awaiting_verification", message: "Recovered existing completion operations; submit again only after all pending work is resolved." };
+  if (config.completionStore && await config.completionStore.read(report.pullRequestNumber)) return { outcome: "awaiting_verification", message: "This PR already has a durable merge intent; no merge will be repeated." };
   if (report.repositoryId !== SAYHEAR_REPOSITORY_ID) {
     throw new Error("The review report names a different repository.");
   }
@@ -3071,6 +3326,15 @@ async function reportReviewResult(
     report.declaredImpacts,
     report.capability,
   );
+  if (snapshot.gateInput.pullRequest.baseSha !== snapshot.gateInput.repository.defaultBranchSha &&
+    report.headSha === snapshot.gateInput.pullRequest.headSha && report.baseSha === snapshot.gateInput.pullRequest.baseSha &&
+    report.version === PR_REVIEW_REPORT_VERSION && report.policyVersion === PR_REVIEW_GATE_POLICY_VERSION &&
+    report.requirementDigest === requirementDigest(snapshot.gateInput.issues, snapshot.gateInput.pullRequest)) {
+    const handoff = await handoffStalePullRequestBase(config.api, snapshot.gateInput.pullRequest, config);
+    return { outcome: "awaiting_verification", message: handoff.status === "handed_off"
+      ? `PR #${report.pullRequestNumber} requires main synchronization; Issues ${handoff.issueNumbers.join(", ")} were handed back.`
+      : `PR #${report.pullRequestNumber} base-sync handoff stopped at ${handoff.status}.` };
+  }
   const { gate } = evaluateSnapshot(config, snapshot, report);
   await upsertCheckRun(config, snapshot, report, gate);
 
@@ -3158,32 +3422,30 @@ async function reportReviewResult(
       message: `Auto-merge was not enabled for PR #${report.pullRequestNumber} because its head or base changed.`,
     };
   }
-  await requestPullRequestAutoMerge(
-    config,
-    report,
-    latestRepository,
-    latestPullRequest,
-  );
-  const readback = await config.api.request<GitHubPullRequest>(
-    repositoryPath(`/pulls/${report.pullRequestNumber}`),
-  );
-  if (
-    !isRecord(readback.auto_merge) &&
-    (readback.merged !== true || readback.state !== "closed" ||
-      readback.head.sha.toLowerCase() !== report.headSha.toLowerCase() ||
-      readback.base.ref !== "main")
-  ) {
-    throw new Error("GitHub did not retain the requested auto-merge state.");
-  }
-  await completeIssueAfterApproval(config.api, freshSnapshot.gateInput.issue.number, {
-    autoMergeEnabled: isRecord(readback.auto_merge),
-    merged: readback.merged === true && readback.state === "closed",
-  });
+  if (!config.completionStore) throw new Error("Trusted completion store unavailable.");
+  const baseRepository = latestPullRequest.base.repo;
+  if (!isRecord(baseRepository) || baseRepository.id !== SAYHEAR_REPOSITORY_ID) throw new Error("The target base repository is unavailable.");
+  const receipt: CompletionRecord = {
+    version: 1, phase: "merge_unconfirmed", attempts: 0, nextRetryAt: 0, reason: null, mergeSha: null,
+    identity: {
+      repositoryId: SAYHEAR_REPOSITORY_ID, pullRequestNumber: report.pullRequestNumber,
+      pullRequestNodeId: recordString(latestPullRequest, "node_id"), headSha: report.headSha,
+      approvedBaseSha: report.baseSha, requirementDigest: report.requirementDigest,
+      baseRepositoryId: SAYHEAR_REPOSITORY_ID, baseRef: "main", botActorId: config.botActorId,
+      reviewId: approval.id, appId: config.app.appId, policyVersion: PR_REVIEW_GATE_POLICY_VERSION,
+      issueNumbers: freshSnapshot.gateInput.issues.filter((issue) => !freshSnapshot.gateInput.pullRequest.keepOpenIssueNumbers.includes(issue.number)).map((issue) => issue.number),
+    },
+  };
+  if (await config.completionStore.read(report.pullRequestNumber)) throw new Error("An existing completion intent must be reconciled before any new merge request.");
+  await config.completionStore.save(receipt);
+  try { await requestPullRequestAutoMerge(config, report, latestRepository, latestPullRequest); }
+  catch { /* The durable intent owns recovery even when the response is lost. */ }
+  const completed = await recoverControllerCompletion(config, receipt);
   return {
-    outcome: "merge_candidate",
-    message: isRecord(readback.auto_merge)
-      ? `GitHub auto-merge is enabled for PR #${report.pullRequestNumber}.`
-      : `PR #${report.pullRequestNumber} merged while the controller read back its state.`,
+    outcome: completed.phase === "complete" ? "merge_candidate" : "awaiting_verification",
+    message: completed.phase === "complete"
+      ? `PR #${report.pullRequestNumber} merged and Issue completion was verified.`
+      : `PR #${report.pullRequestNumber} completion remains ${completed.phase}; ${completed.reason ?? "pending confirmation"}.`,
   };
 }
 
@@ -3200,7 +3462,7 @@ function controllerReviewReport(
     headSha: pullRequest.headSha,
     baseSha: pullRequest.baseSha,
     requirementDigest: requirementDigest(
-      snapshot.gateInput.issue,
+      snapshot.gateInput.issues,
       pullRequest,
     ),
     decision,
@@ -3227,8 +3489,7 @@ function containsExplicitMergeHold(snapshot: Snapshot): boolean {
     [
       snapshot.gateInput.pullRequest.title,
       snapshot.gateInput.pullRequest.body,
-      snapshot.gateInput.issue.title,
-      snapshot.gateInput.issue.body,
+      ...snapshot.gateInput.issues.flatMap((issue) => [issue.title, issue.body]),
     ].join("\n"),
   );
 }
@@ -3312,6 +3573,8 @@ async function scanPullRequests(
   onlyPullNumber: number | null,
   prepareOnly = false,
 ): Promise<readonly Readonly<Record<string, unknown>>[]> {
+  const results = await retryPendingIssueCompletions(config, prepareOnly);
+  if (results.some((result) => result.status !== "issues_completed")) return results;
   const pullRequests = onlyPullNumber === null
     ? await config.api.pages<GitHubPullRequest>(
         repositoryPath("/pulls?state=open"),
@@ -3321,9 +3584,9 @@ async function scanPullRequests(
           repositoryPath(`/pulls/${onlyPullNumber}`),
         ),
       ];
-  const results: Array<Readonly<Record<string, unknown>>> = [];
 
   for (const pullRequest of pullRequests) {
+    if (results.some((result) => result.pullRequest === pullRequest.number)) continue;
     if (pullRequest.state !== "open") continue;
     if (
       pullRequest.draft ||
@@ -3347,6 +3610,28 @@ async function scanPullRequests(
         status: "blocked",
         reason: error instanceof Error ? error.message : String(error),
       });
+      continue;
+    }
+
+    if (snapshot.gateInput.pullRequest.baseSha !== snapshot.gateInput.repository.defaultBranchSha) {
+      const packetPath = await writeReviewPacketFile(snapshot);
+      if (prepareOnly) {
+        results.push({
+          pullRequest: pullRequest.number, status: "waiting_for_current_base", handoffRequired: true,
+          headSha: snapshot.gateInput.pullRequest.headSha, baseSha: snapshot.gateInput.pullRequest.baseSha,
+          currentMainSha: snapshot.gateInput.repository.defaultBranchSha, packetPath,
+        });
+      } else {
+        try {
+          const handoff = await handoffStalePullRequestBase(config.api, snapshot.gateInput.pullRequest, config);
+          results.push({ pullRequest: pullRequest.number, status: "waiting_for_current_base", packetPath,
+            handedOff: handoff.status === "handed_off", handoffStatus: handoff.status,
+            currentMainSha: handoff.currentMainSha, issueNumbers: handoff.issueNumbers, heldIssueNumbers: handoff.heldIssueNumbers });
+        } catch (error) {
+          results.push({ pullRequest: pullRequest.number, status: "base_sync_handoff_incomplete", packetPath,
+            reason: error instanceof Error ? error.message : String(error) });
+        }
+      }
       continue;
     }
 
@@ -3390,7 +3675,7 @@ async function scanPullRequests(
         headSha: snapshot.gateInput.pullRequest.headSha,
         baseSha: snapshot.gateInput.pullRequest.baseSha,
         requirementDigest: requirementDigest(
-          snapshot.gateInput.issue,
+          snapshot.gateInput.issues,
           snapshot.gateInput.pullRequest,
         ),
       },
@@ -3420,21 +3705,11 @@ async function scanPullRequests(
       continue;
     }
 
-    if (
-      snapshot.gateInput.pullRequest.baseSha !==
-      snapshot.gateInput.repository.defaultBranchSha
-    ) {
-      results.push({
-        pullRequest: pullRequest.number,
-        status: "waiting_for_current_base",
-      });
-      continue;
-    }
 
     if (
-      snapshot.gateInput.issue.state !== "open" ||
-      snapshot.gateInput.issue.pause.active ||
-      snapshot.gateInput.issue.pause.source === "unknown" ||
+      !snapshot.gateInput.issues.some((issue) => issue.state === "open" && !snapshot.gateInput.pullRequest.keepOpenIssueNumbers.includes(issue.number)) ||
+      snapshot.gateInput.issues.some((issue) => !snapshot.gateInput.pullRequest.keepOpenIssueNumbers.includes(issue.number) && (issue.pause.active || issue.pause.source === "unknown")) ||
+      snapshot.gateInput.pullRequest.issueClosureAmbiguous ||
       containsExplicitMergeHold(snapshot)
     ) {
       if (prepareOnly) {
@@ -3456,11 +3731,16 @@ async function scanPullRequests(
       continue;
     }
 
+    const packetPath = await writeReviewPacketFile(snapshot);
     if (!snapshot.diff.complete) {
       if (prepareOnly) {
         results.push({
           pullRequest: pullRequest.number,
           status: "incomplete_diff",
+          packetPath,
+          reason: snapshot.diff.reason,
+          changedFiles: snapshot.diff.changedFiles,
+          expectedChangedFiles: snapshot.diff.expectedChangedFiles,
         });
         continue;
       }
@@ -3478,7 +3758,6 @@ async function scanPullRequests(
       continue;
     }
 
-    const packetPath = await writeReviewPacketFile(snapshot);
     if (prepareOnly) {
       results.push({
         pullRequest: pullRequest.number,
@@ -3487,7 +3766,7 @@ async function scanPullRequests(
         headSha: snapshot.gateInput.pullRequest.headSha,
         baseSha: snapshot.gateInput.pullRequest.baseSha,
         requirementDigest: requirementDigest(
-          snapshot.gateInput.issue,
+          snapshot.gateInput.issues,
           snapshot.gateInput.pullRequest,
         ),
       });
@@ -3519,7 +3798,7 @@ async function scanPullRequests(
       headSha: snapshot.gateInput.pullRequest.headSha,
       baseSha: snapshot.gateInput.pullRequest.baseSha,
       requirementDigest: requirementDigest(
-        snapshot.gateInput.issue,
+        snapshot.gateInput.issues,
         snapshot.gateInput.pullRequest,
       ),
     });
@@ -3646,6 +3925,13 @@ async function statusReport(
   ]);
   return {
     repository: SAYHEAR_REPOSITORY_NAME,
+    build: controllerBuildIdentity(),
+    controllerSha256: createHash("sha256").update(await readFile(CONTROLLER_PATH)).digest("hex"),
+    completionStates: config.completionStore ? (await config.completionStore.list()).map((record) => ({ pullRequest: record.identity.pullRequestNumber, phase: record.phase, attempts: record.attempts, nextRetryAt: record.nextRetryAt, reason: record.reason, mergeSha: record.mergeSha })) : [],
+    policyVersion: PR_REVIEW_GATE_POLICY_VERSION,
+    reportVersion: PR_REVIEW_REPORT_VERSION,
+    diffCollectionVersion: "sayhear-pr-diff:v2",
+    baseSyncHandoffVersion: "sayhear-pr-base-sync:v1",
     reviewApp: {
       appId: config.app.appId,
       slug: config.app.slug,
