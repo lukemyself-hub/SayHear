@@ -74,7 +74,10 @@ export function HistoryReviewBody(props: { inspection: ContextInspectorPayload }
           text: string;
         }>;
       };
-      setWords({ kind: "open", sources: body.historySources ?? [] });
+      setWords({
+        kind: "open",
+        sources: Array.isArray(body.historySources) ? body.historySources : [],
+      });
     } catch {
       setWords({ kind: "denied", message: describeOriginalWordsDenial(null) });
     }
