@@ -6,6 +6,7 @@ import {
   createUserTextConversationService,
   InvalidUserTextTurnError,
   RECENT_CONVERSATION_MESSAGE_LIMIT,
+  type CurrentConversationIdentity,
   type GenerationPolicy,
   type UserTextConversationRepository,
 } from "./user-text-conversation";
@@ -15,7 +16,7 @@ const dailySessionId = asDailySessionId("01984477-31e1-7595-92c6-06889cb0fdde");
 const now = new Date("2026-10-06T18:00:00.000Z");
 
 type RepositoryCalls = {
-  findCurrentWritableConversation: ReturnType<typeof vi.fn>;
+  findCurrentConversation: ReturnType<typeof vi.fn>;
   listInterruptedResponsesForSession: ReturnType<typeof vi.fn>;
   listRecentUserTextMessages: ReturnType<typeof vi.fn>;
 };
@@ -25,7 +26,7 @@ function createService(options: {
   repository?: Partial<UserTextConversationRepository>;
 }) {
   const calls: RepositoryCalls = {
-    findCurrentWritableConversation: vi.fn(async () => ({
+    findCurrentConversation: vi.fn(async () => ({
       activityState: "active" as const,
       dailySessionId,
       logicalDate: "2026-10-06",
@@ -43,7 +44,7 @@ function createService(options: {
   });
   const repository = {
     endContinuousExchangeExplicitly: vi.fn(),
-    findCurrentWritableConversation: calls.findCurrentWritableConversation,
+    findCurrentConversation: calls.findCurrentConversation,
     listInterruptedResponses: vi.fn(async () => []),
     listInterruptedResponsesForSession:
       calls.listInterruptedResponsesForSession,
@@ -75,7 +76,21 @@ describe("current conversation reads", () => {
       startedAt: now,
       timezoneAtStart: "Asia/Shanghai",
     });
-    expect(calls.findCurrentWritableConversation).toHaveBeenCalledWith(userId);
+    expect(calls.findCurrentConversation).toHaveBeenCalledWith({ now, userId });
+  });
+
+  it("preserves quiescent state from the authoritative display identity", async () => {
+    const identity = {
+      activityState: "quiescent",
+      dailySessionId,
+      logicalDate: "2026-10-06",
+      startedAt: now,
+      timezoneAtStart: "Asia/Shanghai",
+    } satisfies CurrentConversationIdentity;
+    const { service } = createService({
+      repository: { findCurrentConversation: vi.fn(async () => identity) },
+    });
+    await expect(service.readCurrentConversation(userId)).resolves.toEqual(identity);
   });
 
   it("reads the recent batch with the server-side fixed cap", async () => {
@@ -121,7 +136,7 @@ describe("current conversation reads", () => {
     await expect(
       service.listInterruptedResponsesForSession(userId, dailySessionId),
     ).rejects.toThrow("recovery_gate_closed");
-    expect(calls.findCurrentWritableConversation).not.toHaveBeenCalled();
+    expect(calls.findCurrentConversation).not.toHaveBeenCalled();
     expect(calls.listRecentUserTextMessages).not.toHaveBeenCalled();
   });
 });

@@ -68,7 +68,7 @@ type DailySessionRow = Readonly<{
 }>;
 
 type CurrentConversationRow = Readonly<{
-  activity_state: string;
+  activity_state: "active" | "quiescent";
   daily_session_id: string;
   logical_date: string;
   started_at: Date;
@@ -435,8 +435,8 @@ export class PostgresUserTextConversationRepository
     }));
   }
 
-  public async findCurrentWritableConversation(
-    userId: UserId,
+  public async findCurrentConversation(
+    input: { now: Date; userId: UserId },
   ): Promise<CurrentConversationIdentity | null> {
     const result = await this.pool.query<CurrentConversationRow>(
       `
@@ -450,18 +450,26 @@ export class PostgresUserTextConversationRepository
         INNER JOIN daily_sessions session
           ON session.user_id = owner.user_id
         WHERE owner.user_id = $1
-          AND session.activity_state = 'active'
-        ORDER BY session.started_at DESC, session.daily_session_id DESC
+          AND (
+            session.activity_state = 'active'
+            OR (
+              session.activity_state = 'quiescent'
+              AND session.logical_date =
+                ($2::timestamptz AT TIME ZONE session.timezone_at_start)::date
+            )
+          )
+        ORDER BY (session.activity_state = 'active') DESC,
+          session.started_at DESC, session.daily_session_id DESC
         LIMIT 1
       `,
-      [userId],
+      [input.userId, input.now],
     );
     const row = result.rows[0];
     if (!row) {
       return null;
     }
     return {
-      activityState: "active",
+      activityState: row.activity_state,
       dailySessionId: asDailySessionId(row.daily_session_id),
       logicalDate: row.logical_date,
       startedAt: row.started_at,
@@ -677,6 +685,7 @@ export class PostgresUserTextConversationRepository
   public async listConversationDates(input: {
     beforeDailySessionId: import("@sayhear/domain").DailySessionId | null;
     beforeLogicalDate: string | null;
+    excludedDailySessionId: import("@sayhear/domain").DailySessionId | null;
     limit: number;
     userId: UserId;
   }): Promise<
@@ -695,6 +704,7 @@ export class PostgresUserTextConversationRepository
           ON session.user_id = owner.user_id
         WHERE owner.user_id = $1
           AND session.activity_state <> 'active'
+          AND ($5::uuid IS NULL OR session.daily_session_id <> $5::uuid)
           AND (
             $2::date IS NULL
             OR (session.logical_date, session.daily_session_id)
@@ -708,6 +718,7 @@ export class PostgresUserTextConversationRepository
         input.beforeLogicalDate,
         input.beforeDailySessionId,
         input.limit + 1,
+        input.excludedDailySessionId,
       ],
     );
     const hasMore = result.rows.length > input.limit;

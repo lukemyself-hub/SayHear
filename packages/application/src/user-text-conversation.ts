@@ -223,11 +223,12 @@ export type ConversationMessagePage = Readonly<{
 }>;
 
 /**
- * The owner's single currently writable Daily Session, read directly from the
- * authoritative `activity_state`. A read never creates a session.
+ * The owner's current displayed Daily Session, including a resumable same-day
+ * exchange. Its authoritative activity state is preserved. Reads never create
+ * sessions.
  */
 export type CurrentConversationIdentity = Readonly<{
-  activityState: "active";
+  activityState: "active" | "quiescent";
   dailySessionId: DailySessionId;
   logicalDate: string;
   startedAt: Date;
@@ -293,8 +294,8 @@ export type UserTextConversationRepository = Readonly<{
       }>
     | Readonly<{ outcome: "not_found" }>
   >;
-  findCurrentWritableConversation(
-    userId: UserId,
+  findCurrentConversation(
+    input: { now: Date; userId: UserId },
   ): Promise<CurrentConversationIdentity | null>;
   findConversationSessionByDate(input: {
     logicalDate: string;
@@ -307,6 +308,7 @@ export type UserTextConversationRepository = Readonly<{
   listConversationDates(input: {
     beforeDailySessionId: DailySessionId | null;
     beforeLogicalDate: string | null;
+    excludedDailySessionId: DailySessionId | null;
     limit: number;
     userId: UserId;
   }): Promise<
@@ -533,6 +535,10 @@ export function createUserTextConversationService(dependencies: {
           throw new InvalidConversationCursorError();
         }
       }
+      const identity = await dependencies.repository.findCurrentConversation({
+        now: dependencies.clock(),
+        userId,
+      });
       const result = await dependencies.repository.listConversationDates({
         beforeDailySessionId:
           cursor !== null && cursor.kind === "conversation-dates"
@@ -542,6 +548,7 @@ export function createUserTextConversationService(dependencies: {
           cursor !== null && cursor.kind === "conversation-dates"
             ? cursor.beforeLogicalDate
             : null,
+        excludedDailySessionId: identity?.dailySessionId ?? null,
         limit: CONVERSATION_DATE_PAGE_LIMIT,
         userId,
       });
@@ -635,7 +642,10 @@ export function createUserTextConversationService(dependencies: {
     },
     async readCurrentConversation(userId) {
       await dependencies.recoveryGate?.requireOpen(userId);
-      return dependencies.repository.findCurrentWritableConversation(userId);
+      return dependencies.repository.findCurrentConversation({
+        now: dependencies.clock(),
+        userId,
+      });
     },
     async retry(userId, rawInput, options) {
       await dependencies.recoveryGate?.requireOpen(userId);

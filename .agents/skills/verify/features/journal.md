@@ -45,7 +45,12 @@ clock and no exchange ever ends there.
     the clipboard with the visible prose;
   - chooses `导出`, saves the download as `delivery-export.txt`, and requires the
     suggested name, the date line and the prose;
-  - follows `查看当天聊天` and requires that date's read-only messages.
+  - follows `查看当天聊天` and requires that date's read-only messages;
+  - returns to `今天` and requires the ended same-day exchange, without a
+    duplicate dated chat entry;
+  - sends a same-day follow-up and requires all four canonical messages before
+    refresh, then compares the reloaded timeline and stored Session identity
+    and exchange number.
 - On `provider` the same journey makes paid `journal.draft` and `journal.validate`
   calls; `delivery-stored.json` records their Provider and model. Its workflow
   steps took 13 to 17 s in the one attempt so far, and a scan that overlapped them
@@ -72,11 +77,10 @@ clock and no exchange ever ends there.
   ([#340](https://github.com/lukemyself-hub/SayHear/issues/340); 3 of 13 runs).
   The journey then fails and writes `delivery-unpublished.json`; confirm with
   `grep "deadlock detected" postgres.log` before suspecting the driver.
-- After the exchange ends, `今天` incorrectly shows an empty chat while the dated
-  navigation link still exposes that day's messages
-  ([#344](https://github.com/lukemyself-hub/SayHear/issues/344)). The journey records
-  `todayShowsEndedExchange: false`. After the product fix, require `true` and add
-  a same-day follow-up message assertion before calling this path verified.
+- The `delivery` journey requires `todayShowsEndedExchange: true` and
+  `sameDayFollowupWithoutRefresh: true`. It independently reads one Daily Session,
+  continuous exchange number 2, and four ordered canonical messages. A failed
+  assertion is not a diagnostic-only result.
 - Journal is not freely editable or manually approved. Do not invent a generate
   button or weaken automatic delivery to a service-method invocation.
 - Export is plain text and refuses Journals over 20,000 characters or a stale

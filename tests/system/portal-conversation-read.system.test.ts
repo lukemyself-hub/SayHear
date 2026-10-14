@@ -358,6 +358,74 @@ describe("Portal current conversation read system seam", () => {
     expect(identity?.startedAt).toBeInstanceOf(Date);
   });
 
+  it("reads same-day quiescent messages without activation and resumes the same Session", async () => {
+    await openPrivateWrites();
+    const turn = await seedTurn("Before the break.");
+    await service.endContinuousExchange(OWNER, {
+      dailySessionId: turn.dailySession.id,
+    });
+    expect(await service.readCurrentConversation(OWNER)).toMatchObject({
+      activityState: "quiescent",
+      dailySessionId: turn.dailySession.id,
+      logicalDate: "2026-10-06",
+    });
+    const messages = await service.listRecentMessages(OWNER, {
+      dailySessionId: turn.dailySession.id,
+    });
+    expect(messages).toMatchObject([{ text: "Before the break." }]);
+    const state = await database.pool.query(
+      "SELECT activity_state, current_continuous_exchange_no FROM daily_sessions",
+    );
+    expect(state.rows).toEqual([
+      { activity_state: "quiescent", current_continuous_exchange_no: 1 },
+    ]);
+    const followup = await seedTurn("After the break.");
+    expect(followup.dailySession.id).toBe(turn.dailySession.id);
+    expect(await countSessions()).toBe(1);
+    const resumedMessages = await service.listRecentMessages(OWNER, {
+      dailySessionId: turn.dailySession.id,
+    });
+    expect(resumedMessages.map((message) => message.text)).toEqual([
+      "Before the break.",
+      "After the break.",
+    ]);
+    const resumedState = await database.pool.query(
+      "SELECT activity_state, current_continuous_exchange_no FROM daily_sessions",
+    );
+    expect(resumedState.rows).toEqual([
+      { activity_state: "active", current_continuous_exchange_no: 2 },
+    ]);
+  });
+
+  it("does not display previous-day quiescent or finalized Sessions as current", async () => {
+    await openPrivateWrites();
+    const turn = await seedTurn("An ended day.");
+    await service.endContinuousExchange(OWNER, {
+      dailySessionId: turn.dailySession.id,
+    });
+    clockNowMs = new Date("2026-10-07T08:00:00.000Z").getTime();
+    expect(await service.readCurrentConversation(OWNER)).toBeNull();
+    clockNowMs = BASE_TIME;
+    await database.pool.query("UPDATE daily_sessions SET activity_state = 'finalized'");
+    expect(await service.readCurrentConversation(OWNER)).toBeNull();
+    expect(await countSessions()).toBe(1);
+  });
+
+  it("uses the stored timezone instead of the UTC date for same-day display", async () => {
+    await openPrivateWrites();
+    const turn = await seedTurn("An evening expression.");
+    await service.endContinuousExchange(OWNER, {
+      dailySessionId: turn.dailySession.id,
+    });
+    clockNowMs = new Date("2026-10-07T06:30:00.000Z").getTime();
+    expect(await service.readCurrentConversation(OWNER)).toMatchObject({
+      activityState: "quiescent",
+      logicalDate: "2026-10-06",
+    });
+    clockNowMs = new Date("2026-10-07T07:00:00.000Z").getTime();
+    expect(await service.readCurrentConversation(OWNER)).toBeNull();
+  });
+
   it("returns only the capped recent batch with ascending sequence", async () => {
     await openPrivateWrites();
     for (let index = 0; index < 55; index += 1) {

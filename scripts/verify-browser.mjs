@@ -343,13 +343,43 @@ async function deliveryJourney() {
   assert((await history.innerText()).includes(text));
   assert.equal(await composer().count(), 0);
   await snapshot("backlink");
-  action(`Choose the ${logicalDate} chat date in navigation; the ended exchange now has a dated link.`);
+  action("Return to 今天 and require the ended same-day exchange without a duplicate dated navigation entry.");
   await page.goto(state.origin + "/internal", { waitUntil: "networkidle" });
-  const todayShowsExchange = (await page.getByRole("region", { name: "Text conversation" }).innerText()).includes(text);
-  await page.locator(`a[href='/internal?date=${logicalDate}']`).click();
-  await history.waitFor();
-  assert((await history.innerText()).includes(text));
-  return { entries: ["/internal composer", "inactivity window + scheduled scan", "/internal/journals", `/internal/journals?date=${logicalDate}`, "复制", "导出", "查看当天聊天", `/internal?date=${logicalDate} navigation link`], journalProvider: state.standIns.provider, proseLength: prose.length, clipboardLength: copied.length, exportFile: download.suggestedFilename(), scansUntilPublished: scans.length, failedScans: scans.filter((scan) => scan.failedStatus).length, todayShowsEndedExchange: todayShowsExchange, substitutions: ["60s inactivity window instead of the configured production window", "driver-invoked scan instead of the GitHub Actions schedule", "local Workflow runtime instead of hosted Vercel Workflows"], unverified: ["hosted Workflow delivery", "a second date, so date selection only proves one day's own prose"] };
+  const conversation = page.getByRole("region", { name: "Text conversation" });
+  const todayShowsExchange = (await conversation.innerText()).includes(text);
+  save("ended-today", { todayShowsEndedExchange: todayShowsExchange });
+  await snapshot("ended-today");
+  assert.equal(todayShowsExchange, true, "Today hides the ended same-day exchange.");
+  assert.equal(await page.locator(`a[href='/internal?date=${logicalDate}']`).count(), 0, "Today's Session has a duplicate dated navigation entry.");
+  const followup = `Synthetic verification ${state.runId}: I came back to say the finished fence still makes me smile.`;
+  action("Send a same-day follow-up and require both exchanges before any refresh.");
+  await sendThroughComposer(followup);
+  const visibleBeforeRefresh = await conversation.locator(".userMessage, .assistantMessage").allInnerTexts();
+  const beforeRefreshText = await conversation.innerText();
+  assert(beforeRefreshText.includes(text), "The original exchange disappeared after the follow-up.");
+  assert(beforeRefreshText.includes(followup), "The follow-up is missing before refresh.");
+  const followupStored = {
+    sessions: rows("SELECT daily_session_id, logical_date::text, activity_state, current_continuous_exchange_no FROM daily_sessions"),
+    messages: rows("SELECT e.daily_session_id, e.sequence_no::int AS sequence, e.actor, r.canonical_text AS text FROM conversation_events e JOIN conversation_event_revisions r ON r.conversation_event_revision_id = e.current_revision_id ORDER BY e.sequence_no"),
+    visibleBeforeRefresh,
+  };
+  save("followup-stored", followupStored);
+  assert.equal(visibleBeforeRefresh.length, 4, "The visible timeline contains missing or duplicate messages.");
+  assert(visibleBeforeRefresh.every((message, index) => message.startsWith(followupStored.messages[index].text)), "The visible timeline differs from canonical order or content.");
+  assert.equal(followupStored.sessions.length, 1, "The follow-up created a second Daily Session.");
+  assert.equal(followupStored.sessions[0].logical_date, logicalDate);
+  assert.equal(followupStored.sessions[0].activity_state, "active");
+  assert.equal(followupStored.sessions[0].current_continuous_exchange_no, 2);
+  assert.deepEqual(followupStored.messages.map((message) => message.actor), ["user", "assistant", "user", "assistant"]);
+  assert.deepEqual(followupStored.messages.map((message) => message.sequence), [1, 2, 3, 4]);
+  assert(followupStored.messages.every((message) => message.daily_session_id === followupStored.sessions[0].daily_session_id));
+  assert.equal(followupStored.messages[0].text, text);
+  assert.equal(followupStored.messages[2].text, followup);
+  await snapshot("followup");
+  await page.reload({ waitUntil: "networkidle" });
+  assert.deepEqual(await conversation.locator(".userMessage, .assistantMessage").allInnerTexts(), visibleBeforeRefresh, "Canonical messages changed after refresh.");
+  await snapshot("followup-reloaded");
+  return { entries: ["/internal composer", "inactivity window + scheduled scan", "/internal/journals", `/internal/journals?date=${logicalDate}`, "复制", "导出", "查看当天聊天", "今天", "same-day follow-up before refresh"], journalProvider: state.standIns.provider, proseLength: prose.length, clipboardLength: copied.length, exportFile: download.suggestedFilename(), scansUntilPublished: scans.length, failedScans: scans.filter((scan) => scan.failedStatus).length, todayShowsEndedExchange: todayShowsExchange, sameDayFollowupWithoutRefresh: true, substitutions: ["60s inactivity window instead of the configured production window", "driver-invoked scan instead of the GitHub Actions schedule", "local Workflow runtime instead of hosted Vercel Workflows"], unverified: ["hosted Workflow delivery", "a second date, so date selection only proves one day's own prose"] };
 }
 
 async function signOut() {

@@ -45,7 +45,8 @@ exceed the bounded window. Past-date navigation needs a completed prior-day exch
   a plain keypress alone does not verify IME behavior.
 - Past-date entry: click the exact `a[href='/internal?date=YYYY-MM-DD']` using the
   actual seeded date. Require the same read-only history as the URL entry. The
-  `delivery` journey does this for the ended exchange's date; a date before today
+  `delivery` journey checks the ended exchange by direct date URL and Journal
+  backlink, and excludes its duplicate dated navigation entry. A past-date link
   still needs a controlled clock.
 - Long-history journey: choose `page.getByRole('button', { name: '加载更早消息' })`;
   require older distinct messages and preserved reading position. Reading old

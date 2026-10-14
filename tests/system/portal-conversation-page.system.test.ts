@@ -443,6 +443,37 @@ describe("Portal chat history pagination system seam", () => {
     60_000,
   );
 
+  it("excludes today's quiescent Session before bounded date pagination", async () => {
+    for (let offset = 0; offset < 40; offset += 1) {
+      await seedSession({
+        logicalDate: logicalDateForDay(offset),
+        messages: [{ actor: "user", text: `past ${offset}` }],
+      });
+    }
+    const current = await seedSession({
+      activityState: "quiescent",
+      logicalDate: "2026-10-06",
+      messages: [{ actor: "user", text: "today ended" }],
+    });
+    const first = await service.listConversationDates(OWNER, { cursor: null });
+    expect(first.entries).toHaveLength(CONVERSATION_DATE_PAGE_LIMIT);
+    expect(first.entries.map((entry) => entry.dailySessionId)).not.toContain(
+      current.dailySessionId,
+    );
+    expect(first.nextCursor).not.toBeNull();
+    const second = await service.listConversationDates(OWNER, { cursor: first.nextCursor });
+    expect(second.entries).toHaveLength(10);
+    expect(second.nextCursor).toBeNull();
+    const dates = [...first.entries, ...second.entries].map(
+      (entry) => entry.logicalDate,
+    );
+    expect(new Set(dates).size).toBe(40);
+    expect(dates).not.toContain("2026-10-06");
+    expect(await service.readConversationByDate(OWNER, "2026-10-06")).toMatchObject({
+      dailySessionId: current.dailySessionId,
+    });
+  });
+
   it(
     "paginates one session's 500 mixed messages ascending without duplicates or gaps",
     async () => {
