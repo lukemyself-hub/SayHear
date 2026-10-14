@@ -27,6 +27,10 @@ PR 审查要求修改后，对应 Issue 使用 `ready-for-agent` 接续已有 PR
 依赖、执行占用或自动修改暂停；接续前读取
 [`实现与 PR 审核交接`](issue-tracker.md#实现与-pr-审核交接)。
 
+PR base 落后当前 main 时，由 App 先回写同步要求，再交回 `ready-for-agent`，解除
+`ongoing`；人工分诊标签只接收提醒，保持原状态。明确保持开放的 Issue 与暂停项排除，
+同步不计入三轮代码失败，已完成的同一轮交接不释放后续 Agent 新认领。
+
 Gate 因 PR Validate 仍在 queued、in-progress、missing 或 unknown 而返回
 `awaiting_verification`，或审核上下文可重试、另一个 PR 仍在审批/合入时，Issue 保持
 `ongoing`。终态未通过结果先回写并确认评论，再移除 `ongoing`，设置 `ready-for-agent`，
@@ -35,7 +39,8 @@ Gate 因 PR Validate 仍在 queued、in-progress、missing 或 unknown 而返回
 评论若要求维护者决定，Agent 必须等待。
 `ready-for-human` 仍保留给 Agent 主动转人工实现的情形；PR gate 的 `human_decision`
 回写 `ready-for-agent`，由接续 Agent 按评论准备维护者决定，不得自行替代该决定。
-审核通过且 GitHub 已确认 auto-merge 或合入后，关闭 Issue 并清除 `ongoing` 与互斥分诊标签。
+审核通过且 GitHub 已确认实际合入后，逐个关闭未排除的开放 Issue，清除 `ongoing` 与互斥分诊标签。
+只启用 auto-merge 时继续等待并保持执行占用。PR 明确声明不关闭的 Issue 不参与标签与评论交接。
 
 自动调度遇到带 `ready-for-agent` 且恰好有一个开放关联 PR 的 Issue 时，应接续原 PR
 和分支，不因 PR 已存在而阻断，也不另开重复 PR。存在多个开放关联 PR、依赖或暂停记录时

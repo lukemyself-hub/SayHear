@@ -14,6 +14,7 @@ import {
   evaluatePrReviewGate,
   parsePrReviewGateInput,
   requirementDigest,
+  parseIssueClosureExclusions,
   type PrReviewGateInput,
   type TrustedPrReviewPolicy,
 } from "../scripts/pr-review-gate.ts";
@@ -75,8 +76,8 @@ type InputOverrides = Omit<
 > & {
   repository?: Partial<PrReviewGateInput["repository"]>;
   pullRequest?: Partial<PrReviewGateInput["pullRequest"]>;
-  issue?: Omit<Partial<PrReviewGateInput["issue"]>, "pause"> & {
-    pause?: Partial<PrReviewGateInput["issue"]["pause"]>;
+  issue?: Omit<Partial<PrReviewGateInput["issues"][number]>, "pause"> & {
+    pause?: Partial<PrReviewGateInput["issues"][number]["pause"]>;
   };
   review?: Omit<
     Partial<PrReviewGateInput["review"]>,
@@ -138,11 +139,13 @@ function input(
       authorId: 101,
       lastCommitAuthorId: 102,
       linkedIssueNumbers: [42],
+      keepOpenIssueNumbers: [],
+      issueClosureAmbiguous: false,
       changedFiles: [
         { path: "packages/application/src/server/fix.ts", status: "modified" },
       ],
     },
-    issue,
+    issues: [issue],
     review: {
       version: PR_REVIEW_REPORT_VERSION,
       repositoryId: SAYHEAR_REPOSITORY_ID,
@@ -203,11 +206,11 @@ function input(
     ...overrides,
     repository: { ...base.repository, ...overrides.repository },
     pullRequest: { ...base.pullRequest, ...overrides.pullRequest },
-    issue: {
-      ...base.issue,
+    issues: overrides.issues ?? [{
+      ...base.issues[0]!,
       ...overrides.issue,
-      pause: { ...base.issue.pause, ...overrides.issue?.pause },
-    },
+      pause: { ...base.issues[0]!.pause, ...overrides.issue?.pause },
+    }],
     review: {
       ...base.review,
       ...overrides.review,
@@ -568,6 +571,80 @@ describe("PR review gate", () => {
     expect(report.outcome).toBe("human_decision");
   });
 
+  function multiIssueInput(): PrReviewGateInput {
+    const original = input();
+    const issues = [original.issues[0]!, { ...original.issues[0]!, number: 43, title: "Second requirement", body: "Preserve the second contract." }];
+    const pullRequest = { ...original.pullRequest, linkedIssueNumbers: [42, 43], body: "Fixes #42 and #43" };
+    return { ...original, issues, pullRequest,
+      review: { ...original.review, requirementDigest: requirementDigest(issues, pullRequest) } };
+  }
+
+  it("approves a complete multi-Issue PR and supports dependencies delivered together", () => {
+    const candidate = multiIssueInput();
+    const issues = [candidate.issues[0]!, { ...candidate.issues[1]!, blockedBy: [42] }];
+    expect(evaluatePrReviewGate({ ...candidate, issues }, policy).outcome).toBe("merge_candidate");
+    expect(parsePrReviewGateInput(candidate).issues.map((issue) => issue.number)).toEqual([42, 43]);
+    expect(requirementDigest([...issues].reverse(), candidate.pullRequest)).toBe(candidate.review.requirementDigest);
+  });
+
+  it.each(["body", "discussionDigest", "title"] as const)("invalidates a review after a second Issue %s changes", (field) => {
+    const candidate = multiIssueInput();
+    const issues = [candidate.issues[0]!, { ...candidate.issues[1]!, [field]: "Changed requirement" }];
+    expect(evaluatePrReviewGate({ ...candidate, issues }, policy).reasons[0]?.code).toBe("requirements_changed");
+  });
+
+  it("blocks a paused second Issue, outside dependencies and unclaimed work", () => {
+    const candidate = multiIssueInput();
+    for (const patch of [{ pause: { active: true, source: "maintainer" as const } }, { blockedBy: [19] }]) {
+      expect(evaluatePrReviewGate({ ...candidate, issues: [candidate.issues[0]!, { ...candidate.issues[1]!, ...patch }] }, policy).outcome).toBe("human_decision");
+    }
+    expect(evaluatePrReviewGate({ ...candidate, issues: [candidate.issues[0]!, { ...candidate.issues[1]!, labels: [] }] }, policy).reasons[0]?.code).toBe("issue_not_claimed");
+    expect(evaluatePrReviewGate({ ...candidate, issues: [candidate.issues[0]!, { ...candidate.issues[1]!, blockedBy: null }] }, policy).reasons[0]?.code).toBe("github_context_unavailable");
+  });
+
+  it("keeps closed Issues as requirements without requiring their execution labels", () => {
+    const candidate = multiIssueInput();
+    const issues = [candidate.issues[0]!, { ...candidate.issues[1]!, state: "closed" as const, labels: [], blockedBy: null }];
+    expect(evaluatePrReviewGate({ ...candidate, issues }, policy).outcome).toBe("merge_candidate");
+    expect(evaluatePrReviewGate({ ...candidate, issues: issues.map((issue) => ({ ...issue, state: "closed" })) }, policy).outcome).toBe("human_decision");
+  });
+
+  it("rejects duplicate or incomplete Issue sets rather than silently omitting requirements", () => {
+    const candidate = multiIssueInput();
+    for (const issues of [[], [candidate.issues[0]!], [candidate.issues[0]!, candidate.issues[0]!]]) {
+      const changed = { ...candidate, issues, review: { ...candidate.review, requirementDigest: requirementDigest(issues, candidate.pullRequest) } };
+      expect(evaluatePrReviewGate(changed, policy).outcome).toBe("human_decision");
+    }
+    expect(() => parsePrReviewGateInput({ ...candidate, issues: [candidate.issues[0]!, { ...candidate.issues[1]!, pause: null }] })).toThrow("issues[1].pause");
+  });
+
+  it("keeps explicit reference-only Issues open without claiming or handing them off", () => {
+    const candidate = multiIssueInput();
+    const pullRequest = { ...candidate.pullRequest, body: "Deliver #42. 本 PR 不关闭也不修改 #43。", keepOpenIssueNumbers: [43] };
+    const issues = [candidate.issues[0]!, { ...candidate.issues[1]!, labels: [], blockedBy: null }];
+    const review = { ...candidate.review, requirementDigest: requirementDigest(issues, pullRequest) };
+    expect(evaluatePrReviewGate({ ...candidate, pullRequest, issues, review }, policy).outcome).toBe("merge_candidate");
+    expect(evaluatePrReviewGate({ ...candidate, pullRequest, issues: [{ ...issues[0]!, blockedBy: [43] }, issues[1]!], review }, policy).outcome).toBe("human_decision");
+  });
+
+  it.each([
+    ["本 PR 不关闭也不修改 #301。生产发布在 #322。", [301]],
+    ["Do not close: #301, #308. Closes #313.", [301, 308]],
+    ["Keep #301 and #308 open. Closes #313.", [301, 308]],
+    ["#301 remains open. #308 stays open.", [301, 308]],
+    ["#301、#308 保持开放。关闭 #313。", [301, 308]],
+    ["Do not close https://github.com/lukemyself-hub/SayHear/issues/301", [301]],
+  ])("parses keep-open clauses without consuming later closure references: %s", (body, numbers) => {
+    expect(parseIssueClosureExclusions("", body)).toEqual({ keepOpenIssueNumbers: numbers, ambiguous: false });
+  });
+
+  it("stops for a keep-open declaration without explicit Issue numbers", () => {
+    expect(parseIssueClosureExclusions("", "不关闭父 Issue，详见说明。").ambiguous).toBe(true);
+    const candidate = multiIssueInput();
+    const pullRequest = { ...candidate.pullRequest, body: "Don't close the parent Issue", issueClosureAmbiguous: true };
+    expect(evaluatePrReviewGate({ ...candidate, pullRequest, review: { ...candidate.review, requirementDigest: requirementDigest(candidate.issues, pullRequest) } }, policy).outcome).toBe("human_decision");
+  });
+
   it("requires an unambiguous open Issue and blocks unresolved dependencies", () => {
     const ambiguous = evaluatePrReviewGate(
       input({
@@ -783,7 +860,7 @@ describe("PR review gate", () => {
     });
     const parsed = parsePrReviewGateInput(candidate);
 
-    expect(parsed.issue.title).toBe(suspiciousTitle);
+    expect(parsed.issues[0]?.title).toBe(suspiciousTitle);
     expect(evaluatePrReviewGate(parsed, policy).outcome).toBe("merge_candidate");
   });
 

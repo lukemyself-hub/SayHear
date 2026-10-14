@@ -8,7 +8,7 @@ import {
   type ReleaseImpactKind,
 } from "./daily-release-validation.ts";
 
-export const PR_REVIEW_GATE_POLICY_VERSION = "sayhear-pr-review-gate:v3";
+export const PR_REVIEW_GATE_POLICY_VERSION = "sayhear-pr-review-gate:v4";
 export const PR_REVIEW_REPORT_VERSION = "sayhear-pr-review-report:v3";
 export const SAYHEAR_REPOSITORY_ID = 1312399710;
 export const SAYHEAR_REPOSITORY_NAME = "lukemyself-hub/SayHear";
@@ -39,6 +39,7 @@ const HUMAN_REVIEW_PATHS = [
   "scripts/pr-approval-launcher.c",
   "scripts/build-pr-approval-controller.mjs",
   "tests/pr-approval-controller.test.ts",
+  "tests/pr-approval-diff.test.ts",
   "scripts/capture-g1-role-provider-calls.ts",
   "scripts/pr-review-gate.ts",
   "scripts/daily-release-validation.ts",
@@ -78,6 +79,21 @@ export type GateOutcome =
 
 export type GateReason = Readonly<{ code: string; message: string }>;
 
+export type PrReviewIssue = Readonly<{
+  number: number;
+  state: "open" | "closed";
+  title: string;
+  body: string;
+  updatedAt: string;
+  discussionDigest: string;
+  labels: readonly string[];
+  blockedBy: readonly number[] | null;
+  pause: Readonly<{
+    active: boolean;
+    source: "none" | "maintainer" | "review-app" | "unknown";
+  }>;
+}>;
+
 export type PrReviewGateInput = Readonly<{
   repository: Readonly<{
     id: number;
@@ -103,25 +119,14 @@ export type PrReviewGateInput = Readonly<{
     authorId: number;
     lastCommitAuthorId: number | null;
     linkedIssueNumbers: readonly number[];
+    keepOpenIssueNumbers: readonly number[];
+    issueClosureAmbiguous: boolean;
     changedFiles: readonly Readonly<{
       path: string;
       status: "added" | "modified" | "removed" | "renamed" | "copied";
     }>[];
   }>;
-  issue: Readonly<{
-    number: number;
-    state: "open" | "closed";
-    title: string;
-    body: string;
-    updatedAt: string;
-    discussionDigest: string;
-    labels: readonly string[];
-    blockedBy: readonly number[] | null;
-    pause: Readonly<{
-      active: boolean;
-      source: "none" | "maintainer" | "review-app" | "unknown";
-    }>;
-  }>;
+  issues: readonly PrReviewIssue[];
   review: Readonly<{
     version: string;
     repositoryId: number;
@@ -393,6 +398,65 @@ function parseEvidence(
   };
 }
 
+export function parseIssueClosureExclusions(title: string, body: string): Readonly<{
+  keepOpenIssueNumbers: readonly number[];
+  ambiguous: boolean;
+}> {
+  const keepOpen = new Set<number>();
+  let ambiguous = false;
+  const text = `${title}\n${body}`.replace(/https?:\/\/[^\s<>\)]+/g, (url) => {
+    const local = url.match(/^https:\/\/github\.com\/lukemyself-hub\/SayHear\/issues\/([1-9]\d{0,8})(?:[?#].*)?$/i);
+    return local ? `#${local[1]}` : " ";
+  });
+  // A negative close statement is a lifecycle instruction, not a merge hold.
+  // Restrict number lists to the clause itself so later positive close lists
+  // cannot accidentally become exclusions.
+  const directive = /(?:不(?:会)?(?:自动)?关闭(?:也不修改)?|不要(?:自动)?关闭|不得(?:自动)?关闭|不予关闭|不应关闭|do not (?:automatically )?close|don't (?:auto[- ]|automatically )?close|does not close|doesn't close|will not close|not closing|keep open(?: issues?)?)[ :：*`]*(?:issues?\s*)?((?:#[1-9]\d{0,8})(?:(?:\s*[,，、和及&]\s*|\s+and\s+)#[1-9]\d{0,8})*)/gi;
+  const negative = /不(?:会)?(?:自动)?关闭|不要(?:自动)?关闭|不得(?:自动)?关闭|不予关闭|不应关闭|do not (?:automatically )?close|don't (?:auto[- ]|automatically )?close|does not close|doesn't close|will not close|not closing|keep open|保持开放|remains? open|stays? open|(?:keep|leave)\s+.*\s+open/gi;
+  for (const clause of text.split(/[。；;!！?？\n]|\.(?:\s|$)/)) {
+    let remaining = clause.replace(directive, (_match, list: string) => {
+      for (const number of list.matchAll(/#([1-9]\d{0,8})/g)) keepOpen.add(Number(number[1]));
+      return " ";
+    });
+    remaining = remaining.replace(/((?:#[1-9]\d{0,8})(?:(?:\s*[,，、和及&]\s*|\s+and\s+)#[1-9]\d{0,8})*)[ :：*`]*(?:保持开放|(?:will )?remains? open|(?:should )?stays? open)/gi, (_match, list: string) => {
+      for (const number of list.matchAll(/#([1-9]\d{0,8})/g)) keepOpen.add(Number(number[1]));
+      return " ";
+    });
+    remaining = remaining.replace(/(?:keep|leave)\s+((?:#[1-9]\d{0,8})(?:(?:\s*[,，、和及&]\s*|\s+and\s+)#[1-9]\d{0,8})*)\s+open/gi, (_match, list: string) => {
+      for (const number of list.matchAll(/#([1-9]\d{0,8})/g)) keepOpen.add(Number(number[1]));
+      return " ";
+    });
+    if (negative.test(remaining)) ambiguous = true;
+    negative.lastIndex = 0;
+  }
+  return { keepOpenIssueNumbers: [...keepOpen].sort((left, right) => left - right), ambiguous };
+}
+
+function parsePrReviewIssue(value: unknown, index: number): PrReviewIssue {
+  const path = `issues[${index}]`;
+  if (!isRecord(value)) throw new Error(`${path} must be an object.`);
+  if (value.state !== "open" && value.state !== "closed") {
+    throw new Error(`${path}.state must be open or closed.`);
+  }
+  const pause = value.pause;
+  if (!isRecord(pause)) throw new Error(`${path}.pause must be an object.`);
+  const source = pause.source;
+  if (source !== "none" && source !== "maintainer" && source !== "review-app" && source !== "unknown") {
+    throw new Error(`${path}.pause.source is invalid.`);
+  }
+  return {
+    number: requiredPositiveInteger(value.number, `${path}.number`),
+    state: value.state,
+    title: requiredString(value.title, `${path}.title`),
+    body: typeof value.body === "string" ? value.body : "",
+    updatedAt: requiredTimestamp(value.updatedAt, `${path}.updatedAt`),
+    discussionDigest: requiredString(value.discussionDigest, `${path}.discussionDigest`),
+    labels: parseStringArrayOrEmpty(value.labels, `${path}.labels`),
+    blockedBy: value.blockedBy === null ? null : parseNumberArrayOrEmpty(value.blockedBy, `${path}.blockedBy`),
+    pause: { active: requiredBoolean(pause.active, `${path}.pause.active`), source },
+  };
+}
+
 /**
  * Parse the model report and GitHub snapshot as data only. PR text and report
  * fields never become shell commands or executable code.
@@ -401,11 +465,11 @@ export function parsePrReviewGateInput(value: unknown): PrReviewGateInput {
   if (!isRecord(value)) throw new Error("PR review gate input must be a JSON object.");
   const repository = value.repository;
   const pullRequest = value.pullRequest;
-  const issue = value.issue;
+  const issues = value.issues;
   const review = value.review;
   const runtime = value.runtime;
-  if (!isRecord(repository) || !isRecord(pullRequest) || !isRecord(issue)) {
-    throw new Error("PR review gate input is missing repository, pullRequest, or issue.");
+  if (!isRecord(repository) || !isRecord(pullRequest) || !Array.isArray(issues)) {
+    throw new Error("PR review gate input is missing repository, pullRequest, or issues.");
   }
   if (!isRecord(review) || !isRecord(runtime)) {
     throw new Error("PR review gate input is missing review or runtime.");
@@ -414,10 +478,6 @@ export function parsePrReviewGateInput(value: unknown): PrReviewGateInput {
   const pullState = pullRequest.state;
   if (pullState !== "open" && pullState !== "closed") {
     throw new Error("pullRequest.state must be open or closed.");
-  }
-  const issueState = issue.state;
-  if (issueState !== "open" && issueState !== "closed") {
-    throw new Error("issue.state must be open or closed.");
   }
   if (!Array.isArray(pullRequest.changedFiles)) {
     throw new Error("pullRequest.changedFiles must be an array.");
@@ -539,17 +599,6 @@ export function parsePrReviewGateInput(value: unknown): PrReviewGateInput {
     };
   }
 
-  const pause = issue.pause;
-  if (!isRecord(pause)) throw new Error("issue.pause must be an object.");
-  const pauseSource = pause.source;
-  if (
-    pauseSource !== "none" &&
-    pauseSource !== "maintainer" &&
-    pauseSource !== "review-app" &&
-    pauseSource !== "unknown"
-  ) {
-    throw new Error("issue.pause.source is invalid.");
-  }
   const evidence = value.evidence;
   if (!Array.isArray(evidence)) throw new Error("evidence must be an array.");
   const mergeSha =
@@ -628,28 +677,11 @@ export function parsePrReviewGateInput(value: unknown): PrReviewGateInput {
         pullRequest.linkedIssueNumbers,
         "pullRequest.linkedIssueNumbers",
       ),
+      keepOpenIssueNumbers: parseNumberArrayOrEmpty(pullRequest.keepOpenIssueNumbers, "pullRequest.keepOpenIssueNumbers"),
+      issueClosureAmbiguous: requiredBoolean(pullRequest.issueClosureAmbiguous, "pullRequest.issueClosureAmbiguous"),
       changedFiles,
     },
-    issue: {
-      number: requiredPositiveInteger(issue.number, "issue.number"),
-      state: issueState,
-      title: requiredString(issue.title, "issue.title"),
-      body: typeof issue.body === "string" ? issue.body : "",
-      updatedAt: requiredTimestamp(issue.updatedAt, "issue.updatedAt"),
-      discussionDigest: requiredString(
-        issue.discussionDigest,
-        "issue.discussionDigest",
-      ),
-      labels: parseStringArrayOrEmpty(issue.labels, "issue.labels"),
-      blockedBy:
-        issue.blockedBy === null
-          ? null
-          : parseNumberArrayOrEmpty(issue.blockedBy, "issue.blockedBy"),
-      pause: {
-        active: requiredBoolean(pause.active, "issue.pause.active"),
-        source: pauseSource,
-      },
-    },
+    issues: issues.map(parsePrReviewIssue),
     review: {
       version: requiredString(review.version, "review.version"),
       repositoryId: requiredPositiveInteger(
@@ -710,13 +742,7 @@ export function parsePrReviewGateInput(value: unknown): PrReviewGateInput {
 }
 
 export function requirementDigest(
-  issue: {
-  number: number;
-  title: string;
-  body: string;
-  updatedAt: string;
-  discussionDigest: string;
-},
+  requirement: Pick<PrReviewIssue, "number" | "title" | "body" | "updatedAt" | "discussionDigest"> | readonly Pick<PrReviewIssue, "number" | "title" | "body" | "updatedAt" | "discussionDigest">[],
   pullRequest: {
     number: number;
     title: string;
@@ -725,21 +751,19 @@ export function requirementDigest(
     discussionDigest: string;
   },
 ): string {
-  return createHash("sha256")
-    .update(
-      [
-        `issue:${issue.number}`,
-        issue.title,
-        issue.body,
-        issue.discussionDigest,
-        `pr:${pullRequest.number}`,
-        pullRequest.title,
-        pullRequest.body,
-        pullRequest.discussionDigest,
-      ].join("\n"),
-      "utf8",
-    )
-    .digest("hex");
+  const issues: readonly Pick<PrReviewIssue, "number" | "title" | "body" | "updatedAt" | "discussionDigest">[] =
+    "number" in requirement ? [requirement] : requirement;
+  const sorted = [...issues].sort((left, right) => left.number - right.number);
+  return createHash("sha256").update(JSON.stringify({
+    issues: sorted.map((issue) => ({
+      number: issue.number, title: issue.title, body: issue.body,
+      discussionDigest: issue.discussionDigest,
+    })),
+    pullRequest: {
+      number: pullRequest.number, title: pullRequest.title, body: pullRequest.body,
+      discussionDigest: pullRequest.discussionDigest,
+    },
+  }), "utf8").digest("hex");
 }
 
 function outcome(
@@ -758,7 +782,7 @@ function outcome(
     headSha: input.pullRequest.headSha,
     baseSha: input.pullRequest.baseSha,
     mergeSha: input.pullRequest.mergeSha,
-    requirementDigest: requirementDigest(input.issue, input.pullRequest),
+    requirementDigest: requirementDigest(input.issues, input.pullRequest),
     outcome: result,
     reasons: [reason],
     requiredEvidenceIds,
@@ -799,7 +823,7 @@ function requiresHumanReview(input: PrReviewGateInput, policy: TrustedPrReviewPo
   }
   if (
     /\b(?:do not merge|do not auto[- ]merge|not for merge|not to be merged)\b|不要(?:自动)?合入|暂停自动审批/i.test(
-      `${input.pullRequest.title}\n${input.pullRequest.body}\n${input.issue.body}`,
+      [input.pullRequest.title, input.pullRequest.body, ...input.issues.map((issue) => issue.body)].join("\n"),
     )
   ) {
     return "The PR or Issue explicitly pauses automatic merging.";
@@ -830,32 +854,38 @@ function requiresHumanReview(input: PrReviewGateInput, policy: TrustedPrReviewPo
   ) {
     return "This change triggers full capability acceptance or a product release decision.";
   }
-  if (input.issue.pause.active || input.issue.pause.source === "unknown") {
-    return "The linked Issue is paused or its pause state cannot be trusted.";
+  const numbers = input.issues.map((issue) => issue.number);
+  const linked = input.pullRequest.linkedIssueNumbers;
+  if (numbers.length === 0 || new Set(numbers).size !== numbers.length ||
+    new Set(linked).size !== linked.length || numbers.length !== linked.length ||
+    linked.some((number) => !numbers.includes(number))) {
+    return "The PR must supply every referenced Issue exactly once.";
   }
-  if (
-    input.pullRequest.linkedIssueNumbers.length !== 1 ||
-    input.pullRequest.linkedIssueNumbers[0] !== input.issue.number
-  ) {
-    return "The PR must identify exactly one open Issue that matches the supplied requirement.";
+  if (input.pullRequest.state !== "open") return "The PR is closed.";
+  const exclusions = parseIssueClosureExclusions(input.pullRequest.title, input.pullRequest.body);
+  if (input.pullRequest.issueClosureAmbiguous || exclusions.ambiguous ||
+    exclusions.keepOpenIssueNumbers.join() !== [...input.pullRequest.keepOpenIssueNumbers].sort((a, b) => a - b).join() ||
+    input.pullRequest.keepOpenIssueNumbers.some((number) => !numbers.includes(number))) {
+    return "The PR's keep-open Issue declarations are ambiguous or inconsistent.";
   }
-  if (input.issue.state !== "open" || input.pullRequest.state !== "open") {
-    return "The PR or its linked Issue is closed.";
+  const deliveryIssues = input.issues.filter((issue) => !input.pullRequest.keepOpenIssueNumbers.includes(issue.number));
+  if (!deliveryIssues.some((issue) => issue.state === "open")) {
+    return "All referenced Issues are already closed.";
   }
-  if (input.issue.blockedBy === null || input.issue.blockedBy.length > 0) {
-    return "The linked Issue still has blocking dependencies.";
-  }
-  if (
-    input.issue.labels.some((label) =>
-      ["ready-for-human", "needs-info", "needs-triage", "wontfix"].includes(
-        label.toLowerCase(),
-      ),
-    )
-  ) {
-    return "The linked Issue has a triage label that requires a human decision.";
-  }
-  if (input.issue.body.trim().length === 0) {
-    return "The linked Issue has no body to serve as the review requirement.";
+  for (const issue of input.issues) {
+    if (issue.body.trim().length === 0) return `Issue #${issue.number} has no review requirement.`;
+    if (input.pullRequest.keepOpenIssueNumbers.includes(issue.number)) continue;
+    if (issue.pause.active || issue.pause.source === "unknown") {
+      return `Issue #${issue.number} is paused or its pause state cannot be trusted.`;
+    }
+    if (issue.state === "closed") continue;
+    if (issue.blockedBy === null || issue.blockedBy.some((number) => !deliveryIssues.some((target) => target.number === number))) {
+      return `Issue #${issue.number} still has blocking dependencies outside this PR.`;
+    }
+    if (issue.labels.some((label) =>
+      ["ready-for-human", "needs-info", "needs-triage", "wontfix"].includes(label.toLowerCase()))) {
+      return `Issue #${issue.number} has a triage label that requires a human decision.`;
+    }
   }
   return null;
 }
@@ -967,7 +997,7 @@ export function evaluatePrReviewGate(
   }
   if (
     input.review.requirementDigest !==
-    requirementDigest(input.issue, input.pullRequest)
+    requirementDigest(input.issues, input.pullRequest)
   ) {
     return outcome(input, "human_decision", {
       code: "requirements_changed",
@@ -977,7 +1007,7 @@ export function evaluatePrReviewGate(
 
   if (
     input.pullRequest.externalReviewState === "unavailable" ||
-    input.issue.blockedBy === null
+    input.issues.some((issue) => issue.state === "open" && !input.pullRequest.keepOpenIssueNumbers.includes(issue.number) && issue.blockedBy === null)
   ) {
     return outcome(input, "awaiting_verification", {
       code: "github_context_unavailable",
@@ -1056,16 +1086,16 @@ export function evaluatePrReviewGate(
       message: "The review says approve but contains a P0, P1, or P2 finding.",
     });
   }
-  if (!input.issue.labels.some((label) => label.toLowerCase() === "ongoing")) {
+  if (input.issues.some((issue) => issue.state === "open" && !input.pullRequest.keepOpenIssueNumbers.includes(issue.number) && !issue.labels.some((label) => label.toLowerCase() === "ongoing"))) {
     return outcome(input, "awaiting_verification", {
       code: "issue_not_claimed",
       message: "The linked Issue does not have the ongoing execution label.",
     });
   }
   if (
-    input.issue.labels.some(
+    input.issues.some((issue) => issue.state === "open" && !input.pullRequest.keepOpenIssueNumbers.includes(issue.number) && issue.labels.some(
       (label) => label.toLowerCase() === "ready-for-agent",
-    )
+    ))
   ) {
     return outcome(input, "awaiting_verification", {
       code: "issue_label_conflict",
@@ -1169,7 +1199,7 @@ export function evaluatePrReviewGate(
   const plan = planDailyReleaseValidation({
     version: DAILY_RELEASE_VALIDATION_REQUEST_VERSION,
     change: {
-      summary: `PR #${input.pullRequest.number} reviewed against Issue #${input.issue.number}.`,
+      summary: `PR #${input.pullRequest.number} reviewed against Issues ${input.issues.map((issue) => `#${issue.number}`).join(", ")}.`,
       declaredImpacts: input.review.declaredImpacts,
       changedPaths: input.pullRequest.changedFiles.map(({ path }) => path),
     },
@@ -1226,7 +1256,7 @@ export function evaluatePrReviewGate(
     headSha: input.pullRequest.headSha,
     baseSha: input.pullRequest.baseSha,
     mergeSha: input.pullRequest.mergeSha,
-    requirementDigest: requirementDigest(input.issue, input.pullRequest),
+    requirementDigest: requirementDigest(input.issues, input.pullRequest),
     outcome: "merge_candidate",
     reasons: [
       {
