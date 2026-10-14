@@ -14,6 +14,9 @@
  * `pull_request.base.sha`, else the `origin/main` merge base) rather than the
  * working tree. Deriving the prefix from the head tree would fold an edited or
  * unregistered migration into the prefix and let the drill agree with itself.
+ *
+ * This file never skips. A missing `TEST_DATABASE_URL`, like a missing base
+ * commit, fails the run rather than reporting a vacuous pass.
  */
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -53,7 +56,16 @@ const requireFromData = createRequire(resolve(REPOSITORY_ROOT, "packages/data/pa
 const { Client } = requireFromData("pg") as typeof import("pg");
 
 const testDatabaseUrl = process.env.TEST_DATABASE_URL;
-const systemDescribe = testDatabaseUrl ? describe : describe.skip;
+
+function requireTestDatabaseUrl(): string {
+  if (testDatabaseUrl === undefined || testDatabaseUrl.trim().length === 0) {
+    throw new Error(
+      "TEST_DATABASE_URL is required for the Journal workflow recovery " +
+        "migration drill; the drill fails rather than skips.",
+    );
+  }
+  return testDatabaseUrl;
+}
 
 const EXTRACTION_POLICY_VERSION = "evidence-extraction:v1";
 const USER = fixedInternalOwnerPrincipal.userId;
@@ -528,10 +540,11 @@ async function insertOldWriterGroup(
   );
 }
 
-systemDescribe("Journal workflow recovery migration (issues #340 / #341)", () => {
+describe("Journal workflow recovery migration (issues #340 / #341)", () => {
   it(
     "upgrades the base schema in place and recovers legacy Journal state",
     async () => {
+      const connectionString = requireTestDatabaseUrl();
       const baseCommit = resolveBaseCommit();
       const baseFiles = readCommitMigrationFiles(
         baseCommit,
@@ -562,7 +575,7 @@ systemDescribe("Journal workflow recovery migration (issues #340 / #341)", () =>
           await writeFile(join(baseDirectory, pin.name), bytes);
         }
 
-        schema = await createIsolatedPostgresSchema(testDatabaseUrl!);
+        schema = await createIsolatedPostgresSchema(connectionString);
         schemaName = isolatedSchemaName(schema.connectionString);
         const { pool } = schema;
         const repository = new PostgresJournalRepository(pool);
@@ -838,7 +851,7 @@ systemDescribe("Journal workflow recovery migration (issues #340 / #341)", () =>
         await rm(baseDirectory, { recursive: true, force: true });
       }
 
-      const inspection = new Client({ connectionString: testDatabaseUrl! });
+      const inspection = new Client({ connectionString });
       await inspection.connect();
       try {
         const remaining = await inspection.query<{ count: number }>(
