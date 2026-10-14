@@ -25,6 +25,7 @@ const REGISTERED_EXTENSION_NAMES = [
   "0075_history_experience_search_refs.sql",
   "0080_conversation_request_lifecycle.sql",
   "0081_history_recall_governance.sql",
+  "0082_journal_workflow_recovery.sql",
 ] as const;
 const schemaFingerprint = `sha256:${"a".repeat(64)}`;
 

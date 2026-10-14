@@ -26,6 +26,12 @@ function createHandler(
 }
 
 describe("recovery scanner handler", () => {
+  it.each([["55P03", "lock_timeout"], ["57014", "statement_cancelled"], ["40P01", "transaction_conflict"], ["40001", "transaction_conflict"]])("classifies PostgreSQL %s without exposing content", async (code, diagnosticCode) => {
+    const response = await createHandler({ code, message: "private SQL and text" })(new Request("http://localhost/api/internal/recovery/scan", { headers: { authorization: "Bearer scanner-secret" } }));
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ error: "recovery_scan_failed", diagnosticCode });
+  });
+
   it("executes the scan pipeline for an authenticated GET and reports dispatch counters", async () => {
     // A 200 acknowledges that the scan ran and the outbox accepted the
     // dispatch; it is not evidence that downstream workflows reached a

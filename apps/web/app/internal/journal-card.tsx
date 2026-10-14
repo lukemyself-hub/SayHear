@@ -47,6 +47,7 @@ export function JournalView({
   generationNotice: JournalGenerationNotice | null;
   logicalDate: string | null;
 }) {
+  const [retryStatus, setRetryStatus] = useState<"idle" | "queued" | "error">("idle");
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState(false);
   const [staleGuard, setStaleGuard] = useState(false);
@@ -74,6 +75,15 @@ export function JournalView({
                   : "还没有可读的日记。交流结束后会自动生成，无需手动创建。"}
               </p>
             )}
+            {generationNotice?.failureCode === "retry_budget_exhausted" ? (
+              <button type="button" disabled={retryStatus === "queued"} onClick={async () => {
+                try {
+                  const response = await fetch("/api/internal/journals/retry", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ logicalDate: generationNotice.logicalDate }) });
+                  setRetryStatus(response.ok ? "queued" : "error");
+                } catch { setRetryStatus("error"); }
+              }}>{retryStatus === "queued" ? "已安排重新生成" : "重新尝试"}</button>
+            ) : null}
+            {retryStatus === "error" ? <p role="alert">暂时无法重新尝试，请稍后再试。</p> : null}
           </div>
         </div>
       </section>

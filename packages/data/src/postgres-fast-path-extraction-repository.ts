@@ -1,3 +1,4 @@
+import { retryPostgresTransaction } from "./postgres-transaction-retry";
 import {
   asUserId,
   type FastPathBatchRevision,
@@ -177,6 +178,30 @@ export class PostgresFastPathExtractionRepository
     }>;
     now: Date;
   }): Promise<ReadonlyMap<string, string>> {
+    return retryPostgresTransaction(() => this.ensureRevisionEvidenceOnce(input));
+  }
+
+  private async ensureRevisionEvidenceOnce(input: {
+    userId: string;
+    dailySessionId: string;
+    revision: FastPathBatchRevision;
+    evidence: readonly Readonly<{
+      locatorKey: string;
+      role: "factual_support" | "subjective_report";
+    }>[];
+    extractionPolicyVersion: string;
+    expectedDataEpoch: number;
+    lineage: Readonly<{
+      commandId: string;
+      attemptId: string;
+      championConfigVersion: string;
+      championProvider: string;
+      championModel: string;
+      championSnapshot: string;
+      championProviderPolicyVersion: string;
+    }>;
+    now: Date;
+  }): Promise<ReadonlyMap<string, string>> {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
@@ -192,6 +217,16 @@ export class PostgresFastPathExtractionRepository
   }
 
   public async commitRevisionExtraction(
+    input: Parameters<FastPathExtractionRepository["commitRevisionExtraction"]>[0],
+  ): Promise<
+    | Readonly<{ outcome: "committed"; candidateIds: readonly string[] }>
+    | Readonly<{ outcome: "already_extracted" }>
+    | Readonly<{ outcome: "stale_source" }>
+  > {
+    return retryPostgresTransaction(() => this.commitRevisionExtractionOnce(input));
+  }
+
+  private async commitRevisionExtractionOnce(
     input: Parameters<FastPathExtractionRepository["commitRevisionExtraction"]>[0],
   ): Promise<
     | Readonly<{ outcome: "committed"; candidateIds: readonly string[] }>

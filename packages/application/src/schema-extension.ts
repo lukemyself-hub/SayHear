@@ -139,6 +139,13 @@ export const ONE_A_3B_G1_SCHEMA_EXTENSIONS: readonly OneA3bG1SchemaExtensionPin[
       justification:
         "Creates the content-free, non-owner-scoped history_recall_policies governance table (issue #320; no user_id, outside the owner Full Purge Surface Registry like recent_context_policies) and adds the nullable history_recall_results.governance_policy_version column (a version identity, no content; registered as a non-private column). It names no protected relation.",
     }),
+    Object.freeze({
+      store: "business" as const,
+      name: "0082_journal_workflow_recovery.sql",
+      sha256: "86392dc6d5f98b8d50f637eb4c31762a3678b8bfa4cb5ed1ce4071c0dc407b6f",
+      justification:
+        "Adds bounded Journal recovery metadata and owner-scoped Evidence dispatch claims. Existing snapshot-linked attempts populate only the new ownership columns. No protected relation or private content is rewritten (Issues #340 and #341).",
+    }),
   ]);
 
 /** Registered extension pins for one store, in registry order. */

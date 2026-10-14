@@ -108,3 +108,5 @@ export {
   type EvidenceStepUpDenialReason,
   type EvidenceStepUpIssuerContext,
 } from "./postgres-evidence-step-up-repository";
+
+export { PostgresJournalWorkflowRecovery } from "./postgres-journal-workflow-recovery";

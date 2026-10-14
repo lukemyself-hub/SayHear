@@ -169,6 +169,8 @@ Accepted
 - [`0082`](adr/0082-one-turn-detector-owns-each-voice-session.md)：每个 Voice Session 只有一个 turn detector owner
 - [`0084`](adr/0084-voice-session-and-turn-are-runtime-mappings.md)：VoiceSession / VoiceTurn 是持久运行映射，不是产品长期记录
 
+- [`0153`](adr/0153-owner-first-transactions-and-bounded-journal-recovery.md)：Owner-first 锁顺序，事务外 Evidence 抽取与 Journal 有界持久恢复。
+
 ### 数据身份、证据与派生状态
 
 - [`0074`](adr/0074-versioned-domain-artifacts-require-lineage.md)：版本化领域产物必须保留 revision 与 lineage

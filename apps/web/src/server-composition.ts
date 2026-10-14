@@ -1,4 +1,5 @@
 import {
+  asUserId,
   createMemoryRetrievalService,
   createInternalOwnerAccessService,
   createInternalInspectionService,
@@ -102,6 +103,7 @@ import {
   PostgresMemoryConsolidationRepository,
   PostgresMemoryRetrievalRepository,
   PostgresJournalRepository,
+  PostgresJournalWorkflowRecovery,
   PostgresOutboxDispatcherRepository,
   PostgresOwnerPurgeRepository,
   PostgresPurgeMarkerRepository,
@@ -221,7 +223,7 @@ export function createServerComposition() {
     roles,
   });
   const evidenceConfiguration = journalRoleRegistry.configuration("evidence.extract");
-  const evidenceRepository = new PostgresEvidenceRepository(pool, journalRoleRegistry.evidenceExtractor);
+  const evidenceRepository = new PostgresEvidenceRepository(pool, journalRoleRegistry.evidenceExtractor, async (userId) => { await recoveryGate.requireOpen(asUserId(userId)); }, Math.max(300_000, configuration.provider.timeoutMs + 60_000));
   const evidenceService = createEvidenceService({
     clock: configuration.clock,
     extractionPolicyVersion: evidenceConfiguration.policyVersion,
@@ -236,6 +238,7 @@ export function createServerComposition() {
     recoveryGate,
     writesEnabled: configuration.writeSwitches.evidenceExtractionEnabled,
   });
+  const journalWorkflowRecovery = new PostgresJournalWorkflowRecovery(pool, Math.max(300_000, configuration.provider.timeoutMs * 3 + 60_000));
   const journalRepository = new PostgresJournalRepository(pool);
   const entityRepository = new PostgresEntityRepository(pool);
   const entityService = createEntityService({
@@ -938,6 +941,7 @@ export function createServerComposition() {
     evidenceService,
     journalService,
     journalRepository,
+    journalWorkflowRecovery,
     journalGenerationPolicyVersion: draftConfiguration.policyVersion,
     recoveryGate,
     recoveryReapplyService: createRecoveryReapplyService({
