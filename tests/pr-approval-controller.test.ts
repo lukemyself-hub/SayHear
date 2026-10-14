@@ -5,6 +5,11 @@ import { describe, expect, it } from "vitest";
 import {
   appReviewOutcomeForIdentity,
   completeIssueAfterApproval,
+  completeLinkedIssuesAfterMerge,
+  forEachLinkedIssue,
+  handoffStalePullRequestBase,
+  reconcileIssueCompletion,
+  resolveLinkedIssues,
   createGitHubAppJwt,
   GitHubApiError,
   GitHubRestClient,
@@ -31,6 +36,8 @@ import {
   PR_REVIEW_GATE_POLICY_VERSION,
   PR_REVIEW_REPORT_VERSION,
   SAYHEAR_REPOSITORY_ID,
+  requirementDigest,
+  type PrReviewGateInput,
 } from "../scripts/pr-review-gate.ts";
 
 const ACTIONS_APP_ID = 15368;
@@ -422,7 +429,7 @@ describe("PR approval controller", () => {
     expect(issue.labels).not.toContain("ongoing");
   });
 
-  it("closes an approved Issue and removes all execution and triage-state labels", async () => {
+  it("closes a merged Issue and removes all execution and triage-state labels", async () => {
     const events: string[] = [];
     let issue = {
       number: 42,
@@ -458,8 +465,8 @@ describe("PR approval controller", () => {
     });
 
     await completeIssueAfterApproval(api, 42, {
-      autoMergeEnabled: true,
-      merged: false,
+      autoMergeEnabled: false,
+      merged: true,
     });
 
     expect(events.indexOf("label:remove:ongoing")).toBeLessThan(
@@ -504,6 +511,100 @@ describe("PR approval controller", () => {
       autoMergeEnabled: false,
       merged: false,
     })).rejects.toThrow("cannot close before GitHub confirms");
+  });
+
+  it("resolves multiple local Issue references once and excludes PRs and foreign links", async () => {
+    const requested: string[] = [];
+    const api = new StubApi((path) => {
+      requested.push(path);
+      if (path.endsWith("/42")) return { number: 42, state: "open" };
+      if (path.endsWith("/43")) return { number: 43, state: "closed" };
+      if (path.endsWith("/44")) return { number: 44, pull_request: {} };
+      throw new Error(`Unexpected lookup: ${path}`);
+    });
+    const references = await resolveLinkedIssues(api, {
+      title: "Fix #42", body: "#42, #43 and #44. https://github.com/lukemyself-hub/SayHear/issues/43 https://github.com/other/repo/issues/999 other/repo#998",
+    } as Parameters<typeof resolveLinkedIssues>[1]);
+    expect(references.map((issue) => issue.number)).toEqual([42, 43]);
+    expect(requested).toHaveLength(3);
+    await expect(resolveLinkedIssues(new StubApi(() => ({ number: 44, pull_request: {} })), {
+      title: "PR #44", body: "",
+    } as Parameters<typeof resolveLinkedIssues>[1])).rejects.toThrow("at least one Issue");
+  });
+
+  it("waits for merge without closing any Issue when auto-merge is only enabled", async () => {
+    const api = new StubApi(() => { throw new Error("No Issue mutation or lookup is allowed yet"); });
+    await completeLinkedIssuesAfterMerge(api, [42, 43], { autoMergeEnabled: true, merged: false });
+    await expect(completeIssueAfterApproval(api, 42, { autoMergeEnabled: true, merged: false })).rejects.toThrow("confirms merge");
+  });
+
+  it("attempts every Issue even when one handoff fails and reports the incomplete work", async () => {
+    const attempted: number[] = [];
+    await expect(forEachLinkedIssue([43, 42, 43, 44], async (number) => {
+      attempted.push(number);
+      if (number === 43) throw new Error("Label update failed");
+    })).rejects.toThrow("Issue #43: Label update failed");
+    expect(attempted).toEqual([42, 43, 44]);
+  });
+
+  it("recovers multi-Issue closure after a partial failure using live merge and App approval", async () => {
+    const issueMap = new Map([42, 43, 44, 45].map((number) => [number, {
+      number, state: number === 44 ? "closed" : "open", title: `Requirement ${number}`, body: "Existing behavior",
+      updated_at: "2026-10-12T00:00:00Z", labels: ["bug", "ongoing"],
+    }]));
+    const pull = { number: 321, node_id: "PR_321", state: "closed", merged: true, merge_commit_sha: MERGE_SHA,
+      title: "Deliver #42, #43, #44", body: "Fixes #42, #43 and #44. 本 PR 不关闭也不修改 #45。", updated_at: "2026-10-12T00:00:00Z",
+      head: { sha: HEAD_SHA, repo: { id: SAYHEAR_REPOSITORY_ID } }, base: { ref: "main", sha: BASE_SHA, repo: { id: SAYHEAR_REPOSITORY_ID } }, user: { id: 101 } };
+    const emptyDiscussion = "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945";
+    const report: ModelReviewReport = { ...modelReport, requirementDigest: requirementDigest([...issueMap.values()].map((issue) => ({
+      ...issue, updatedAt: issue.updated_at, discussionDigest: emptyDiscussion,
+    })), { ...pull, updatedAt: pull.updated_at, discussionDigest: emptyDiscussion }) };
+    const approval = { id: 10, user: { id: REVIEW_BOT_ACTOR_ID }, commit_id: HEAD_SHA, state: "APPROVED",
+      body: `<!-- sayhear-pr-auto-approval-review:v2 pr=321 head=${HEAD_SHA} base=${BASE_SHA} requirement=${report.requirementDigest} outcome=approve -->` };
+    const completionIdentity = {
+      repositoryId: SAYHEAR_REPOSITORY_ID, pullRequestNumber: 321, pullRequestNodeId: "PR_321", headSha: HEAD_SHA,
+      approvedBaseSha: BASE_SHA, requirementDigest: report.requirementDigest, baseRepositoryId: SAYHEAR_REPOSITORY_ID, baseRef: "main",
+      botActorId: REVIEW_BOT_ACTOR_ID, reviewId: 10, appId: 123, policyVersion: PR_REVIEW_GATE_POLICY_VERSION, issueNumbers: [42, 43, 44],
+
+    };
+    let fail43 = true;
+    const closed: number[] = [];
+    const api = new StubApi((path, options) => {
+      if (path.endsWith("/pulls/321")) return pull;
+      const number = Number(path.match(/\/issues\/(\d+)/)?.[1]);
+      const issue = issueMap.get(number);
+      if (!issue) throw new Error(`Unexpected request ${path}`);
+      if (options?.method === "PATCH") {
+        if (number === 43 && fail43) throw new Error("Temporary GitHub failure");
+        issue.state = "closed";
+        issue.updated_at = "2026-10-13T01:00:00Z";
+        pull.updated_at = "2026-10-13T01:00:00Z";
+        closed.push(number);
+      }
+      if (options?.method === "DELETE") issue.labels = issue.labels.filter((label) => label !== decodeURIComponent(path.split("/").at(-1)!));
+      return issue;
+    }, (path) => path.endsWith("/pulls/321/reviews") ? [approval] : []);
+    await expect(reconcileIssueCompletion(api, completionIdentity)).rejects.toThrow("Issue #43");
+    expect(issueMap.get(42)?.state).toBe("closed");
+    expect(issueMap.get(44)?.labels).toEqual(["bug"]);
+    expect(requirementDigest([...issueMap.values()].map((issue) => ({ ...issue, updatedAt: issue.updated_at, discussionDigest: emptyDiscussion })),
+      { ...pull, updatedAt: pull.updated_at, discussionDigest: emptyDiscussion })).toBe(report.requirementDigest);
+    fail43 = false;
+    await expect(reconcileIssueCompletion(api, completionIdentity)).resolves.toBe("issues_completed");
+    expect(closed).toEqual([42, 43]);
+    expect([...issueMap.values()].filter((issue) => issue.number !== 45).every((issue) => issue.state === "closed" && issue.labels.join() === "bug")).toBe(true);
+    expect(issueMap.get(45)).toMatchObject({ state: "open", labels: ["bug", "ongoing"] });
+    await expect(reconcileIssueCompletion(api, completionIdentity)).resolves.toBe("issues_completed");
+    expect(closed).toEqual([42, 43]);
+    pull.merged = false;
+    pull.state = "open";
+    await expect(reconcileIssueCompletion(api, completionIdentity)).resolves.toBe("waiting_for_merge");
+    pull.state = "closed";
+    await expect(reconcileIssueCompletion(api, completionIdentity)).rejects.toThrow("closed_without_merge");
+    pull.merged = true;
+    await expect(reconcileIssueCompletion(api, { ...completionIdentity, requirementDigest: "f".repeat(64) })).rejects.toThrow("reviewer_mismatch");
+    issueMap.get(43)!.body = "A newly changed requirement";
+    await expect(reconcileIssueCompletion(api, completionIdentity)).rejects.toThrow("requirement_content_mismatch");
   });
 
   it("excludes only authenticated Vercel deployment status from PR requirements", () => {
@@ -728,6 +829,21 @@ describe("PR approval controller", () => {
     ).rejects.toThrow("exceeds the 4-byte limit");
   });
 
+  it("bounds streamed evidence without a Content-Length and cancels an oversized body", async () => {
+    let cancelled = false;
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array([1, 2]));
+        controller.enqueue(new Uint8Array([3, 4, 5]));
+      },
+      cancel() { cancelled = true; },
+    });
+    const client = new GitHubRestClient("installation-token", async () => new Response(body));
+    await expect(client.bytes("/repos/lukemyself-hub/SayHear/git/blobs/example", { maxBytes: 4 }))
+      .rejects.toThrow("exceeds the 4-byte limit");
+    expect(cancelled).toBe(true);
+  });
+
   it("accepts a valid structured review and rejects request changes without a blocker", () => {
     expect(parseModelReviewReport(modelReport)).toMatchObject({
       decision: "approve",
@@ -907,5 +1023,188 @@ describe("PR approval controller", () => {
         identity,
       ),
     ).toBeNull();
+  });
+});
+
+
+describe("stale main Issue handoff", () => {
+  function fixture() {
+    const pull = {
+      number: 333, state: "open", draft: false, title: "Deliver #42 #43 #44 #45",
+      body: "本 PR 不关闭也不修改 #44。", base: { ref: "main", sha: BASE_SHA },
+      head: { sha: HEAD_SHA, repo: { id: SAYHEAR_REPOSITORY_ID } }, auto_merge: null,
+    };
+    let main = "f".repeat(40);
+    const issues = new Map([42, 43, 44, 45].map((number) => [number, {
+      number, state: number === 45 ? "closed" : "open", title: `Issue ${number}`, body: "Implement existing contract",
+      labels: [{ name: "ongoing" }, { name: "bug" }],
+    }]));
+    const comments = new Map<number, GitHubComment[]>([333, 42, 43, 44, 45].map((n) => [n, []]));
+    const writes: string[] = [];
+    let commentActor = REVIEW_BOT_ACTOR_ID;
+    let afterComment: (() => void) | undefined;
+    let failLabel: number | undefined;
+    let failCompletion = false;
+    let beforeRead: (() => void) | undefined;
+    const api = new StubApi((path, options) => {
+      if (!options?.method || options.method === "GET") {
+        if (path.endsWith("/pulls/333")) return structuredClone(pull);
+        if (path.endsWith("/git/ref/heads/main")) return { object: { sha: main } };
+        const number = Number(path.split("/").at(-1));
+        if (issues.has(number)) { beforeRead?.(); return structuredClone(issues.get(number)); }
+        throw new Error(`Unexpected read ${path}`);
+      }
+      const match = /\/issues\/(\d+)\/(comments|labels)(?:\/(.*))?$/.exec(path);
+      if (!match) throw new Error(`Unexpected write ${path}`);
+      const number = Number(match[1]);
+      writes.push(`${options.method}:${number}:${match[2]}:${match[3] ?? ""}`);
+      if (match[2] === "comments") {
+        if (failCompletion && requestBody<{ body: string }>(options).body.includes("completed=true")) throw new Error("completion publication failed");
+        comments.get(number)!.push(makeIssueComment(requestBody<{ body: string }>(options).body, commentActor));
+        afterComment?.();
+        return {};
+      }
+      if (failLabel === number) throw new Error("label write failed");
+      // Labels may change only after the App comment was read back.
+      expect(comments.get(number)!.some((c) => c.user.id === REVIEW_BOT_ACTOR_ID && c.body?.includes("sayhear-pr-base-sync:v1") === true)).toBe(true);
+      const issue = issues.get(number)!;
+      if (options.method === "POST") {
+        issue.labels.push(...requestBody<{ labels: string[] }>(options).labels.map((name) => ({ name })));
+      } else {
+        issue.labels = issue.labels.filter((label) => label.name !== decodeURIComponent(match[3]!));
+      }
+      return {};
+    }, (path) => comments.get(Number(/\/issues\/(\d+)\/comments/.exec(path)?.[1])) ?? []);
+    const expected = {
+      number: pull.number, state: "open", draft: false, title: pull.title, body: pull.body,
+      updatedAt: "2026-10-13T00:00:00Z", discussionDigest: "", externalReviewState: "clear",
+      headSha: HEAD_SHA, baseSha: BASE_SHA, mergeSha: MERGE_SHA, baseRef: "main",
+      headRepositoryId: SAYHEAR_REPOSITORY_ID, authorId: 101, lastCommitAuthorId: 101,
+      linkedIssueNumbers: [42, 43, 44, 45], keepOpenIssueNumbers: [44], issueClosureAmbiguous: false,
+      changedFiles: [],
+    } satisfies PrReviewGateInput["pullRequest"];
+    return { api, expected, pull, issues, comments, writes,
+      setMain: (sha: string) => { main = sha; },
+      setCommentActor: (actor: number) => { commentActor = actor; },
+      setAfterComment: (action: () => void) => { afterComment = action; },
+      setFailLabel: (number: number) => { failLabel = number; },
+      setFailCompletion: () => { failCompletion = true; },
+      setBeforeRead: (action: () => void) => { beforeRead = action; },
+    };
+  }
+  const actors = { botActorId: REVIEW_BOT_ACTOR_ID, ownerActorId: 101 };
+
+  it("hands every open delivery Issue back after App comment readback, preserving exclusions and closed Issues", async () => {
+    const f = fixture();
+    expect(await handoffStalePullRequestBase(f.api, f.expected, actors)).toMatchObject({ status: "handed_off", issueNumbers: [42, 43] });
+    for (const n of [42, 43]) {
+      expect(f.issues.get(n)!.labels.map((l) => l.name).sort()).toEqual(["bug", "ready-for-agent"]);
+      const body = f.comments.get(n)![0]!.body;
+      expect(body).toContain(HEAD_SHA);
+      expect(body).toContain(BASE_SHA);
+      expect(body).toContain("f".repeat(40));
+      expect(body).toContain("原 PR 和原分支");
+      expect(parseRequestChangeHistory(f.comments.get(n)!, 333, REVIEW_BOT_ACTOR_ID).count).toBe(0);
+    }
+    expect(f.writes.some((w) => /:(44|45):/.test(w))).toBe(false);
+  });
+
+  it("deduplicates repeated scans, but publishes a new instruction when main advances", async () => {
+    const f = fixture();
+    await handoffStalePullRequestBase(f.api, f.expected, actors);
+    await handoffStalePullRequestBase(f.api, f.expected, actors);
+    expect(f.comments.get(42)).toHaveLength(2);
+    f.setMain("d".repeat(40));
+    await handoffStalePullRequestBase(f.api, f.expected, actors);
+    expect(f.comments.get(42)).toHaveLength(4);
+  });
+
+  it("preserves an Agent's new occupancy after a completed same-identity handoff", async () => {
+    const f = fixture();
+    await handoffStalePullRequestBase(f.api, f.expected, actors);
+    f.issues.get(42)!.labels = [{ name: "bug" }, { name: "ongoing" }];
+    const writesBefore = f.writes.length;
+    await handoffStalePullRequestBase(f.api, f.expected, actors);
+    expect(f.writes).toHaveLength(writesBefore);
+    expect(f.issues.get(42)!.labels.map((l) => l.name)).toEqual(["bug", "ongoing"]);
+    f.setMain("d".repeat(40));
+    await handoffStalePullRequestBase(f.api, f.expected, actors);
+    expect(f.issues.get(42)!.labels.map((l) => l.name)).toEqual(["bug", "ongoing"]);
+    expect(f.writes.slice(writesBefore).some((w) => w.includes(":42:labels:"))).toBe(false);
+  });
+
+  it.each(["ready-for-human", "needs-info", "needs-triage", "wontfix"])("publishes the sync instruction but preserves %s", async (label) => {
+    const f = fixture();
+    f.issues.get(42)!.labels = [{ name: label }, { name: "bug" }];
+    expect(await handoffStalePullRequestBase(f.api, f.expected, actors)).toMatchObject({ status: "held_for_human", heldIssueNumbers: [42], issueNumbers: [43] });
+    expect(f.comments.get(42)).toHaveLength(1);
+    expect(f.issues.get(42)!.labels.map((l) => l.name)).toEqual([label, "bug"]);
+    expect(f.writes.some((w) => w.includes(":42:labels:"))).toBe(false);
+  });
+
+  it("preserves occupancy after completion publication fails and an Agent claims the Issue", async () => {
+    const f = fixture(); f.setFailCompletion();
+    await expect(handoffStalePullRequestBase(f.api, f.expected, actors)).rejects.toThrow("completion publication failed");
+    f.issues.get(42)!.labels = [{ name: "ongoing" }, { name: "bug" }];
+    await expect(handoffStalePullRequestBase(f.api, f.expected, actors)).rejects.toThrow("ongoing may be a new Agent claim");
+    expect(f.issues.get(42)!.labels.map((l) => l.name)).toEqual(["ongoing", "bug"]);
+  });
+
+  it("does not delete a human label added at the label mutator's fresh read", async () => {
+    const f = fixture(); let readsAfterComment = 0;
+    f.setBeforeRead(() => {
+      if (f.comments.get(42)!.length > 0 && ++readsAfterComment === 2) {
+        f.issues.get(42)!.labels.push({ name: "ready-for-human" });
+      }
+    });
+    await expect(handoffStalePullRequestBase(f.api, f.expected, actors)).rejects.toThrow("human triage state");
+    expect(f.issues.get(42)!.labels.some((l) => l.name === "ready-for-human")).toBe(true);
+    expect(f.writes.some((w) => w.includes(":42:labels:"))).toBe(false);
+  });
+
+  it("respects an authenticated maintainer pause before any write", async () => {
+    const f = fixture();
+    f.comments.get(42)!.push(makeIssueComment("/pause-pr-auto-approval", 101));
+    expect((await handoffStalePullRequestBase(f.api, f.expected, actors)).status).toBe("held_for_human");
+    expect(f.writes).toHaveLength(0);
+  });
+
+  it.each(["current", "changed", "hold", "ambiguous"])("does not write for %s context", async (kind) => {
+    const f = fixture();
+    if (kind === "current") f.setMain(BASE_SHA);
+    if (kind === "changed") f.pull.head.sha = "d".repeat(40);
+    if (kind === "hold") f.issues.get(42)!.body = "不要合入";
+    if (kind === "ambiguous") { f.pull.body = "Do not close issues."; f.expected.body = f.pull.body; }
+    expect((await handoffStalePullRequestBase(f.api, f.expected, actors)).status).toBe(
+      kind === "current" ? "current_base" : kind === "changed" ? "state_changed" : "held_for_human",
+    );
+    expect(f.writes).toHaveLength(0);
+  });
+
+  it("does not release occupancy if the App comment cannot be confirmed", async () => {
+    const f = fixture(); f.setCommentActor(101);
+    await expect(handoffStalePullRequestBase(f.api, f.expected, actors)).rejects.toThrow("Issue updates incomplete");
+    expect(f.writes.every((w) => w.includes(":comments:"))).toBe(true);
+    expect(f.issues.get(42)!.labels.some((l) => l.name === "ongoing")).toBe(true);
+  });
+
+  it("stops labels when head or an Issue hold changes after comment publication", async () => {
+    for (const changeHead of [true, false]) {
+      const f = fixture();
+      f.setAfterComment(() => {
+        if (changeHead) f.pull.head.sha = "d".repeat(40);
+        else f.issues.get(42)!.body = "暂停自动审批";
+      });
+      await expect(handoffStalePullRequestBase(f.api, f.expected, actors)).rejects.toThrow("Issue #42");
+      expect(f.writes.some((w) => w.includes(":42:labels:"))).toBe(false);
+      expect(f.issues.get(42)!.labels.some((l) => l.name === "ongoing")).toBe(true);
+    }
+  });
+
+  it("continues other Issue handoffs and reports a partial label failure", async () => {
+    const f = fixture(); f.setFailLabel(42);
+    await expect(handoffStalePullRequestBase(f.api, f.expected, actors)).rejects.toThrow("Issue #42: label write failed");
+    expect(f.issues.get(43)!.labels.map((l) => l.name).sort()).toEqual(["bug", "ready-for-agent"]);
+    expect(f.issues.get(42)!.labels.some((l) => l.name === "ongoing")).toBe(true);
   });
 });

@@ -2,6 +2,114 @@
 
 ## 状态
 
+### 可恢复合并收尾
+
+#339 将合并意图与 Issue 收尾分开持久保存。签名意图在请求合并前落盘，绑定已审
+PR、仓库、head、base、App approval 和交付 Issue。恢复只读核验并补 Issue 收尾，
+不重复批准或合并。未完成或明确不匹配的记录阻止后续合入。
+单次最多五次确认、等待不超过 60 秒，最多十个自动执行周期，遵守 Retry-After。
+来源、签名信任、回归证据、受控安装及回滚步骤见
+[收尾实施说明](../plans/pr-approval-recoverable-completion.md)。
+源码和构建夹具通过不代表当前特权安装版已完成更新，必须回读安装哈希及版本。
+
+### 多 Issue PR 与关闭排除
+
+Luke 于 2026-10-12 确认：PR 可以引用多个 Issue；合入后自动关闭其中仍开放的 Issue，
+同时尊重 PR 对部分 Issue 的“不关闭”声明。多 Issue 版本已由 Luke 安装。2026-10-13T03:09Z 固定 `status` 回读确认
+`policyVersion=sayhear-pr-review-gate:v4`，bundle SHA-256 为
+`64e0f5674dd45c74a1067895ce7051fea9a31f8ca6deea0b0c707fce360707d8`。
+#333 的 `prepare` 返回 `incomplete_diff`：1077 个文件超过 GitHub 整份 diff 接口
+300 文件上限，API 返回 406。尚未生成正式审核包或提交批准。
+
+- 引用来自同仓库 PR 标题、正文中的 `#数字` 或本仓库 Issue URL，去重并排除 PR 编号与
+  其他仓库链接。审核包的 `issues` 包含全部引用的 Issue 和各自需求、评论摘要、状态。
+- 明确的关闭排除单独记录在 `pullRequest.keepOpenIssueNumbers`。支持
+  `本 PR 不关闭也不修改 #301。`、`Do not close: #301, #308.` 和
+  `#301、#308 保持开放。`，以及直接列出本仓库 Issue URL 的声明。排除语句未明确
+  列出编号或无法确定范围时进入 `human_decision`，先让维护者改写为明确编号列表。
+- 排除项是需求上下文：完整读取并绑定需求摘要，但不认领、不写交接评论、不改标签、
+  不关闭。#333 的“不关闭也不修改 #301”声明必须保留。
+- 其余开放 Issue 均须认领、无暂停或互斥标签。交付集合内的开放依赖允许随本 PR 一起
+  交付；集合外依赖，包括被声明保持开放的 Issue，仍须先解除。已关闭 Issue 只作
+  需求上下文，不重新打开；合入后可清理未排除的已关闭 Issue 遗留状态标签。
+- 每个交付 Issue 都须满足需求，不能用一个 Issue 的实现替代其他 Issue 的验收。
+  任一正文、标题、非 App 评论或引用集合改变都会使需求摘要失效。
+- 审批策略版本为 `sayhear-pr-review-gate:v4`，报告结构保持
+  `sayhear-pr-review-report:v3`。旧报告与旧人工绑定不能直接用于新摘要。
+- `prepare` 返回 `issue_completion_pending` 时，使用固定 `scan --pr 数字` 恢复合入后
+  收尾。只开启 auto-merge 时继续等待并保留执行占用；必须回读 `merged=true` 和匹配
+  的真实 App approval，才逐个关闭交付 Issue、清理标签并回读。失败不跳过其余 Issue，
+  保留待收尾记录并报告失败项，下次 scan 重试。记录只是重试线索，不能替代 GitHub
+  认证身份、已审需求摘要和实际合入状态。该路径不重新批准或合入 PR。
+
+### PR 落后 main 的交接
+
+Luke 于 2026-10-12 要求：发现 PR base 落后当前 main 时，将同步要求回写相应 Issue，
+让实现 Agent 接续原 PR/分支。root-owned 版本已由 Luke 按 A 方案安装。2026-10-13T04:24Z 固定 status 确认三项版本，
+bundle SHA-256 为 `ebfa3d099f916b7109a58283bc783b83de570a5644c305d5378684ff697392bc`。
+#333 prepare 正式包完整，1077 文件、85 二进制，keepOpenIssueNumbers 为 [301]；
+固定 scan 已由 App 回写 #321/#322 并回读 ready-for-agent、无 ongoing；#301 未修改。
+PR 仍等待同步 main，本次未提交批准或合入。
+新增状态标识 `baseSyncHandoffVersion=sayhear-pr-base-sync:v1`，policy v4 与 diff v2 保持不变。
+
+- 在复用旧审核和等待旧 CI 前处理 base 落后。`prepare` 只生成本地包并返回
+  `waiting_for_current_base`、`handoffRequired=true`、head/base/currentMainSha 和 packetPath。
+  包生成不表示批准，也不表示 CI、人工授权或生产验收门禁通过。
+- 使用固定 `scan --pr 数字` 完成 App 身份回写；这条专用交接不要求 Issue 已全部 ongoing，
+  也不因旧 CI 排队而无限等候。先核验 Ready、同仓库 main、最新 head/base、引用集合和排除，
+  暂停或合入保留仍阻断。`submit` 遇到匹配当前身份与需求摘要的 stale-base 报告也走此交接。
+- 每个未排除的开放 Issue 收到 PR 链接、head/base/当时 main SHA、同步 main、处理冲突、
+  在新 SHA/base 上重跑可信 CI 与专项、接续原 PR 不另建 PR 的要求。#301 等明确保持开放项
+  不写评论、不改标签；已关闭项不重新打开。
+- 确认 App 评论后恢复 `ready-for-agent`、清除 `ongoing` 和互斥标签并回读。
+  `ready-for-human`、`needs-info`、`needs-triage`、`wontfix` 只收到提醒，原标签保留，
+  输出 `held_for_human` 与 heldIssueNumbers。交接不解除人工决定、暂停或集合外依赖。
+- App 在标签回读后写已完成标记，以 PR/head/base/main 去重；后续 Agent 已重新认领的
+  `ongoing` 不被同一轮扫描释放。评论成功但标签失败可重试；逐项失败不跳过其余项，
+  `base_sync_handoff_incomplete` 不可报告为已交接。
+- 此路径不创建 request changes review，不增加三轮代码修改失败计数，也不批准、合入或
+  直接修改 PR 分支。实现 Agent 执行前须重读最新 main、评论、依赖与暂停，再按 Git 授权同步。
+
+交接评论已有、完成标记缺失且 Issue 仅有 ongoing 时，无法可靠区分旧占用与新认领，
+保留占用并报告未完成交接，等待人工核实；不盲目释放。main 再前进时，已交接后新认领
+的 Agent 只收到更新提醒，ongoing 保留。标签变更函数也回读人工状态，遇到新人工标签停止。
+
+### 大 PR 完整 diff 取证
+
+新增 collector 已用 #333 的认证 API 元数据和固定 Git 对象完成离线重放验证：
+1077 文件、85 个二进制文件，完整 patch 正向应用后全部 blob SHA 与 head 一致，反向
+还原也通过。该 collector 的正式 root-owned bundle 已由 Luke 安装；固定
+`status` 回读确认 `diffCollectionVersion=sayhear-pr-diff:v2`，bundle SHA-256 为
+`2ab4934dbc43cc65df9be0c2f2ebac4f109f94f4a3f9eb23bf859d619d08c049`。
+2026-10-13T04:00:28.835Z 的正式 `prepare --pr 333` 返回
+`waiting_for_current_base`：PR base 为 `b31cc25a`，main 已到 `575cd63b`，GitHub 状态
+为 `BEHIND`，因此尚未生成正式包。待 PR 跟上当前 main 后再回读包内完整性与排除项。
+
+- 普通文本 PR 从固定 base/head SHA 的 compare 接口读取 unified diff，逐项校验文件头、
+  状态、index SHA、hunk 数量及增删计数。没有 hunk 的修改必须回退到 tree/blob 核验。
+- 大 PR 或 diff 无法证明完整时，交叉核对分页 files、compare 的 merge-base、固定 commit
+  tree。要求树未截断、文件数与 `changed_files` 相符、路径去重，完整树差异与 manifest
+  覆盖集合完全一致。缺失路径、mode 或 SHA 不匹配都阻断。
+- 内容只来自固定 blob SHA 的原始数据接口，验证 Git blob SHA 和字节数；按旧/新完整
+  内容生成 full-file patch，包括可正反应用的 Git binary literal patch。不能将
+  `Binary files differ` 摘要或 per-file `patch` 字段当作完整内容。接口依据见
+  [GitHub blob API](https://docs.github.com/en/rest/git/blobs#get-a-blob) 和
+  [GitHub tree API](https://docs.github.com/en/rest/git/trees#get-a-tree)。
+- `diff.source` 为 `github-diff`、`github-blobs` 或 `unavailable`，并记录 merge-base、
+  内容大小、二进制数量、预期文件数和失败原因。fallback 的完整文本参与 `diff.digest`
+  与修改轮次摘要；任何二进制内容改变都使摘要改变。
+- 限制 3000 个改动文件、单 blob 8 MiB、旧/新内容合计 64 MiB、patch 128 MiB、6 个并发
+  blob 读取。改变限额须经过 gate 改动授权。变更中的 submodule 不自动当作完整 diff。
+- `artifacts/pr-approval/git-blobs/` 是可删除的内容缓存，不能授予审批。每次都按认证
+  tree 的 SHA 和大小重新验证，拒绝符号链接与非普通文件，有界读取；缓存污染则重新
+  从 API 取得内容。缓存写入失败不改变已验证的证据。controller 不调用工作区 Git，
+  不 checkout、不执行被审代码、不安装依赖。
+- 全部内容读取后再次回读 PR head/base/file count。漂移、截断、下载超限、manifest
+  读取失败或内容校验失败仍保持 `incomplete_diff`。已能读取 PR/Issue 上下文时，
+  `prepare` 会生成带原因的诊断包，包中 `diff.complete=false`，不能提交批准。
+- 安装后先 `status`，再 `prepare --pr 333`，核验 `diff.complete=true`、1077 文件与
+  `keepOpenIssueNumbers=[301]`。完整取证不代表代码审核、CI、迁移或生产验收通过。
+
 ### controller 修复与 UI 证据标准
 
 已安装的 controller 曾把 `ui:browser-smoke:desktop` / `:mobile` 当作 UI 必要证据，
@@ -110,9 +218,9 @@ pnpm pr:review-gate:dry-run -- --input <snapshot.json>
 
 ## Gate 规则
 
-- 报告绑定仓库、PR、head SHA、base SHA、策略版本，以及 Issue 标题、正文和 `updated_at` 摘要。Issue 评论或字段发生变化时，旧报告失效。
-- 仅接受完整 diff、非 Draft PR、指向当前 `main` 的同仓库 PR，以及唯一、开放、无阻塞依赖的关联 Issue。
-- Issue 必须处于 `ongoing`，不能同时带 `ready-for-agent`、人工处理、待补充或暂停状态。
+- 报告绑定仓库、PR、head SHA、base SHA、策略版本，以及全部引用 Issue 的标题、正文和非 App 评论摘要。只改标签或 App 自身回写不改变需求摘要。
+- 仅接受完整 diff、非 Draft PR、指向当前 `main` 的同仓库 PR，以及完整的关联 Issue 集合。交付集合的开放 Issue 须已认领，集合外依赖须解除。
+- 每个未排除的开放 Issue 必须处于 `ongoing`，不能同时带 `ready-for-agent`、人工处理、待补充或暂停状态。
 - PR Validate 的证据必须对应当前 head、base 和 merge SHA，并匹配可信 workflow 文件摘要、GitHub Actions App、仓库和 `pull_request` 事件。
 - 每项必要证据都必须显式为 `passed`。`skipped`、`cancelled`、`neutral`、`planned` 和 `out-of-scope` 均阻断。
 - `scripts/daily-release-validation.ts` 决定行为专项；gate 不使用它的退出码代替验收结果。
@@ -129,16 +237,16 @@ pnpm pr:review-gate:dry-run -- --input <snapshot.json>
   `trusted_identity_unconfigured`、`review_author_unavailable`、
   `branch_protection_unreadable`、`production_deploy_behavior_unknown` 等阻断属于终态，
   先回写评论，再按 `ready-for-agent` 交接，不能让 `ongoing` 长期占用 Issue。
-- 其他终态非批准结果（`request_changes`、终态 `awaiting_verification` 或
+- 对每个未排除的开放 Issue，其他终态非批准结果（`request_changes`、终态 `awaiting_verification` 或
   `human_decision`）必须先确认 Issue 评论已写入，再设置 `ready-for-agent`、移除
   `ongoing` 和其他互斥分诊状态，并回读最终标签。更新失败时不能声称已完成交接。
   评论若要求维护者决定，Agent 先等待决定，不得自行替代。Agent 接续时检查依赖、暂停
   记录和关联 PR；恰好一个开放关联 PR 时继续原 PR 和分支，不创建重复 PR。多个关联 PR、
   依赖或暂停仍阻断。本仓库不含 Issue 调度器，因此这条接续行为是外部调度器的要求，
   不能仅凭本文档声称已经实测。
-- App 已提交 `APPROVED` 且 GitHub 回读确认 auto-merge 已启用，或 PR 已在回读时合入后，
-  移除 `ongoing` 和互斥分诊状态，关闭 Issue，并回读确认关闭状态。类别标签如 `bug`
-  保留。
+- App 已提交 `APPROVED` 且 GitHub 回读确认 PR 实际合入后，逐个关闭未排除的开放 Issue，
+  清理 `ongoing` 和互斥分诊状态，并回读确认。类别标签如 `bug` 保留。只启用
+  auto-merge 时继续等待，保持执行占用，不提前关闭。
 
 ## 快照信任边界
 
