@@ -3,7 +3,7 @@ import { mkdtemp, readFile, writeFile, symlink, chmod } from "node:fs/promises";
 import { resolve } from "node:path";
 import { describe, it, expect } from "vitest";
 import { SignedCompletionStore, recoverCompletion, CompletionMismatch, CompletionUnavailable, type CompletionRecord, type CompletionStore, type CompletionClock } from "../scripts/pr-approval/completion.ts";
-import { confirmCompletionMerge, githubRetryAfterMs, requestProtectedMerge, controllerBuildIdentity, type GitHubApi } from "../scripts/pr-approval-controller.ts";
+import { confirmCompletionMerge, githubRetryAfterMs, requestProtectedMerge, controllerBuildIdentity, completeLinkedIssuesAfterMerge, GitHubApiError, type GitHubApi } from "../scripts/pr-approval-controller.ts";
 import { PR_REVIEW_GATE_POLICY_VERSION, SAYHEAR_REPOSITORY_ID } from "../scripts/pr-review-gate.ts";
 
 const head = "a".repeat(40);
@@ -115,6 +115,40 @@ describe("durable PR completion", () => {
     expect(waits).toEqual([]);
     expect(closes).toBe(0);
   });
+  it.each([
+    { retryDelays: [120_000], nextRetryAt: 121_000 },
+    { retryDelays: [120_000, 180_000], nextRetryAt: 181_000 },
+  ])("defers composed Issue completion until the largest Retry-After $nextRetryAt", async ({ retryDelays, nextRetryAt }) => {
+    const store = new MemoryStore();
+    const { clock, waits } = virtualClock();
+    const writes: number[] = [];
+    const reads: number[] = [];
+    const api: GitHubApi = {
+      request: async <T>(path: string, options?: Readonly<{ method?: string }>) => {
+        const issueNumber = Number(path.split("/issues/")[1]?.split("/")[0]);
+        const delay = retryDelays[issueNumber - 337];
+        if (options?.method === "DELETE") {
+          writes.push(issueNumber);
+          throw new GitHubApiError(429, "DELETE", path, delay);
+        }
+        reads.push(issueNumber);
+        return { number: issueNumber, state: "closed", labels: delay ? ["bug", "ongoing"] : ["bug"] } as T;
+      },
+      pages: async () => [], bytes: async () => new Uint8Array(),
+    };
+    const issueNumbers = retryDelays.map((_, index) => 337 + index).concat(339);
+    const record = { ...initial, identity: { ...initial.identity, issueNumbers } };
+    const result = await recoverCompletion(store, record, {
+      confirmMerge: async () => merge,
+      completeIssues: async (identity) => completeLinkedIssuesAfterMerge(api, identity.issueNumbers, { autoMergeEnabled: false, merged: true }),
+    }, clock);
+    expect(writes).toEqual(retryDelays.map((_, index) => 337 + index));
+    expect(reads).toContain(339);
+    expect(waits).toEqual([]);
+    expect(result).toMatchObject({ phase: "issues_pending", nextRetryAt, reason: "completion_issue_updates_incomplete", mergeSha: merge });
+    expect(store.value).toEqual(result);
+  });
+
   it("limits reads, honors nextRetryAt, and stops after ten execution cycles", async () => {
     const store = new MemoryStore();
     const time = virtualClock();
