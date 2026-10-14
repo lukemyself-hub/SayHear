@@ -12,9 +12,10 @@ not the root README's historical Foundation-only feature description.
 - Use only this run's URL and synthetic session, never the normal Owner profile.
 - The empty seed includes auth and backup policy, but no product content. Episode
   and Reflection writes remain off. This is not a hosted acceptance environment.
-- Use a fresh run for `text`, `delivery` and `oauth`. Keyboard/IME, fault
-  injection, longer history, a second Journal date, and generated Reflections
-  need extra journeys.
+- Use a fresh run for `text`, `keyboard`, `history`, `delivery`, `interruption`,
+  `cross-date` and `oauth`. Keyboard/IME, fault injection, long history and a
+  second Journal date now have their own journeys; generated Reflections still
+  need one.
 
 ## Driving conventions
 

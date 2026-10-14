@@ -1,0 +1,212 @@
+{
+  "recordedAt": "2026-10-14T01:35:15.000Z",
+  "baseCommit": "b7fac60d3111726616c571840f33126d9a4b6e41",
+  "workingTree": "All runs launched from the issue-345 worktree with its changes uncommitted; each run's doctor.json and result JSON records the exact sourceStatus at launch. driverSha256 pins the driver revision regardless.",
+  "driverSha256": {
+    "scripts/verify-control.mjs": "7b2312bd182b137c13eb9e87518627dcca4036c4c0fba0a42123ac089664d6c0",
+    "scripts/verify-fixture.mjs": "5edd2e7bc719d506aa46c300fde3d82131d0400a5dbb3cc623a498b4f6087807",
+    "scripts/verify-browser.mjs": "0f4e45f0b0cbc64100ffca184b4d735e94000f604b2a87ffd7f7e71ee80cbf48"
+  },
+  "host": "macOS, Node 24.18.0, PostgreSQL 17.10, playwright-core 1.61.1 with cached Chrome for Testing build 1200, no locale in the environment",
+  "runs": {
+    "local-regression": {
+      "run": "dev-345-local-2",
+      "doctor": {
+        "profile": "local",
+        "deployment": "test",
+        "clock": "fixed",
+        "provider": "deterministic",
+        "oauth": "inert",
+        "session": "fixture",
+        "owner": "synthetic",
+        "anonymousStatus": 401,
+        "ownerFixture": true,
+        "authenticatedStatus": 200,
+        "composerPresent": true,
+        "businessMigrations": 78,
+        "markerMigrations": 2
+      },
+      "purpose": "Confirm the pre-existing journeys do not regress on the new driver revision before driving the new ones.",
+      "journeys": [
+        { "feature": "access", "passed": true, "entries": ["/", "/api/internal/access"] },
+        { "feature": "text", "passed": true, "entries": ["/internal", "/internal?date=2026-07-27"], "events": 2 },
+        { "feature": "journal", "passed": true, "entries": ["/internal/journals"], "coverage": "empty state only" },
+        { "feature": "context", "passed": true, "entries": ["/internal/context-inspector"], "coverage": "entry only" },
+        { "feature": "reflection", "passed": true, "entries": ["/internal/reflection-inspector"], "coverage": "entry only" },
+        { "feature": "context-trace", "passed": true, "entries": ["message 查看 context link", "/internal/context-inspector typed lookup", "GET /api/internal/inspection/conversation-content"] },
+        { "feature": "signout", "passed": true, "entries": ["/api/auth/signout"], "note": "This ends the run's only session; launch again before other journeys." }
+      ],
+      "scratchRemoved": true
+    },
+    "keyboard": {
+      "run": "dev-345-keyboard-1",
+      "doctor": {
+        "profile": "local",
+        "deployment": "test",
+        "clock": "fixed",
+        "provider": "deterministic",
+        "oauth": "inert",
+        "session": "fixture",
+        "owner": "synthetic",
+        "anonymousStatus": 401,
+        "ownerFixture": true,
+        "authenticatedStatus": 200,
+        "composerPresent": true,
+        "businessMigrations": 78,
+        "markerMigrations": 2
+      },
+      "journeys": [
+        {
+          "feature": "keyboard",
+          "profile": "local",
+          "passed": true,
+          "entries": [
+            "/internal composer",
+            "Shift+Enter",
+            "CDP Input.imeSetComposition + Enter",
+            "Enter"
+          ],
+          "ime": {
+            "compositionEvents": ["compositionstart"],
+            "enterDuringComposition": {
+              "defaultPrevented": false,
+              "isComposing": true,
+              "key": "Enter",
+              "keyCode": 13,
+              "shiftKey": false
+            },
+            "method": "browser-level composition through CDP Input.imeSetComposition; a real operating-system IME stays human-pending"
+          },
+          "responseRequests": 1,
+          "stored": "keyboard-stored.json: one succeeded conversation.text attempt; Shift+Enter added one newline with no response request; Enter during composition sent nothing; one Enter sent exactly one request and committed the multiline text",
+          "unverified": [
+            "a real operating-system IME (human pending)",
+            "candidate selection and composition editing"
+          ]
+        }
+      ],
+      "scratchRemoved": true
+    },
+    "history": {
+      "run": "dev-345-history-1",
+      "doctor": {
+        "profile": "local",
+        "deployment": "test",
+        "clock": "fixed",
+        "provider": "deterministic",
+        "oauth": "inert",
+        "session": "fixture",
+        "owner": "synthetic",
+        "anonymousStatus": 401,
+        "ownerFixture": true,
+        "authenticatedStatus": 200,
+        "composerPresent": true,
+        "businessMigrations": 78,
+        "markerMigrations": 2
+      },
+      "journeys": [
+        {
+          "feature": "history",
+          "profile": "local",
+          "passed": true,
+          "entries": [
+            "/internal composer × 28",
+            "scroll follow and 回到最新",
+            "/internal?date=2026-07-27 with 加载更早消息"
+          ],
+          "anchorShiftPx": 0.875,
+          "window": { "recent": 50, "storedEvents": 58 },
+          "stored": "history-stored.json: 29 exchanges, 58 stored events, 29 response requests, one 加载更早消息 request; the recent window is exactly 50 messages (first shown history-04); the 29th send while scrolled up moved the viewport 0.875px at most; 回到最新 re-pinned follow; the date page prepended the rest without duplicates",
+          "unverified": ["interrupted items inside a long history", "tampered pagination cursors"]
+        }
+      ],
+      "scratchRemoved": true
+    },
+    "interruption": {
+      "run": "dev-345-interruption-1",
+      "doctor": {
+        "profile": "fault",
+        "deployment": "test",
+        "clock": "controllable",
+        "provider": "deterministic",
+        "providerFault": "file",
+        "oauth": "inert",
+        "session": "fixture",
+        "owner": "synthetic",
+        "anonymousStatus": 401,
+        "ownerFixture": true,
+        "authenticatedStatus": 200,
+        "composerPresent": true,
+        "businessMigrations": 78,
+        "markerMigrations": 2
+      },
+      "journeys": [
+        {
+          "feature": "interruption",
+          "profile": "fault",
+          "passed": true,
+          "entries": [
+            "/internal composer",
+            "test-only Provider fault file",
+            "/internal?date=2026-07-27 history guidance",
+            "Retry response",
+            "POST /api/internal/conversation/retries replay"
+          ],
+          "substitutions": [
+            "one-chunk deterministic fault instead of a real Provider interruption",
+            "controlled test clock advanced 24 hours instead of a real day change"
+          ],
+          "stored": "interruption-stored.json: interrupted turn with 1 user and 0 assistant messages, command and attempt interrupted; the read-only day page showed only the guidance 这次中断发生在 2026年7月27日。可在当前可写交流中重新发起；此历史记录不会被改写。 with a 前往当前交流 link and wrote nothing; Retry response produced one settled turn with 1 assistant message; replaying the exact retryRequestId returned the same turn (retry_committed, assistant_delta, assistant_committed) with no new Provider call",
+          "unverified": [
+            "a real Provider or network interruption",
+            "retry against a quiesced historical session"
+          ]
+        }
+      ],
+      "scratchRemoved": true
+    }
+  },
+  "blockedRuns": {
+    "cross-date": {
+      "run": "dev-345-cross-date-1",
+      "profile": "timeline",
+      "doctor": {
+        "deployment": "test",
+        "clock": "controllable",
+        "provider": "deterministic",
+        "oauth": "inert",
+        "session": "fixture",
+        "owner": "synthetic",
+        "anonymousStatus": 401,
+        "ownerFixture": true,
+        "authenticatedStatus": 200,
+        "composerPresent": true,
+        "businessMigrations": 78,
+        "markerMigrations": 2
+      },
+      "result": {
+        "feature": "cross-date",
+        "passed": false,
+        "step": "publishJournal(2026-07-27)",
+        "error": "No Journal was published for 2026-07-27 within four minutes; see cross-date-unpublished-2026-07-27.json."
+      },
+      "observation": "The controlled clock worked: the day-1 session quiesced by inactivity_timeout, eligibility created one command and the first scan dispatched fast-path extraction, dialogue state and Journal eligibility together. The Journal generation then ended as retryable_failed / journal_generation_failed, and postgres.log holds 'deadlock detected' at 2026-10-13 18:29:03.306 PDT. This is the known issue #340 deadlock, not a driver fault.",
+      "outcome": "Real-run evidence for cross-date waits for issue #340 to merge, as triaged for issue #345; the journey stays in the driver and feature map.",
+      "issue": "https://github.com/lukemyself-hub/SayHear/issues/340"
+    }
+  },
+  "notRun": [
+    {
+      "journey": "a real operating-system IME for the keyboard journey",
+      "reason": "only a human can operate a real IME; the driver uses browser-level CDP Input.imeSetComposition and records that substitution"
+    },
+    {
+      "journey": "cross-date acceptance evidence",
+      "reason": "one attempt was blocked by the issue #340 deadlock (see blockedRuns); per issue #345 triage it is rerun after that fix"
+    },
+    {
+      "journey": "hosted Journal, Episode and Daily/Weekly generation, including hosted Workflow delivery",
+      "reason": "no environment contact before Luke approves docs/verification/hosted-execution-plan.md; the acceptance alias is behind Vercel Authentication, its deployed commit and G1 state are unread, and this checkout holds no active G1 manifest"
+    }
+  ]
+}
