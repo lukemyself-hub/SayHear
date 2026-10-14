@@ -3236,6 +3236,23 @@ export async function reconcileIssueCompletion(
   return "issues_completed";
 }
 
+function completionMergeSha(value: unknown): string | null {
+  return typeof value === "string" && /^[a-f0-9]{40}$/i.test(value) ? value.toLowerCase() : null;
+}
+
+// The pinned API version omits merge_commit_sha and GitHub removes the pull request
+// merge ref once merged, so the merged timeline event is the remaining commit evidence.
+async function readMergedEventCommitSha(api: GitHubApi, pullRequestNumber: number): Promise<string | null> {
+  const events = await api.pages<JsonRecord>(repositoryPath(`/issues/${pullRequestNumber}/timeline`));
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    if (!event || event.event !== "merged") continue;
+    const mergeSha = completionMergeSha(event.commit_id);
+    if (mergeSha !== null) return mergeSha;
+  }
+  return null;
+}
+
 export async function confirmCompletionMerge(api: GitHubApi, identity: CompletionIdentity): Promise<string | null> {
   let raw: unknown;
   try { raw = await api.request<unknown>(repositoryPath(`/pulls/${identity.pullRequestNumber}`)); }
@@ -3264,7 +3281,8 @@ export async function confirmCompletionMerge(api: GitHubApi, identity: Completio
     if (raw.state === "closed") throw new CompletionMismatch("closed_without_merge");
     return null;
   }
-  if (typeof raw.merge_commit_sha !== "string" || !/^[a-f0-9]{40}$/i.test(raw.merge_commit_sha)) throw new CompletionUnavailable("merge_sha_missing");
+  const mergeSha = completionMergeSha(raw.merge_commit_sha) ?? await readMergedEventCommitSha(api, identity.pullRequestNumber);
+  if (mergeSha === null) throw new CompletionUnavailable("merge_sha_missing");
   const reviews = await api.pages<GitHubReview>(repositoryPath(`/pulls/${identity.pullRequestNumber}/reviews`));
   const review = reviews.find((value) => value.id === identity.reviewId);
   if (!review) throw new CompletionUnavailable("approval_readback_missing");
@@ -3275,7 +3293,7 @@ export async function confirmCompletionMerge(api: GitHubApi, identity: Completio
     reviews.some((candidate) => candidate.id > identity.reviewId && candidate.user.id === identity.botActorId && candidate.commit_id.toLowerCase() === identity.headSha && candidate.state === "CHANGES_REQUESTED")) {
     throw new CompletionMismatch("reviewer_mismatch");
   }
-  return raw.merge_commit_sha.toLowerCase();
+  return mergeSha;
 }
 
 export async function verifyCompletionRequirements(api: GitHubApi, identity: CompletionIdentity): Promise<void> {

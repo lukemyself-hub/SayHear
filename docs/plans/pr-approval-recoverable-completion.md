@@ -55,6 +55,9 @@ The merge result remains distinct from incomplete Issue completion in the record
 
 Complete identity mismatches stop immediately. Missing fields, network failures, and contradictory transient state remain pending.
 Confirmation requires the bound PR, repository, head, base branch, closed merged state, merge SHA, and live App review.
+The pinned API version omits `merge_commit_sha` and GitHub removes the pull request merge ref after merge,
+so confirmation takes the merge SHA from the pull request payload when present and otherwise from the
+`merged` timeline event that GitHub records for the same merge commit.
 The current main SHA may advance after merge. The pre-merge reviewed base SHA remains pinned in the approval identity.
 
 Issue closure and label deletion use the existing per-Issue API operations.
