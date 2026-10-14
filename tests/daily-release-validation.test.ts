@@ -288,6 +288,23 @@ describe("unknown impact is located, never escalated", () => {
     expect(selectedIds(plan)).not.toContain(FULL_ACCEPTANCE_CHECK);
     expect(plan.producerInvocations).toEqual([]);
   });
+
+  it("treats the PR approval apparatus as located without a behavior impact", () => {
+    const paths = [
+      "docs/agents/pr-auto-approval.md",
+      "scripts/daily-release-validation.ts",
+      "scripts/pr-approval-controller.ts",
+      "scripts/pr-review-gate.ts",
+      "tests/pr-review-gate.test.ts",
+    ];
+    const plan = planDailyReleaseValidation(request({ changedPaths: paths }));
+
+    expect(plan.requiresImpactLocation).toBe(false);
+    expect(selectedIds(plan)).toEqual(FIXED_PR_CI_BASELINE);
+    expect(classifyReleaseImpact([], [...paths, "unknown/tool.ts"]).located).toBe(false);
+    expect(classifyReleaseImpact([], [...paths, "packages/ai/src/provider.ts"]).effective)
+      .toContain("provider-migration");
+  });
 });
 
 describe("full capability acceptance triggers", () => {

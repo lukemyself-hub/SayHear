@@ -2,6 +2,26 @@
 
 ## 状态
 
+### 审批工具链路径的枚举与安装顺序
+
+#352 在浏览器通道与合入前延后检查之上收窄了 gate 的「影响未定位」判定：release
+planner 用 `NON_RUNTIME_TOOL_PATHS` 枚举了不配置部署运行时的路径，包括离线评估
+工具，以及 PR 审批工具链本身的 controller、gate、planner、build、verifier、
+其测试、夹具和文档。改动只落在该集合内时 `requiresImpactLocation=false`，
+只要求固定 PR CI 基线；显式影响声明、混合改动和集合外路径继续按原规则定位，
+这些路径也不再触发 `provider-migration` 提示。
+
+判定在已安装的 controller 内运行，源码可见不等于生效：必须构建并安装新 bundle
+之后 gate 行为才会改变。合并顺序保持 #351 先合入，再让 #352 以新 main 为 base
+合入。安装版若不含本枚举，#351（Issue #350）与 #352 自身都会停在
+`impact_not_located`。
+
+源码验证：6 个套件 327 项通过，构建后的 bundle 内 280 项通过，`tsc -p
+tsconfig.json` 与 `tsc -p tsconfig.g1-tools.json` 均无错误。用同一源码重算
+#351 的冻结审核上下文，`requirementDigest` 复现 `b66c6691…`，受保护路径仍是
+同样的 7 个文件；安装本版本不会作废 Luke 在 head `b028f7df` 上已提交的浏览器
+批准。安装后的固定 `status` 回读仍是判断是否生效的唯一依据。
+
 ### 迁移专项证据候选
 
 #350 的独立候选将策略标识更新为 `sayhear-pr-review-gate:v7`，报告结构保持
@@ -267,7 +287,7 @@ GitHub App `8329` 且正文以 `[vc]: #` 开头的部署状态评论。人工评
 
 main classic protection rule `84625756` 已保存并由 App API 回读：1 个审批、过期审批失效、最近一次推送由他人审批、跟上 main、管理员同样执行、无绕过 actor；required checks 精确为 GitHub Actions `validate`（15368）与 SayHear App `pr-review-gate`（5270295）。规则 UI 禁止强推和删除。仓库 Allow auto-merge 已保存，用户连接器和刷新后的 UI 回读为 true；旧 App REST 读取会省略该字段，控制器已改为 GraphQL 明确布尔值读取并通过实测。
 
-分类修复只识别已核实的十个评估工具、配置和测试路径，不将其文件名当作生产迁移；显式迁移声明、真实运行时路径、混合与未知改动继续保留门禁。已安装版本通过 App GraphQL 回读确认 Allow auto-merge 为 true；#258 已恢复 ongoing，App 已提交 #325 的 APPROVED review `5482359756`，gate check 成功。
+分类修复枚举已核实的非运行时路径：十个评估工具、配置和测试路径，加上 PR 审批工具链（controller、gate、planner、build、verifier、其测试、夹具与文档），不将其文件名当作生产迁移；显式迁移声明、真实运行时路径、混合与未知改动继续保留门禁。已安装版本通过 App GraphQL 回读确认 Allow auto-merge 为 true；#258 已恢复 ongoing，App 已提交 #325 的 APPROVED review `5482359756`，gate check 成功。
 
 试运行发现 Contents read 权限下的 App review 不计入分支保护。Luke 已明确授权 Contents write，App 和 installation `170161232` 的更新已完成；安装范围仍只有 SayHear。bundle `1e9fa694af8a511cf02dbb3ef5c3c419d9094b50da87bcd409f8958a5242c406` 已安装并通过认证、权限白名单和保护规则回读。合并请求绑定已审 head SHA；响应丢失先读取实际结果，手动关闭不算合入。83 个针对性测试、根与工具 TypeScript 检查通过。
 
