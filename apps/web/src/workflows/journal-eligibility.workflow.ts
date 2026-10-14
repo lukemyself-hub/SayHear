@@ -91,7 +91,16 @@ async function runEligibilityStep(input: {
       return { ...eligibility, outcome: "retryable_failed" as const };
     }
     if (evidence.outcome !== "frozen") {
-      await settle("needs_review", evidence.outcome);
+      // `not_eligible` is not a generation failure: the date list already
+      // surfaces an insufficient-expression day through `date_outcome`, so it
+      // keeps its terminal `needs_review` row and never becomes a failed
+      // generation with a retry action. Every other non-frozen outcome is
+      // transient, so it settles `retryable_failed` and lets the bounded
+      // three-attempt budget converge on the one terminal shape the recovery
+      // scan, date list, notice and retry action all accept
+      // (`needs_review` + `retry_budget_exhausted`). A fresh terminal row
+      // carrying a raw reason would be invisible to every one of them.
+      await settle(evidence.outcome === "not_eligible" ? "needs_review" : "retryable_failed", evidence.outcome);
       return { ...eligibility, outcome: evidence.outcome === "not_eligible" ? "needs_review" as const : "retryable_failed" as const };
     }
     if (evidence.outcome === "frozen") {
@@ -113,9 +122,12 @@ async function runEligibilityStep(input: {
         return { ...eligibility, outcome: "retryable_failed" as const };
       }
       if (journal.outcome !== "published") {
-        await settle(journal.outcome === "validation_failed" && journal.reason !== "model_run_failed" ? "needs_review" :
-          journal.outcome === "stale" || journal.outcome === "fenced" ? "needs_review" : "retryable_failed", journal.reason ?? journal.outcome);
-        return { ...eligibility, outcome: journal.outcome === "validation_failed" ? "needs_review" as const : "retryable_failed" as const };
+        // No non-published Journal outcome is terminal on its own. Each one is
+        // transient under the bounded budget, so every failure settles
+        // `retryable_failed` and converges on `needs_review` +
+        // `retry_budget_exhausted` once the three attempts are spent.
+        await settle("retryable_failed", journal.reason ?? journal.outcome);
+        return { ...eligibility, outcome: "retryable_failed" as const };
       }
       await settle("published", null);
       return { ...eligibility, outcome: "published" as const };

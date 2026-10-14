@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   asGenerationCommandId,
@@ -51,6 +51,15 @@ import {
 import { createConversationResponseHandler } from "../../apps/web/src/conversation-response-handler";
 import { createContinuousExchangeEndHandler } from "../../apps/web/src/continuous-exchange-end-handler";
 import { createRecoveryScannerHandler } from "../../apps/web/src/recovery-scanner-handler";
+import { journalEligibilityWorkflow } from "../../apps/web/src/workflows/journal-eligibility.workflow";
+
+// The Workflow step builds its own composition from the deployed config. The
+// regression below drives the real step, so it swaps in a composition built
+// from this suite's isolated database and a scripted Evidence freeze.
+const workflowComposition = vi.hoisted(() => ({ current: null as unknown }));
+vi.mock("../../apps/web/src/server-composition", () => ({
+  createServerComposition: () => workflowComposition.current,
+}));
 
 const testDatabaseUrl = process.env.TEST_DATABASE_URL;
 if (!testDatabaseUrl) {
@@ -2124,6 +2133,200 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
     expect(await recovery.claim(identity, "manual-lease")).toBe(true);
     await recovery.settle(identity, "manual-lease", "published", null);
     expect((await database.pool.query("SELECT status FROM workflow_commands WHERE workflow_command_id = $1", [identity.workflowCommandId])).rows[0].status).toBe("completed");
+  });
+
+  it("re-arms a transient generation failure so a failed day stays recoverable and visible", async () => {
+    const id = await submitConversation({
+      clientEventId: "transient-event",
+      clientTurnId: "transient-turn",
+      text: "I spent the afternoon reading on the porch with the cat.",
+    });
+    await endExchange(id);
+    const command = (
+      await database.pool.query<{ workflow_command_id: string; source_revision: string }>(
+        "SELECT workflow_command_id, source_revision FROM workflow_commands WHERE command_type = 'journal_eligibility' AND subject_id = $1",
+        [id],
+      )
+    ).rows[0]!;
+    const identity = {
+      workflowCommandId: command.workflow_command_id,
+      subjectId: id,
+      sourceRevision: Number(command.source_revision),
+      expectedDataEpoch: 1,
+    };
+    const recovery = new PostgresJournalWorkflowRecovery(database.pool);
+
+    // Drive the real Workflow step with the Evidence freeze forced to the
+    // transient `stale` outcome a concurrent duplicate dispatch takes. The day
+    // must be re-armed, never settled into a raw terminal row the recovery
+    // surfaces cannot see.
+    workflowComposition.current = {
+      ...buildComposition(),
+      clock: fixedResponseClock,
+      evidenceService: { freeze: async () => ({ outcome: "stale" as const }) },
+      journalWorkflowRecovery: recovery,
+    };
+    const result = await journalEligibilityWorkflow({
+      workflowCommandId: identity.workflowCommandId,
+      subjectId: identity.subjectId,
+      sourceRevision: identity.sourceRevision,
+      policyVersion: JOURNAL_ELIGIBILITY_POLICY_VERSION,
+      expectedDataEpoch: identity.expectedDataEpoch,
+    });
+    expect(result.outcome).toBe("retryable_failed");
+    expect(
+      (
+        await database.pool.query(
+          "SELECT outcome, reason, attempt_count FROM journal_workflow_outcomes WHERE workflow_command_id = $1",
+          [identity.workflowCommandId],
+        )
+      ).rows[0],
+    ).toEqual({ outcome: "retryable_failed", reason: "stale", attempt_count: 1 });
+
+    // The Recovery Scan re-arms the original outbox event and command.
+    await database.pool.query(
+      "UPDATE journal_workflow_outcomes SET next_attempt_at = CURRENT_TIMESTAMP WHERE workflow_command_id = $1",
+      [identity.workflowCommandId],
+    );
+    await recovery.recoverDue();
+    expect((await database.pool.query("SELECT status FROM outbox_events WHERE workflow_command_id = $1", [identity.workflowCommandId])).rows[0]!.status).toBe("pending");
+    expect((await database.pool.query("SELECT status FROM workflow_commands WHERE workflow_command_id = $1", [identity.workflowCommandId])).rows[0]!.status).toBe("created");
+
+    // Two more attempts exhaust the durable budget and converge on the single
+    // terminal shape the recovery surfaces understand.
+    for (const attempt of [2, 3]) {
+      expect(await recovery.claim(identity, `transient-lease-${attempt}`)).toBe(true);
+      await recovery.settle(identity, `transient-lease-${attempt}`, "retryable_failed", "stale");
+      await database.pool.query(
+        "UPDATE journal_workflow_outcomes SET next_attempt_at = CURRENT_TIMESTAMP WHERE workflow_command_id = $1 AND outcome = 'retryable_failed'",
+        [identity.workflowCommandId],
+      );
+    }
+    expect(
+      (
+        await database.pool.query(
+          "SELECT outcome, reason, attempt_count FROM journal_workflow_outcomes WHERE workflow_command_id = $1",
+          [identity.workflowCommandId],
+        )
+      ).rows[0],
+    ).toEqual({ outcome: "needs_review", reason: "retry_budget_exhausted", attempt_count: 3 });
+
+    // Owner-visible surfaces now report the failed generation instead of a
+    // silently empty day.
+    const journalRepository = new PostgresJournalRepository(database.pool);
+    const dates = await journalRepository.listCurrentJournalDates({
+      userId: fixedInternalOwnerPrincipal.userId,
+      limit: 10,
+      cursor: null,
+    });
+    expect(dates.find((entry) => entry.dailySessionId === id)?.state).toBe("generation_failed");
+    expect(
+      await journalRepository.readGenerationNoticeForDate({
+        userId: fixedInternalOwnerPrincipal.userId,
+        logicalDate: "2026-08-12",
+      }),
+    ).toEqual({ logicalDate: "2026-08-12", failureCode: "retry_budget_exhausted" });
+
+    // A newer terminal row with a different reason for the same date must not
+    // shadow the budget-exhausted row and silently resolve the retry to false.
+    await database.pool.query(
+      `INSERT INTO journal_workflow_outcomes (workflow_command_id,user_id,daily_session_id,source_revision,expected_data_epoch,outcome,reason,created_at,attempt_count)
+       VALUES ('newer-non-budget-row',$1,$2,$3,1,'needs_review','not_eligible',CURRENT_TIMESTAMP + INTERVAL '1 hour',0)`,
+      [fixedInternalOwnerPrincipal.userId, id, identity.sourceRevision],
+    );
+    expect(await recovery.retryForDate({ userId: fixedInternalOwnerPrincipal.userId, logicalDate: "2026-08-12" })).toBe(true);
+  });
+
+  it("retries a budget-exhausted day even when a newer non-budget terminal row exists", async () => {
+    const id = await submitConversation({
+      clientEventId: "shadow-event",
+      clientTurnId: "shadow-turn",
+      text: "I finished the book about mountain trails this afternoon.",
+    });
+    await endExchange(id);
+    const command = (
+      await database.pool.query<{ workflow_command_id: string; source_revision: string }>(
+        "SELECT workflow_command_id, source_revision FROM workflow_commands WHERE command_type = 'journal_eligibility' AND subject_id = $1",
+        [id],
+      )
+    ).rows[0]!;
+    const recovery = new PostgresJournalWorkflowRecovery(database.pool);
+    await database.pool.query(
+      `INSERT INTO journal_workflow_outcomes (workflow_command_id,user_id,daily_session_id,source_revision,expected_data_epoch,outcome,reason,created_at,attempt_count)
+       VALUES ($1,$2,$3,$4,1,'needs_review','retry_budget_exhausted','2026-08-12T15:00:00Z',3),
+              ('newer-shadow-row',$2,$3,$4,1,'needs_review','not_eligible','2026-08-12T16:00:00Z',0)`,
+      [command.workflow_command_id, fixedInternalOwnerPrincipal.userId, id, Number(command.source_revision)],
+    );
+    expect(await recovery.retryForDate({ userId: fixedInternalOwnerPrincipal.userId, logicalDate: "2026-08-12" })).toBe(true);
+    expect(
+      (
+        await database.pool.query(
+          "SELECT outcome, reason, attempt_count FROM journal_workflow_outcomes WHERE workflow_command_id = $1",
+          [command.workflow_command_id],
+        )
+      ).rows[0],
+    ).toEqual({ outcome: "retryable_failed", reason: null, attempt_count: 0 });
+  });
+
+  it("keeps the Evidence `not_eligible` carve-out out of the failed-generation surface", async () => {
+    const id = await submitConversation({
+      clientEventId: "not-eligible-event",
+      clientTurnId: "not-eligible-turn",
+      text: "A short note that still clears the substantive expression gate.",
+    });
+    await endExchange(id);
+    const command = (
+      await database.pool.query<{ workflow_command_id: string; source_revision: string }>(
+        "SELECT workflow_command_id, source_revision FROM workflow_commands WHERE command_type = 'journal_eligibility' AND subject_id = $1",
+        [id],
+      )
+    ).rows[0]!;
+    const identity = {
+      workflowCommandId: command.workflow_command_id,
+      subjectId: id,
+      sourceRevision: Number(command.source_revision),
+      expectedDataEpoch: 1,
+    };
+    const recovery = new PostgresJournalWorkflowRecovery(database.pool);
+    workflowComposition.current = {
+      ...buildComposition(),
+      clock: fixedResponseClock,
+      evidenceService: { freeze: async () => ({ outcome: "not_eligible" as const }) },
+      journalWorkflowRecovery: recovery,
+    };
+    const result = await journalEligibilityWorkflow({
+      workflowCommandId: identity.workflowCommandId,
+      subjectId: identity.subjectId,
+      sourceRevision: identity.sourceRevision,
+      policyVersion: JOURNAL_ELIGIBILITY_POLICY_VERSION,
+      expectedDataEpoch: identity.expectedDataEpoch,
+    });
+    expect(result.outcome).toBe("needs_review");
+    expect(
+      (
+        await database.pool.query(
+          "SELECT outcome, reason, attempt_count FROM journal_workflow_outcomes WHERE workflow_command_id = $1",
+          [identity.workflowCommandId],
+        )
+      ).rows[0],
+    ).toEqual({ outcome: "needs_review", reason: "not_eligible", attempt_count: 1 });
+    const journalRepository = new PostgresJournalRepository(database.pool);
+    expect(
+      (
+        await journalRepository.listCurrentJournalDates({
+          userId: fixedInternalOwnerPrincipal.userId,
+          limit: 10,
+          cursor: null,
+        })
+      ).some((entry) => entry.dailySessionId === id && entry.state === "generation_failed"),
+    ).toBe(false);
+    expect(
+      await journalRepository.readGenerationNoticeForDate({
+        userId: fixedInternalOwnerPrincipal.userId,
+        logicalDate: "2026-08-12",
+      }),
+    ).toBeNull();
+    expect(await recovery.retryForDate({ userId: fixedInternalOwnerPrincipal.userId, logicalDate: "2026-08-12" })).toBe(false);
   });
 
   it("uses opaque branded ids end to end", () => {

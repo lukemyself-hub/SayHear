@@ -139,6 +139,7 @@ export class PostgresJournalWorkflowRecovery {
         failure.source_revision::int AS "sourceRevision", failure.expected_data_epoch::int AS "expectedDataEpoch"
        FROM journal_workflow_outcomes failure INNER JOIN daily_sessions session ON session.daily_session_id = failure.daily_session_id
        WHERE failure.user_id = $1 AND session.logical_date = $2::date AND failure.outcome = 'needs_review'
+         AND failure.reason = 'retry_budget_exhausted'
        ORDER BY failure.created_at DESC LIMIT 1`, [input.userId, input.logicalDate],
     );
     const identity = identities.rows[0];

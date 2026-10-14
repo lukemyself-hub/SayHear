@@ -41,6 +41,14 @@ A crashed final attempt or exhausted budget terminates as `needs_review` with
 Daily readiness can then settle the final failure. Normal running and retryable
 commands still wait.
 
+An Evidence or Journal outcome that is transient rather than final is recorded
+as a failed attempt, so it re-arms through the same bounded budget instead of
+leaving a terminal row that no recovery surface accepts. That covers a lost
+dispatch claim, a stale or fenced freeze, disabled writes, and a validation
+failure other than a model-run failure. A day with no eligible source material
+is not a failure: it stays `needs_review` and is surfaced as an
+insufficient-expression day.
+
 The Journal page displays a failed-generation notice and an authenticated,
 same-origin retry action. The action only re-arms a current terminal failure,
 rechecks epoch, revision and ownership, and resets its automatic budget once.
