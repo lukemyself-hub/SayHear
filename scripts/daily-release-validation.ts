@@ -102,6 +102,15 @@ export type ReleaseCheckImpact =
   | "capability"
   | "stage";
 
+export type PreMergeImpossibleReason =
+  | "requires-deployed-effective-configuration"
+  | "requires-paid-live-provider-calls";
+
+export type PreMergeDeferralPolicy = Readonly<{
+  reason: PreMergeImpossibleReason;
+  followUp: Readonly<{ stage: ReleaseStage; command: string }>;
+}>;
+
 export type ReleaseCheck = Readonly<{
   id: string;
   title: string;
@@ -113,6 +122,8 @@ export type ReleaseCheck = Readonly<{
   providerCalls: boolean;
   modelCalls: boolean;
   evidenceLocation?: string;
+  /** Present only on checks that structurally cannot run before merge. */
+  preMergeDeferral?: PreMergeDeferralPolicy;
 }>;
 
 const FULL_ACCEPTANCE_ID = "capability:full-acceptance";
@@ -271,6 +282,10 @@ export const RELEASE_CHECKS: readonly ReleaseCheck[] = [
     providerCalls: false,
     modelCalls: false,
     evidenceLocation: "effective-runtime-config report",
+    preMergeDeferral: {
+      reason: "requires-deployed-effective-configuration",
+      followUp: { stage: "acceptance", command: "pnpm release:config:compare" },
+    },
   },
   {
     id: "permission:isolation",
@@ -311,7 +326,7 @@ export const RELEASE_CHECKS: readonly ReleaseCheck[] = [
   },
   {
     id: "migration:upgrade-compatibility",
-    title: "Migration old-schema upgrade compatibility",
+    title: "Migration upgrade path equals fresh install",
     command:
       "pnpm exec vitest run tests/ci/migration-upgrade-compatibility.test.ts",
     kind: "behavior",
@@ -319,7 +334,7 @@ export const RELEASE_CHECKS: readonly ReleaseCheck[] = [
     fullProducer: false,
     providerCalls: false,
     modelCalls: false,
-    evidenceLocation: "tests/ci/migration-upgrade-compatibility.test.ts",
+    evidenceLocation: "artifacts/vitest-report.json",
   },
   {
     id: "provider:effective-config-diff",
@@ -331,6 +346,10 @@ export const RELEASE_CHECKS: readonly ReleaseCheck[] = [
     providerCalls: false,
     modelCalls: false,
     evidenceLocation: "effective-runtime-config report",
+    preMergeDeferral: {
+      reason: "requires-deployed-effective-configuration",
+      followUp: { stage: "acceptance", command: "pnpm release:config:compare" },
+    },
   },
   {
     id: "provider:affected-role-calls",
@@ -342,6 +361,13 @@ export const RELEASE_CHECKS: readonly ReleaseCheck[] = [
     providerCalls: true,
     modelCalls: true,
     evidenceLocation: "captured role-call evidence",
+    preMergeDeferral: {
+      reason: "requires-paid-live-provider-calls",
+      followUp: {
+        stage: "acceptance",
+        command: "pnpm exec tsx scripts/capture-g1-role-provider-calls.ts",
+      },
+    },
   },
   {
     id: "provider:privacy-checks",
@@ -379,6 +405,16 @@ export const RELEASE_CHECKS: readonly ReleaseCheck[] = [
 ];
 
 const CHECK_BY_ID = new Map(RELEASE_CHECKS.map((check) => [check.id, check]));
+
+/**
+ * The single owner of "this check cannot run before merge". Callers get the
+ * static registry policy or `null`; a check with no policy is never deferrable.
+ */
+export function preMergeDeferralFor(
+  checkId: string,
+): PreMergeDeferralPolicy | null {
+  return CHECK_BY_ID.get(checkId)?.preMergeDeferral ?? null;
+}
 
 const IMPACT_CHECK_IDS: Readonly<Record<ReleaseImpactKind, readonly string[]>> =
   {
@@ -436,7 +472,7 @@ const CHECK_RATIONALE: Readonly<Record<string, string>> = {
   "purge:full-restore-drill":
     "A purge coverage change needs the full relevant Purge/restore drill, not only the baseline inventory check.",
   "migration:upgrade-compatibility":
-    "A changed migration needs a disposable-database drill applying the base migrations before the head extensions, checking existing-data compatibility and comparing the upgraded schema with a fresh head install.",
+    "A changed migration needs a disposable-database upgrade drill: the base tree's migrations are applied first, the head tree's registered extensions on top, existing data must stay compatible, and the upgraded schema must equal a fresh head install.",
   "provider:effective-config-diff":
     "Reads the deployed effective Provider configuration and compares it with the acceptance baseline through the shared #278 gate.",
   "provider:affected-role-calls":

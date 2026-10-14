@@ -60,13 +60,41 @@ Luke 于 2026-10-12 确认：PR 可以引用多个 Issue；合入后自动关闭
   需求上下文，不重新打开；合入后可清理未排除的已关闭 Issue 遗留状态标签。
 - 每个交付 Issue 都须满足需求，不能用一个 Issue 的实现替代其他 Issue 的验收。
   任一正文、标题、非 App 评论或引用集合改变都会使需求摘要失效。
-- 审批策略版本为 `sayhear-pr-review-gate:v4`，报告结构保持
-  `sayhear-pr-review-report:v3`。旧报告与旧人工绑定不能直接用于新摘要。
+- 新审批策略版本为 `sayhear-pr-review-gate:v6`，报告结构为
+  `sayhear-pr-review-report:v4`。旧报告与人工绑定保留各自原版本，
+  不能用于新审批，也不能改标为 v6。
 - `prepare` 返回 `issue_completion_pending` 时，使用固定 `scan --pr 数字` 恢复合入后
   收尾。只开启 auto-merge 时继续等待并保留执行占用；必须回读 `merged=true` 和匹配
   的真实 App approval，才逐个关闭交付 Issue、清理标签并回读。失败不跳过其余 Issue，
   保留待收尾记录并报告失败项，下次 scan 重试。记录只是重试线索，不能替代 GitHub
   认证身份、已审需求摘要和实际合入状态。该路径不重新批准或合入 PR。
+
+### 合入前无法产出的检查
+
+检查注册表只允许三个条目携带 `preMergeDeferral`：
+`prompt-budget:effective-config-diff`、`provider:effective-config-diff` 和
+`provider:affected-role-calls`。前两个需要部署后的 effective configuration，
+第三个需要付费 Live Provider 调用；后续阶段都是 `acceptance`。这些记录表示未运行，
+不会进入 `acceptedEvidenceIds`，也不授予额外调用预算。
+
+- 收集器优先记录可信 `passed` 证据，无法产出时才记录
+  `kind: "deferred-before-merge"`。gate 逐字段比对注册表策略，其他检查不能延后。
+- legacy root 通道通过其余门禁后返回 `merge_candidate_with_deferrals`。报告、
+  check summary 和 App review 都列明未运行项与后续命令，App review 使用
+  `approve_deferred`。该标记不被 Issue completion 接受。
+- 延后合入要求 GitHub `closingIssuesReferences`、PR 标题与正文以及完整 commit
+  messages 都没有 closing 信号。任一非空或不可读时返回
+  `human_decision`，原因是 `deferred_merge_would_close_issues`。明确保持开放的
+  Issue 仍不写评论、不改标签、不关闭。
+- legacy root 延后合入跳过 completion receipt 和全部 Issue 收尾，Issue 保持开放，
+  等待验收。合入前再次检查最新 PR 作者仍属于 legacy root 通道。
+- browser 通道出现 deferral 时返回 `human_decision`，原因是
+  `browser_deferred_merge_requires_human`。现有 browser 立即合入流程不支持延后检查，
+  不能借此开启 auto-merge。
+- 修改 `packages/data/migrations/` 或 `migrations-purge-marker/` 会直接选中
+  `migration:upgrade-compatibility`。只有可信 Validate run 中
+  `tests/ci/migration-upgrade-compatibility.test.ts` 的完整、无 skip Vitest 证据才能
+  满足它；迁移不在 deferral 白名单内。
 
 ### PR 落后 main 的交接
 
@@ -152,46 +180,79 @@ Luke 已确认接受以 `ui:portal-smoke` 取代设计稿所述的桌面与移�
 
 ### 已确认差异的人工授权
 
-#### PR 作者也是审核决策者时
+#### 版本标识
 
-GitHub 不接受作者批准自己的 PR，最近一次推送也必须由其他身份批准。
-Luke 的人工审核决定因此通过本机管理员写入的 `humanReviewAuthorizations`
-记录表达，由独立 GitHub App 提交正式审批。普通 PR 评论、标签或在聊天中表示
-“已审核”不会自行把 `pr-review-gate` 变绿。
+新审批策略版本为 `sayhear-pr-review-gate:v6`，报告结构为
+`sayhear-pr-review-report:v4`。`status`、构建身份与审核包保留能力标识
+`browserApprovalVersion=sayhear-pr-browser-approval:v1`。构建身份另记录
+`sourceDiffSha256`：源码包含 main 之上的未提交改动，只有 `sourceCommit` 不能
+证明安装版包含这些变更。
 
-1. Agent 用固定 `prepare` 入口刷新审核包，展示 PR、head、完整 diff 摘要、需求摘要、
-   受保护路径及最新 Validate 结果，并完成独立代码审查。
-2. Luke 对该具体版本确认接受受保护路径的差异。Agent 准备配置安装助手，将决定
-   绑定审核包中的 PR 号、`approvedHeadSha`、`diff.digest`、
-   `reviewContext.requirementDigest` 和精确路径；经 Luke 在自己的终端授权后安装。
-   若 PR 改了 Validate 工作流，另绑定人工审核过的 workflow blob，不能自动信任它。
-3. 若仅剩 Issue 的人工交接标签，按这次决定恢复 `ongoing`，并清除审核回写留下的
-   `ready-for-agent` 和旧流程可能残留的 `ready-for-human`，随后再次 `prepare`，
-   独立审核报告必须匹配最新需求摘要。
-4. 用固定 `submit` 提交报告。controller 重新验证所有检查、需求、版本与保护规则，
-   合格时由 App 提交 `APPROVED` 和成功的 gate，按既有生产授权执行受保护合入。
+#### 人工授权的两个通道
 
-本机审批工具、测试、文档和根配置没有生产业务影响时，人工记录可另声明
-`noRuntimeImpact: true`。只有完整 diff 与需求摘要匹配，且每个改动路径都是明确列出的
-离线评估路径，或精确授权的 scripts/tests/docs/根配置路径时，该决定才定位原本未知的
-影响，要求完整 CI 基线；不伪装成生产业务专项。当前仅列出
-`eval/retrieval-precision-v1/README.md`、`eval/retrieval-precision-v1/harness.ts` 和
-`tests/system/retrieval-precision-corpus.system.test.ts` 三个离线路径。其他 eval、runtime
-和未知路径不适用。人工授权的 scripts/ci 与 tests/ci 路径仍须逐个精确匹配。混合 runtime
-改动按声明的影响执行正常专项检查。模型报告不能设置这个字段。
+人工授权按 PR 作者分流，两条通道互不通用。作者与审核者身份按 PR 与 review
+payload 里的固定数字 ID、login 与类型三元组同时核对；App bot 与 owner 身份另按
+`/users` 回读比对。只用 login 判断会在账号重建后误授权。
 
-其余人工授权只解除匹配的路径门禁。失败 CI、P0–P2 发现、未解决的审核线程、风险标记、
-能力发布、暂停与生产证据要求仍会阻断。代码或需求改变后重新审核与绑定。
-已有绑定记录在只同步 main 且 diff 与需求摘要均未改变时可继续使用。
-安装助手不得读取私钥，也不得取消分支保护、修改 App 权限或把模型报告当人工授权。
+- `luke-agents`（id 342173548，User）作者的 PR 只走浏览器通道。`prepare` 先在
+  本机签名冻结上下文，再让 Luke（`lukemyself-hub`，id 236989142，User）在 GitHub
+  当前 head 上直接提交 `APPROVED` review。不要求把口令抄进 review body。
+- `lukemyself-hub` 的历史 PR 继续用管理员写入 root `config.json` 的
+  `humanReviewAuthorizations`。未知作者不获得任何人工授权。
+- 浏览器通道绝不用 root 记录兜底：`luke-agents` 的 PR 即使在 root 记录里出现，
+  也不进入受保护路径的允许列表。
 
-Luke 已确认 #311、#310、#327 的具体差异。控制器从 root-owned `config.json`
-读取 `humanReviewAuthorizations`，每条记录绑定 PR 号、完整 diff 的 SHA-256、
-`reviewContext.requirementDigest`、精确文件路径和批准时间。`approvedHeadSha`
-记录被审提交用于追溯；仅同步 main 且完整 diff 与需求摘要未变时可继续匹配。
-#310 还绑定已审 Validate 工作流的 Git blob SHA。记录必须通过本机管理员安装，
-模型报告和普通 configure 命令不能添加授权。未匹配记录不解除路径门禁；风险标记、
-删测试、人工线程、最新 CI、独立审批和 main 保护继续执行。
+冻结上下文包含仓库与 PR 的数字及 node 身份、已认证的作者与审核者、精确 head/base、
+完整 `diff.digest`、`requirementDigest`、受保护路径清单，以及 head 候选的
+Validate workflow blob。`prepare` 在任何 CI 结果之前冻结，避免 workflow 改动与
+绿色 CI 互证。同一上下文重复 `prepare` 幂等。
+
+浏览器批准的判定规则：
+
+- 挑战保存审核者最新已提交 review 的水位（id 与提交时间）。只有严格晚于
+  `frozenAt`、id 大于水位、且时间严格递增的审核才能绑定；同一秒、时钟回拨或
+  之前已出现过的批准一律不绑定。
+- 每次读取都重新计算当前上下文并回读实时 review。上下文漂移（含只同步 head 但
+  diff 未变）、新需求、缺失去除的挑战都会重置 epoch 并作废旧 receipt；上下文恢复
+  后旧 receipt 也不会复活。
+- Luke 在任意 head 上最后提交的 review 必须是 `APPROVED`。之后的 `COMMENTED`、
+  `CHANGES_REQUESTED`、`DISMISSED` 都拒绝；`PENDING` 忽略；审核者元数据、时间戳或顺序异常按失败关闭处理：
+  清空本地 epoch，并把该 PR 记为 blocked，等待维护者复核，不静默当作批准，也不静默
+  降级成普通拒绝。该阻塞只作用于该 PR，同一轮其余 PR 继续处理；GitHub 不提供删除
+  已提交 review 的接口，因此这个 PR 需要维护者处理（通常是改用新的 PR 重新走流程），
+  自动化只如实汇报，不猜测恢复路径。
+- 需求摘要（v5）排除全部顶层 review 记录（正文、状态、commit）；inline review
+  评论继续计入。批准本身不再改变需求摘要，因而不会因批准而失效。
+- 授权只覆盖冻结时的精确路径与 workflow blob，不解锁产品、隐私、迁移、新能力或
+  绕过 CI 的风险标记。浏览器通道的 `noRuntimeImpact` 恒为 false，不从 `APPROVED`
+  推断；需要该豁免时按 root 记录逐路径精确绑定，而 root 记录只对
+  `lukemyself-hub` 作者的 PR 生效，`luke-agents` 的 PR 拿不到该豁免。
+
+#### 浏览器通道的合入与收尾
+
+浏览器通道只发起绑定已审 head 的立即合入，不开启 GitHub 延迟 auto-merge。App
+审批仍会写入以满足分支保护，但延迟 auto-merge 会让 Luke 事后撤回 review 时，
+App 审批独自占住分支保护的审批位，从而在人工授权已失效后仍然合入。
+
+- 未达到可合入状态时只等待并报告：不开启 auto-merge，也不写签名合入意图，让下一次
+  `scan` 在状态变干净时重新发起绑定 head 的立即合入。root 通道保留原有 auto-merge
+  语义。当缺少的浏览器批准是唯一的人工决定时，agent PR 既不合并也不中断整轮扫描，`submit`/`scan`
+  返回 `awaiting_verification` 并说明需要当前 head 上的实时人工批准，且不写 Issue 交接；
+  若同时还有暂停、分诊、依赖或关闭声明等人工决定，仍按原规则交回并如实报告该决定。
+  未触及受保护路径的 agent PR 不需要浏览器批准，直接按绑定 head 的立即合入处理。
+- 签名合入意图记录浏览器来源与 provenance（`humanChannel`、`humanReviewId`、
+  epoch）。写 Issue 前再次回读实时绑定的人工 review，确认它仍是绑定 id、绑定 head
+  上最后提交的 `APPROVED`，并重新推导需求摘要、核对合入提交与绑定 head；其余冻结
+  字段都按 head 绑定，不重复采集 diff。合入后若 Luke 撤回 review，记录转入
+  `needs_attention` 并报告该撤回，不重复合入、不写 Issue；合入是否真的落地以 GitHub
+  实时状态为准，自动化不据此宣布合入结果。已写入的浏览器合入意图在恢复时
+  会重新发起绑定 head 的立即合入（发起前再次回读实时人工 review），而不是只确认，
+  因此一次瞬时不可合入不会把已批准合入永久搁置。
+- 最终回读与 GitHub 合并请求之间仍存在不可消除的竞态：回读通过后 reviewer 仍可能
+  在毫秒级窗口内撤回。该窗口只能靠立即合入与合入后复查收窄，不能完全消除。
+- 已签名 v4 合入意图按原 v4 policy 与含 review 的摘要恢复，v5 按原 v5 policy 与
+  排除 review 的摘要恢复。v6 继续使用 v5 摘要算法。兼容仅限已存在的 signed
+  receipt，不改标、不重新批准；新提交只接受 v6/report v4。
 
 PR 需求摘要只排除身份同时匹配 Vercel Bot actor `35613825`、login、Bot 类型、
 GitHub App `8329` 且正文以 `[vc]: #` 开头的部署状态评论。人工评论、其他 Bot
@@ -234,6 +295,7 @@ pnpm pr:review-gate:dry-run -- --input <snapshot.json>
 命令读取 JSON 快照，输出以下结果之一：
 
 - `merge_candidate`：快照通过当前确定性规则。它不是 GitHub 批准、required check 或合入授权。
+- `merge_candidate_with_deferrals`：legacy root 快照通过其余规则，但列明的检查未在合入前运行。
 - `request_changes`：审核报告发现需要修改的问题。
 - `awaiting_verification`：版本、SHA、权限或验收证据不足。
 - `human_decision`：需求、产品、权限、迁移或保护规则需要人决定。
@@ -250,7 +312,7 @@ pnpm pr:review-gate:dry-run -- --input <snapshot.json>
 - PR Validate 的证据必须对应当前 head、base 和 merge SHA，并匹配可信 workflow 文件摘要、GitHub Actions App、仓库和 `pull_request` 事件。
 - 每项必要证据都必须显式为 `passed`。`skipped`、`cancelled`、`neutral`、`planned` 和 `out-of-scope` 均阻断。
 - `scripts/daily-release-validation.ts` 决定行为专项；gate 不使用它的退出码代替验收结果。
-- 涉及审批规则、CI、产品定义、删除测试、完整能力验收或生产新能力启用时转人工。UI 变化按 Luke 确认的标准，追加 `ui:portal-smoke`（`tests/portal-integration.test.ts` 与 `tests/portal-conversation-status.test.ts` 两个模块级行为测试），不再要求设计稿所述的桌面与移动端交互证据；仓库当前没有接入 PR CI 的浏览器 E2E runner。该降级是产品决定，不是测试通过，等真实浏览器 E2E 落地后可恢复。v4 对数据库迁移无条件返回 `awaiting_verification`；迁移专项证据候选的核验规则与安装边界见本文件顶部。
+- 涉及审批规则、CI、产品定义、删除测试、完整能力验收或生产新能力启用时转人工。UI 变化按 Luke 确认的标准，追加 `ui:portal-smoke`（`tests/portal-integration.test.ts` 与 `tests/portal-conversation-status.test.ts` 两个模块级行为测试），不再要求设计稿所述的桌面与移动端交互证据；仓库当前没有接入 PR CI 的浏览器 E2E runner。该降级是产品决定，不是测试通过，等真实浏览器 E2E 落地后可恢复。数据库迁移要求可信、无 skip 的升级兼容专项证据；迁移专项证据候选的核验规则、v4 时代的无条件阻断及其安装边界见本文件顶部。
 - 只有可读的 main 保护规则、最新 base、过期 review 失效、管理员强制执行、恰好一个审批名额、没有绕过 actor，以及精确匹配来源的 `validate` 和 `pr-review-gate` 两项 required checks 同时成立时，才会生成 `merge_candidate`。
 - 所有必要证据必须来自同一个 PR Validate workflow run 和 attempt。快照采集器仍须证明它们是当前最新 run；gate 本身不连接 GitHub，也不提供全仓合入锁。
 

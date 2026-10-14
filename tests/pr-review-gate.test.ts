@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   FIXED_PR_CI_BASELINE,
   RELEASE_CHECKS,
+  preMergeDeferralFor,
   type ReleaseImpactKind,
 } from "../scripts/daily-release-validation.ts";
 import {
@@ -15,8 +16,11 @@ import {
   parsePrReviewGateInput,
   requirementDigest,
   parseIssueClosureExclusions,
+  closingKeywordIssueNumbers,
+  type PreMergeDeferralRecord,
   type PrReviewGateInput,
   type TrustedPrReviewPolicy,
+  type WorkflowEvidenceRecord,
 } from "../scripts/pr-review-gate.ts";
 
 const HEAD_SHA = "a".repeat(40);
@@ -47,8 +51,8 @@ const policy: TrustedPrReviewPolicy = {
 
 function makeEvidence(
   checkId: string,
-  overrides: Partial<PrReviewGateInput["evidence"][number]> = {},
-): PrReviewGateInput["evidence"][number] {
+  overrides: Partial<WorkflowEvidenceRecord> = {},
+): WorkflowEvidenceRecord {
   return {
     checkId,
     result: "passed",
@@ -68,6 +72,12 @@ function makeEvidence(
     coveredCheckIds: [],
     ...overrides,
   };
+}
+
+function makeDeferral(checkId: string): PreMergeDeferralRecord {
+  const policy = preMergeDeferralFor(checkId);
+  if (policy === null) throw new Error(`${checkId} is not a deferrable check`);
+  return { kind: "deferred-before-merge", checkId, policy };
 }
 
 type InputOverrides = Omit<
@@ -141,6 +151,7 @@ function input(
       linkedIssueNumbers: [42],
       keepOpenIssueNumbers: [],
       issueClosureAmbiguous: false,
+      closingIssueNumbers: [],
       changedFiles: [
         { path: "packages/application/src/server/fix.ts", status: "modified" },
       ],
@@ -498,7 +509,7 @@ describe("PR review gate", () => {
 
   it("does not accept a same-named check from an untrusted app", () => {
     const evidence = input().evidence.map((entry, index) =>
-      index === 0
+      index === 0 && entry.kind !== "deferred-before-merge"
         ? { ...entry, source: { ...entry.source, appId: 77 } }
         : entry,
     );
@@ -512,7 +523,9 @@ describe("PR review gate", () => {
     "does not treat %s evidence as a pass",
     (result) => {
       const evidence = input().evidence.map((entry, index) =>
-        index === 0 ? { ...entry, result } : entry,
+        index === 0 && entry.kind !== "deferred-before-merge"
+          ? { ...entry, result }
+          : entry,
       );
       const report = evaluatePrReviewGate(input({ evidence }), policy);
 
@@ -921,8 +934,285 @@ describe("PR review gate", () => {
       review: { policyVersion: `sayhear-pr-review-gate:${version}` },
     }), policy);
 
-    expect(PR_REVIEW_GATE_POLICY_VERSION).toBe("sayhear-pr-review-gate:v7");
-    expect(PR_REVIEW_REPORT_VERSION).toBe("sayhear-pr-review-report:v3");
+    expect(PR_REVIEW_GATE_POLICY_VERSION).toBe("sayhear-pr-review-gate:v8");
+    expect(PR_REVIEW_REPORT_VERSION).toBe("sayhear-pr-review-report:v4");
+    expect(report.reasons[0]?.code).toBe("policy_version_mismatch");
+  });
+  const DEFERRABLE_CHECK_IDS = [
+    "prompt-budget:effective-config-diff",
+    "provider:effective-config-diff",
+    "provider:affected-role-calls",
+  ] as const;
+
+  function deferralEvidence(): PrReviewGateInput["evidence"] {
+    return [
+      ...FIXED_PR_CI_BASELINE.map((id) => makeEvidence(id)),
+      makeEvidence("prompt-budget:synthetic-samples", {
+        artifactSha256: "a".repeat(64),
+        coveredCheckIds: ["prompt-budget:synthetic-samples"],
+      }),
+      makeEvidence("provider:privacy-checks", {
+        artifactSha256: "b".repeat(64),
+        coveredCheckIds: ["provider:privacy-checks"],
+      }),
+      ...DEFERRABLE_CHECK_IDS.map((id) => makeDeferral(id)),
+    ];
+  }
+
+  function deferralInput(
+    mutate: (
+      evidence: PrReviewGateInput["evidence"],
+    ) => PrReviewGateInput["evidence"] = (evidence) => evidence,
+    pullRequestPatch: Partial<PrReviewGateInput["pullRequest"]> = {},
+  ): PrReviewGateInput {
+    const candidate = input({
+      review: { declaredImpacts: ["prompt-budget", "provider-migration"] },
+      pullRequest: {
+        body: "Delivers #42.",
+        changedFiles: [
+          { path: "packages/ai/src/provider.ts", status: "modified" },
+        ],
+        ...pullRequestPatch,
+      },
+      evidence: mutate(deferralEvidence()),
+    });
+    return {
+      ...candidate,
+      review: {
+        ...candidate.review,
+        requirementDigest: requirementDigest(candidate.issues, candidate.pullRequest),
+      },
+    };
+  }
+
+  it("returns merge_candidate_with_deferrals for exactly the registry deferrals", () => {
+    const report = evaluatePrReviewGate(deferralInput(), policy);
+
+    expect(report.outcome).toBe("merge_candidate_with_deferrals");
+    expect(report.reasons[0]?.code).toBe("pre_merge_checks_deferred");
+    expect(
+      report.deferredEvidence.map((entry) => entry.checkId).sort(),
+    ).toEqual([...DEFERRABLE_CHECK_IDS].sort());
+    for (const id of DEFERRABLE_CHECK_IDS) {
+      expect(report.acceptedEvidenceIds).not.toContain(id);
+    }
+    for (const entry of report.deferredEvidence) {
+      expect(entry.followUp.stage).toBe("acceptance");
+      expect(entry.followUp.command.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("requires a human decision for browser approval with deferred checks", () => {
+    const report = evaluatePrReviewGate(deferralInput(), {
+      ...policy,
+      humanApprovalChannel: "browser",
+    });
+
+    expect(report.outcome).toBe("human_decision");
+    expect(report.reasons[0]?.code).toBe("browser_deferred_merge_requires_human");
+    expect(report.deferredEvidence).toEqual([]);
+  });
+
+  it.each([
+    ["a closing keyword in the PR body", { body: "Delivers #42.\n\nCloses #42" }],
+    ["a closing keyword in the PR title", { title: "Fix #42 provider path" }],
+    ["a Development-sidebar link", { closingIssueNumbers: [42] }],
+    ["a closing keyword in a commit message", { closingIssueNumbers: [301] }],
+    ["an unreadable closing-reference set", { closingIssueNumbers: null }],
+  ] as const)(
+    "refuses a deferred merge when GitHub would close Issues natively (%s)",
+    (_label, pullRequestPatch) => {
+      const report = evaluatePrReviewGate(
+        deferralInput(undefined, pullRequestPatch),
+        policy,
+      );
+
+      expect(report.outcome).toBe("human_decision");
+      expect(report.reasons[0]?.code).toBe("deferred_merge_would_close_issues");
+      expect(report.deferredEvidence).toEqual([]);
+    },
+  );
+
+  it("keeps closing keywords allowed for a clean merge_candidate", () => {
+    const report = evaluatePrReviewGate(
+      input({ pullRequest: { closingIssueNumbers: [42] } }),
+      policy,
+    );
+
+    expect(input().pullRequest.body).toBe("Fixes #42");
+    expect(report.outcome).toBe("merge_candidate");
+  });
+
+  it("parses a missing closing-reference set as unknown", () => {
+    const { closingIssueNumbers: _omitted, ...pullRequest } = input().pullRequest;
+    const parsed = parsePrReviewGateInput({ ...input(), pullRequest });
+
+    expect(parsed.pullRequest.closingIssueNumbers).toBeNull();
+  });
+
+  it("finds every GitHub closing keyword form, including negated text", () => {
+    expect(
+      closingKeywordIssueNumbers(
+        [
+          "closes #1", "Fixed: #2", "RESOLVES lukemyself-hub/SayHear#3",
+          "fix https://github.com/lukemyself-hub/SayHear/issues/4",
+          "Do not close #5", "Delivers #6", "关闭 #7", "closer #8",
+        ].join("\n"),
+      ),
+    ).toEqual([1, 2, 3, 4, 5]);
+  });
+
+  it("keeps the plain merge_candidate outcome when nothing is deferred", () => {
+    const report = evaluatePrReviewGate(input(), policy);
+
+    expect(report.outcome).toBe("merge_candidate");
+    expect(report.deferredEvidence).toEqual([]);
+  });
+
+  it("accepts verified evidence for a deferrable check instead of deferring it", () => {
+    const report = evaluatePrReviewGate(
+      deferralInput((evidence) =>
+        evidence.map((entry) =>
+          entry.kind === "deferred-before-merge" &&
+          entry.checkId === "provider:effective-config-diff"
+            ? makeEvidence("provider:effective-config-diff", {
+                artifactSha256: "c".repeat(64),
+                coveredCheckIds: ["provider:effective-config-diff"],
+              })
+            : entry,
+        ),
+      ),
+      policy,
+    );
+
+    expect(report.outcome).toBe("merge_candidate_with_deferrals");
+    expect(report.acceptedEvidenceIds).toContain(
+      "provider:effective-config-diff",
+    );
+    expect(report.deferredEvidence.map((entry) => entry.checkId).sort()).toEqual(
+      ["prompt-budget:effective-config-diff", "provider:affected-role-calls"],
+    );
+  });
+
+  it("blocks a forged or non-deferrable deferral instead of failing open", () => {
+    const mismatched = evaluatePrReviewGate(
+      deferralInput((evidence) =>
+        evidence.map((entry) =>
+          entry.kind === "deferred-before-merge" &&
+          entry.checkId === "provider:effective-config-diff"
+            ? {
+                ...entry,
+                policy: {
+                  ...entry.policy,
+                  followUp: {
+                    ...entry.policy.followUp,
+                    command: "pnpm some-other-command",
+                  },
+                },
+              }
+            : entry,
+        ),
+      ),
+      policy,
+    );
+    expect(mismatched.outcome).toBe("awaiting_verification");
+    expect(mismatched.reasons[0]?.message).toContain(
+      "provider:effective-config-diff",
+    );
+    expect(mismatched.deferredEvidence).toEqual([]);
+
+    const nonDeferrable = evaluatePrReviewGate(
+      deferralInput((evidence) => [
+        ...evidence.filter(
+          (entry) =>
+            entry.kind === "deferred-before-merge" ||
+            entry.checkId !== "provider:privacy-checks",
+        ),
+        {
+          kind: "deferred-before-merge",
+          checkId: "provider:privacy-checks",
+          policy: {
+            reason: "requires-deployed-effective-configuration",
+            followUp: {
+              stage: "acceptance",
+              command: "pnpm release:config:compare",
+            },
+          },
+        },
+      ]),
+      policy,
+    );
+    expect(nonDeferrable.outcome).toBe("awaiting_verification");
+    expect(nonDeferrable.reasons[0]?.message).toContain(
+      "provider:privacy-checks",
+    );
+
+    const outOfScope = evaluatePrReviewGate(
+      deferralInput((evidence) =>
+        evidence.map((entry) =>
+          entry.kind !== "deferred-before-merge" &&
+          entry.checkId === "provider:privacy-checks"
+            ? {
+                ...entry,
+                result: "out-of-scope",
+                artifactSha256: null,
+                coveredCheckIds: [],
+              }
+            : entry,
+        ),
+      ),
+      policy,
+    );
+    expect(outOfScope.outcome).toBe("awaiting_verification");
+    expect(outOfScope.reasons[0]?.message).toContain(
+      "provider:privacy-checks",
+    );
+  });
+
+  it("does not let authorized deferrals bridge a cross-run evidence set", () => {
+    const report = evaluatePrReviewGate(
+      deferralInput((evidence) =>
+        evidence.map((entry) =>
+          entry.kind !== "deferred-before-merge" &&
+          entry.checkId === "provider:privacy-checks"
+            ? {
+                ...entry,
+                source: {
+                  ...entry.source,
+                  runId: entry.source.runId + 1,
+                  runAttempt: entry.source.runAttempt + 1,
+                },
+              }
+            : entry,
+        ),
+      ),
+      policy,
+    );
+
+    expect(report.outcome).toBe("awaiting_verification");
+    expect(report.reasons[0]?.message).toContain(
+      "different workflow run or attempt",
+    );
+    expect(report.deferredEvidence).toEqual([]);
+  });
+
+  it.each([
+    ["sayhear-pr-review-report:v3", "sayhear-pr-review-gate:v4"],
+    ["sayhear-pr-review-report:v3", "sayhear-pr-review-gate:v5"],
+    ["sayhear-pr-review-report:v4", "sayhear-pr-review-gate:v4"],
+    ["sayhear-pr-review-report:v4", "sayhear-pr-review-gate:v5"],
+    ["sayhear-pr-review-report:v3", "sayhear-pr-review-gate:v6"],
+  ])("rejects a new report with incompatible identity %s / %s", (version, policyVersion) => {
+    const report = evaluatePrReviewGate(
+      input({
+        review: { version, policyVersion },
+      }),
+      policy,
+    );
+
+    expect(PR_REVIEW_GATE_POLICY_VERSION).toBe("sayhear-pr-review-gate:v8");
+    expect(PR_REVIEW_REPORT_VERSION).toBe("sayhear-pr-review-report:v4");
+    expect(report.outcome).toBe("awaiting_verification");
     expect(report.reasons[0]?.code).toBe("policy_version_mismatch");
   });
 

@@ -11,6 +11,10 @@ import {
   handoffStalePullRequestBase,
   reconcileIssueCompletion,
   resolveLinkedIssues,
+  readClosingIssueReferences,
+  requestDeferredMerge,
+  AGENT_IDENTITY,
+  LUKE_IDENTITY,
   createGitHubAppJwt,
   GitHubApiError,
   GitHubRestClient,
@@ -34,13 +38,14 @@ import {
   type ModelReviewReport,
 } from "../scripts/pr-approval-controller.ts";
 import {
+  PR_VALIDATE_WORKFLOW_PATH,
   PR_REVIEW_GATE_POLICY_VERSION,
   PR_REVIEW_REPORT_VERSION,
-  PR_VALIDATE_WORKFLOW_PATH,
   SAYHEAR_REPOSITORY_ID,
   requirementDigest,
   type PrReviewGateInput,
 } from "../scripts/pr-review-gate.ts";
+import { preMergeDeferralFor } from "../scripts/daily-release-validation.ts";
 
 const ACTIONS_APP_ID = 15368;
 const HEAD_SHA = "a".repeat(40);
@@ -316,7 +321,9 @@ describe("migration evidence collection", () => {
         artifactSha256: fixture.reportDigest,
         coveredCheckIds: [migrationCheckId],
       });
-    expect(collected.evidence.every((entry) => entry.result === "passed")).toBe(true);
+    expect(collected.evidence.every(
+      (entry) => entry.kind !== "deferred-before-merge" && entry.result === "passed",
+    )).toBe(true);
   });
 
   it.each([
@@ -345,8 +352,8 @@ describe("migration evidence collection", () => {
   ])("rejects unavailable or untrusted migration evidence %j", async (options) => {
     const collected = await collector(options).collect();
 
-    expect(collected.evidence.find((entry) => entry.checkId === migrationCheckId)?.result)
-      .toBe("failed");
+    expect(collected.evidence.find((entry) => entry.checkId === migrationCheckId))
+      .toMatchObject({ result: "failed" });
   });
 
   it("keeps the migration requirement present when no current workflow run exists", async () => {
@@ -359,8 +366,8 @@ describe("migration evidence collection", () => {
   it("rejects an empty test report for both baseline and migration evidence", async () => {
     const collected = await collector({ emptyReport: true }).collect();
 
-    expect(collected.evidence.find((entry) => entry.checkId === "baseline:test")?.result)
-      .toBe("failed");
+    expect(collected.evidence.find((entry) => entry.checkId === "baseline:test"))
+      .toMatchObject({ result: "failed" });
     expect(collected.evidence.find((entry) => entry.checkId === migrationCheckId))
       .toMatchObject({ result: "failed", artifactSha256: null, coveredCheckIds: [] });
   });
@@ -1243,6 +1250,12 @@ describe("PR approval controller", () => {
 
     expect(appReviewOutcomeForIdentity(marker, identity)).toBe("approve");
     expect(
+      appReviewOutcomeForIdentity(
+        marker.replace("outcome=approve -->", "outcome=approve_deferred -->"),
+        identity,
+      ),
+    ).toBe("approve_deferred");
+    expect(
       appReviewOutcomeForIdentity(marker, {
         ...identity,
         baseSha: "f".repeat(40),
@@ -1317,7 +1330,7 @@ describe("stale main Issue handoff", () => {
       updatedAt: "2026-10-13T00:00:00Z", discussionDigest: "", externalReviewState: "clear",
       headSha: HEAD_SHA, baseSha: BASE_SHA, mergeSha: MERGE_SHA, baseRef: "main",
       headRepositoryId: SAYHEAR_REPOSITORY_ID, authorId: 101, lastCommitAuthorId: 101,
-      linkedIssueNumbers: [42, 43, 44, 45], keepOpenIssueNumbers: [44], issueClosureAmbiguous: false,
+      linkedIssueNumbers: [42, 43, 44, 45], keepOpenIssueNumbers: [44], issueClosureAmbiguous: false, closingIssueNumbers: [],
       changedFiles: [],
     } satisfies PrReviewGateInput["pullRequest"];
     return { api, expected, pull, issues, comments, writes,
@@ -1444,4 +1457,430 @@ describe("stale main Issue handoff", () => {
     expect(f.issues.get(43)!.labels.map((l) => l.name).sort()).toEqual(["bug", "ready-for-agent"]);
     expect(f.issues.get(42)!.labels.some((l) => l.name === "ongoing")).toBe(true);
   });
+});
+
+describe("pre-merge deferral evidence collection", () => {
+  const DEFERRABLE_CHECK_IDS = [
+    "prompt-budget:effective-config-diff",
+    "provider:effective-config-diff",
+    "provider:affected-role-calls",
+  ] as const;
+  const MIGRATION_UPGRADE_CHECK = "migration:upgrade-compatibility";
+  const COLLECTOR_RUN_ID = 555;
+  const COLLECTOR_REVIEW_APP_ID = 98765;
+  const WORKFLOW_BLOB_SHA = "f".repeat(40);
+  const capability = {
+    newCapabilityEnabled: false,
+    majorContractChange: false,
+    externalMvpRelease: false,
+  };
+
+  function storedZipEntryWithZeroCrc(name: string, content: Uint8Array): Uint8Array {
+    const nameBytes = Buffer.from(name, "utf8");
+    const size = content.byteLength;
+    const local = Buffer.alloc(30 + nameBytes.length);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(20, 4);
+    local.writeUInt32LE(size, 18);
+    local.writeUInt32LE(size, 22);
+    local.writeUInt16LE(nameBytes.length, 26);
+    nameBytes.copy(local, 30);
+    const central = Buffer.alloc(46 + nameBytes.length);
+    central.writeUInt32LE(0x02014b50, 0);
+    central.writeUInt16LE(20, 4);
+    central.writeUInt16LE(20, 6);
+    central.writeUInt32LE(size, 20);
+    central.writeUInt32LE(size, 24);
+    central.writeUInt16LE(nameBytes.length, 28);
+    nameBytes.copy(central, 46);
+    const centralOffset = local.length + size;
+    const end = Buffer.alloc(22);
+    end.writeUInt32LE(0x06054b50, 0);
+    end.writeUInt16LE(1, 8);
+    end.writeUInt16LE(1, 10);
+    end.writeUInt32LE(central.length, 12);
+    end.writeUInt32LE(centralOffset, 16);
+    return new Uint8Array(
+      Buffer.concat([local, Buffer.from(content), central, end]),
+    );
+  }
+
+  function collector(options: {
+    readonly reportPaths: readonly string[];
+    readonly trustedRun?: boolean;
+    readonly skippedPath?: string;
+    readonly report?: unknown;
+  }) {
+    const reportBytes = Buffer.from(
+      JSON.stringify(
+        options.report ?? {
+          success: true,
+          testResults: options.reportPaths.map((path) => ({
+            name: `/workspace/SayHear/${path}`,
+            status: "passed",
+            assertionResults: [{ status: path === options.skippedPath ? "pending" : "passed" }],
+          })),
+        },
+      ),
+      "utf8",
+    );
+    const archive = storedZipEntryWithZeroCrc(
+      "vitest-report.json",
+      new Uint8Array(reportBytes),
+    );
+    const validateCheck = {
+      id: 9001,
+      name: "validate",
+      app: { id: ACTIONS_APP_ID },
+      head_sha: HEAD_SHA,
+      details_url: `https://github.com/lukemyself-hub/SayHear/actions/runs/${COLLECTOR_RUN_ID}`,
+      status: "completed",
+      conclusion: "success",
+    };
+    const api = new StubApi(
+      (path) => {
+        if (path.includes("/check-runs")) {
+          return { check_runs: options.trustedRun === false ? [] : [validateCheck] };
+        }
+        if (path.endsWith(`/actions/runs/${COLLECTOR_RUN_ID}`)) {
+          return {
+            id: COLLECTOR_RUN_ID,
+            event: "pull_request",
+            head_sha: HEAD_SHA,
+            path: PR_VALIDATE_WORKFLOW_PATH,
+            pull_requests: [
+              { number: 321, head: { sha: HEAD_SHA }, base: { sha: BASE_SHA } },
+            ],
+            status: "completed",
+            conclusion: "success",
+            run_attempt: 1,
+          };
+        }
+        if (path.includes("/contents/")) return { sha: WORKFLOW_BLOB_SHA };
+        if (path.includes("/artifacts")) {
+          return {
+            artifacts: [
+              {
+                id: 77,
+                name: "vitest-report-321",
+                expired: false,
+                digest: `sha256:${createHash("sha256").update(archive).digest("hex")}`,
+              },
+            ],
+          };
+        }
+        throw new Error(`Unexpected collector request ${path}`);
+      },
+      () => [],
+      () => archive,
+    );
+    return {
+      reportDigest: createHash("sha256").update(reportBytes).digest("hex"),
+      config: {
+        api,
+        app: {
+          appId: COLLECTOR_REVIEW_APP_ID,
+          installationId: 1,
+          slug: "sayhear-pr-review-gate",
+          productionMergeAuthorized: false,
+          ordinaryMergeTriggersProduction: false,
+        },
+        policy: {
+          repositoryId: SAYHEAR_REPOSITORY_ID,
+          repositoryName: "lukemyself-hub/SayHear",
+          defaultBranch: "main",
+          policyVersion: PR_REVIEW_GATE_POLICY_VERSION,
+          reviewAppId: COLLECTOR_REVIEW_APP_ID,
+          actionsAppId: ACTIONS_APP_ID,
+          validateWorkflowBlobSha: WORKFLOW_BLOB_SHA,
+        },
+        botActorId: REVIEW_BOT_ACTOR_ID,
+        ownerActorId: 101,
+      },
+    };
+  }
+
+  const pullRequest = {
+    number: 321,
+    state: "open",
+    draft: false,
+    title: "Deliver #42",
+    body: "Fixes #42",
+    updated_at: "2026-10-14T00:00:00Z",
+    head: { sha: HEAD_SHA, repo: { id: SAYHEAR_REPOSITORY_ID } },
+    base: { ref: "main", sha: BASE_SHA },
+    user: { id: 101 },
+    merge_commit_sha: MERGE_SHA,
+    changed_files: 1,
+  } as Parameters<typeof collectEvidence>[2];
+
+  it("emits explicit deferrals for the registry checks that cannot run before merge", async () => {
+    const { config } = collector({
+      reportPaths: [
+        "tests/runtime-config.test.ts",
+        "tests/system/narrative-validation.system.test.ts",
+        "tests/system/portal-acceptance.system.test.ts",
+      ],
+    });
+
+    const collected = await collectEvidence(
+      config,
+      321,
+      pullRequest,
+      [{ path: "packages/ai/src/provider.ts", status: "modified" }],
+      ["prompt-budget", "provider-migration"],
+      capability,
+      MERGE_SHA,
+      BASE_SHA,
+    );
+
+    const byId = new Map(
+      collected.evidence.map((entry) => [entry.checkId, entry]),
+    );
+    for (const checkId of DEFERRABLE_CHECK_IDS) {
+      expect(byId.get(checkId)).toEqual({
+        kind: "deferred-before-merge",
+        checkId,
+        policy: preMergeDeferralFor(checkId),
+      });
+    }
+    expect(
+      collected.evidence
+        .filter((entry) => entry.kind === "deferred-before-merge")
+        .map((entry) => entry.checkId)
+        .sort(),
+    ).toEqual([...DEFERRABLE_CHECK_IDS].sort());
+    expect(byId.get("provider:privacy-checks")).toMatchObject({
+      result: "passed",
+    });
+  });
+
+  it("records the migration upgrade drill as digest-bound targeted evidence when the report covers its path", async () => {
+    const { config, reportDigest } = collector({
+      reportPaths: [
+        "tests/ci/migration-upgrade-compatibility.test.ts",
+        "tests/system/g1-purge-restore-drill.system.test.ts",
+        "tests/system/owner-full-purge.system.test.ts",
+      ],
+    });
+
+    const collected = await collectEvidence(
+      config,
+      321,
+      pullRequest,
+      [{ path: "packages/data/migrations/0099_add_column.sql", status: "added" }],
+      [],
+      capability,
+      MERGE_SHA,
+      BASE_SHA,
+    );
+
+    expect(
+      collected.evidence.find(
+        (entry) => entry.checkId === MIGRATION_UPGRADE_CHECK,
+      ),
+    ).toEqual({
+      checkId: MIGRATION_UPGRADE_CHECK,
+      result: "passed",
+      source: expect.objectContaining({ runId: COLLECTOR_RUN_ID }),
+      artifactSha256: reportDigest,
+      coveredCheckIds: [MIGRATION_UPGRADE_CHECK],
+    });
+    expect(
+      collected.evidence.some((entry) => entry.kind === "deferred-before-merge"),
+    ).toBe(false);
+  });
+
+  it("keeps the migration upgrade drill blocking when the report does not cover its path", async () => {
+    const { config } = collector({ reportPaths: ["tests/runtime-config.test.ts"] });
+
+    const collected = await collectEvidence(
+      config,
+      321,
+      pullRequest,
+      [{ path: "packages/data/migrations/0099_add_column.sql", status: "added" }],
+      [],
+      capability,
+      MERGE_SHA,
+      BASE_SHA,
+    );
+
+    expect(
+      collected.evidence.find(
+        (entry) => entry.checkId === MIGRATION_UPGRADE_CHECK,
+      ),
+    ).toMatchObject({
+      result: "failed",
+      artifactSha256: null,
+      coveredCheckIds: [],
+    });
+    expect(
+      collected.evidence.some((entry) => entry.kind === "deferred-before-merge"),
+    ).toBe(false);
+  });
+
+  it("refuses migration evidence when its Vitest assertion was skipped", async () => {
+    const migrationPath = "tests/ci/migration-upgrade-compatibility.test.ts";
+    const { config } = collector({
+      reportPaths: [migrationPath],
+      skippedPath: migrationPath,
+    });
+    const collected = await collectEvidence(
+      config, 321, pullRequest,
+      [{ path: "packages/data/migrations/0099_add_column.sql", status: "added" }],
+      [], capability, MERGE_SHA, BASE_SHA,
+    );
+    expect(collected.evidence.find((entry) => entry.checkId === MIGRATION_UPGRADE_CHECK)).toMatchObject({
+      result: "failed",
+      artifactSha256: null,
+      coveredCheckIds: [],
+    });
+  });
+
+  it("refuses a Vitest report with no test results instead of passing vacuously", async () => {
+    const { config } = collector({
+      reportPaths: [],
+      report: { success: true, testResults: [] },
+    });
+    const collected = await collectEvidence(
+      config, 321, pullRequest, [], [], capability, MERGE_SHA, BASE_SHA,
+    );
+    expect(
+      collected.evidence.find((entry) => entry.checkId === "baseline:test"),
+    ).toMatchObject({ result: "failed" });
+  });
+
+  it("refuses a Vitest test result with no assertions instead of passing vacuously", async () => {
+    const { config } = collector({
+      reportPaths: [],
+      report: {
+        success: true,
+        testResults: [
+          {
+            name: "/workspace/SayHear/tests/runtime-config.test.ts",
+            status: "passed",
+            assertionResults: [],
+          },
+        ],
+      },
+    });
+    const collected = await collectEvidence(
+      config, 321, pullRequest, [], [], capability, MERGE_SHA, BASE_SHA,
+    );
+    expect(
+      collected.evidence.find((entry) => entry.checkId === "baseline:test"),
+    ).toMatchObject({ result: "failed" });
+  });
+
+  it("never defers without a trusted workflow run on the same head", async () => {
+    const { config } = collector({ reportPaths: [], trustedRun: false });
+
+    const collected = await collectEvidence(
+      config,
+      321,
+      pullRequest,
+      [{ path: "packages/ai/src/provider.ts", status: "modified" }],
+      ["prompt-budget", "provider-migration"],
+      capability,
+      MERGE_SHA,
+      BASE_SHA,
+    );
+
+    expect(collected.evidence.map((entry) => entry.checkId)).toEqual(
+      expect.arrayContaining([...DEFERRABLE_CHECK_IDS]),
+    );
+    expect(
+      collected.evidence.every(
+        (entry) =>
+          entry.kind !== "deferred-before-merge" && entry.result === "skipped",
+      ),
+    ).toBe(true);
+  });
+
+  it("reads the Issues GitHub would close on merge and fails closed when it cannot", async () => {
+    const graph = (closing: unknown) =>
+      new StubApi((path) => {
+        if (path !== "/graphql") throw new Error(`Unexpected request ${path}`);
+        return { data: { repository: { pullRequest: { closingIssuesReferences: closing } } } };
+      });
+
+    await expect(readClosingIssueReferences(
+      graph({ nodes: [{ number: 301 }, { number: 322 }], pageInfo: { hasNextPage: false } }), 333,
+    )).resolves.toEqual([301, 322]);
+    await expect(readClosingIssueReferences(
+      graph({ nodes: [], pageInfo: { hasNextPage: false } }), 333,
+    )).resolves.toEqual([]);
+    await expect(readClosingIssueReferences(
+      graph({ nodes: [{ number: 301 }], pageInfo: { hasNextPage: true } }), 333,
+    )).resolves.toBeNull();
+    await expect(readClosingIssueReferences(graph({ nodes: [{}] }), 333)).resolves.toBeNull();
+    await expect(readClosingIssueReferences(graph(undefined), 333)).resolves.toBeNull();
+    await expect(readClosingIssueReferences(
+      new StubApi(() => ({ errors: [{ message: "denied" }] })), 333,
+    )).resolves.toBeNull();
+  });
+
+  it.each([AGENT_IDENTITY, { id: 1, login: "unknown", type: "User" }])(
+    "blocks deferred merge when the latest author is outside the legacy root channel",
+    async (user) => {
+      const { config } = collector({ reportPaths: [] });
+      const calls: string[] = [];
+      const api = new StubApi((path) => {
+        calls.push(path);
+        throw new Error("A non-root author cannot request deferred merge.");
+      });
+      const result = await requestDeferredMerge(
+        { ...config, api },
+        modelReport,
+        { outcome: "merge_candidate_with_deferrals", deferredEvidence: [] },
+        { allow_merge_commit: true },
+        { ...pullRequest, user },
+      );
+      expect(result.outcome).toBe("human_decision");
+      expect(calls).toEqual([]);
+    },
+  );
+
+  it.each([true, false])(
+    "merges a legacy root deferral without completion or Issue writes when mergeable=%s",
+    async (mergeable) => {
+      const { config } = collector({ reportPaths: [] });
+      const mutations: string[] = [];
+      const api = new StubApi((path, options) => {
+        if (path === "/graphql" && options?.method === "POST") {
+          mutations.push(path);
+          return { data: { enablePullRequestAutoMerge: { pullRequest: { number: 321 } } } };
+        }
+        if (path.endsWith("/pulls/321/merge") && options?.method === "PUT") {
+          mutations.push(path);
+          return { merged: true };
+        }
+        if (path.endsWith("/pulls/321") && options?.method === undefined) {
+          return { ...pullRequest, auto_merge: { enabled: true } };
+        }
+        throw new Error(`Unexpected deferred merge write ${path}`);
+      });
+      const completionStore = {
+        list: async () => { throw new Error("Deferred merge must not list completion records."); },
+        read: async () => { throw new Error("Deferred merge must not read a completion record."); },
+        save: async () => { throw new Error("Deferred merge must not save a completion record."); },
+      };
+      const result = await requestDeferredMerge(
+        { ...config, api, completionStore },
+        modelReport,
+        {
+          outcome: "merge_candidate_with_deferrals",
+          deferredEvidence: [{
+            checkId: "provider:effective-config-diff",
+            reason: "requires-deployed-effective-configuration",
+            followUp: { stage: "acceptance", command: "pnpm release:config:compare" },
+          }],
+        },
+        { allow_merge_commit: true },
+        { ...pullRequest, user: LUKE_IDENTITY, node_id: "PR_321", mergeable, mergeable_state: "clean" },
+      );
+      expect(result.outcome).toBe("merge_candidate_with_deferrals");
+      expect(mutations).toEqual([mergeable ? "/repos/lukemyself-hub/SayHear/pulls/321/merge" : "/graphql"]);
+    },
+  );
 });
