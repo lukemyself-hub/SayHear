@@ -14,6 +14,7 @@ export class PostgresRollingSummaryRepository implements RollingSummaryRepositor
   public async queueEligible(input: Parameters<RollingSummaryRepository["queueEligible"]>[0]): Promise<number> {
     const client = await this.pool.connect(); let queued = 0;
     try { await client.query("BEGIN");
+      await client.query("SELECT user_id FROM app_users ORDER BY user_id FOR UPDATE");
       const policy = await client.query<{ minimum_uncovered_event_count: number; minimum_uncovered_token_count: number }>(
         `SELECT minimum_uncovered_event_count, minimum_uncovered_token_count
          FROM rolling_summary_policies WHERE policy_version = $1`, [input.policyVersion],
@@ -107,6 +108,7 @@ export class PostgresRollingSummaryRepository implements RollingSummaryRepositor
   }
   public async publish(input: { command: RollingSummaryCommand; content: RollingSummaryContent; now: Date }): Promise<"published" | "stale"> {
     const client=await this.pool.connect(); try { await client.query("BEGIN");
+      await lockActiveOwnerEpoch(client, input.command.userId);
       const session = await client.query<{ source_revision: string }>(`SELECT source_revision FROM daily_sessions
         WHERE daily_session_id = $1 AND user_id = $2 FOR UPDATE`, [input.command.dailySessionId, input.command.userId]);
       const sources = await client.query<any>(`SELECT ref.sequence_no, event.sequence_no AS event_sequence_no,

@@ -129,6 +129,9 @@ export function createRecoveryScannerHandler(dependencies: {
 }
 
 function classifyRecoveryScanFailure(error: unknown):
+  | "lock_timeout"
+  | "statement_cancelled"
+  | "transaction_conflict"
   | "schema_drift"
   | "database_unavailable"
   | "unknown" {
@@ -139,6 +142,9 @@ function classifyRecoveryScanFailure(error: unknown):
     typeof error.code === "string"
       ? error.code
       : null;
+  if (code === "55P03") return "lock_timeout";
+  if (code === "57014") return "statement_cancelled";
+  if (code === "40P01" || code === "40001") return "transaction_conflict";
   if (code === "42703" || code === "42P01" || code === "42883") {
     return "schema_drift";
   }

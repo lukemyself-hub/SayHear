@@ -24,6 +24,8 @@ export function describeJournalFinding(finding: JournalDiagnosticFinding): strin
 
 export function describeJournalGenerationNotice(notice: JournalGenerationNotice): string {
   switch (notice.failureCode) {
+    case "retry_budget_exhausted":
+      return `${notice.logicalDate} 的日记生成失败。原始交流内容仍然保留，可以重新尝试。`;
     case "invalid_schema":
       return `${notice.logicalDate} 的 Journal 未生成：模型返回的内容结构无法校验。`;
     case "missing_evidence":

@@ -1,3 +1,5 @@
+import { PostgresJournalWorkflowRecovery } from "./postgres-journal-workflow-recovery";
+import { retryPostgresTransaction } from "./postgres-transaction-retry";
 import type {
   JournalEligibilityDateOutcome,
   JournalEligibilityEvaluationResult,
@@ -14,7 +16,7 @@ import {
 } from "@sayhear/domain";
 import type { Pool } from "pg";
 
-import { lockActiveOwnerEpoch } from "./postgres-owner-epoch-fence";
+import { lockSessionOwnerEpoch } from "./postgres-owner-epoch-fence";
 import { createUuidV7 } from "./uuid-v7";
 
 type EligibilitySessionRow = Readonly<{
@@ -34,10 +36,16 @@ export class PostgresJournalEligibilityRepository
   public async evaluateEligibility(
     input: Parameters<JournalEligibilityRepository["evaluateEligibility"]>[0],
   ): ReturnType<JournalEligibilityRepository["evaluateEligibility"]> {
+    return retryPostgresTransaction(() => this.evaluateEligibilityOnce(input));
+  }
+
+  private async evaluateEligibilityOnce(
+    input: Parameters<JournalEligibilityRepository["evaluateEligibility"]>[0],
+  ): ReturnType<JournalEligibilityRepository["evaluateEligibility"]> {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
-      // Lock the Daily Session row first — no aggregate, so FOR UPDATE is valid.
+      const ownerEpoch = await lockSessionOwnerEpoch(client, input.dailySessionId);
       const locked = await client.query<{
         daily_session_id: string;
         user_id: string;
@@ -69,7 +77,6 @@ export class PostgresJournalEligibilityRepository
       // epoch in the SAME transaction. A user whose data_epoch advances after
       // this point cannot invalidate this command admission without waiting on
       // the owner lock.
-      const ownerEpoch = await lockActiveOwnerEpoch(client, lockedRow.user_id);
       if (ownerEpoch === null) {
         await client.query("ROLLBACK");
         return { outcome: "not_found" };
@@ -206,6 +213,7 @@ export class PostgresJournalEligibilityRepository
   public async listQuiescentSessionsNeedingEligibility(input: {
     limit: number;
   }): Promise<readonly DailySessionId[]> {
+    await new PostgresJournalWorkflowRecovery(this.pool).recoverDue();
     const rows = await this.pool.query<{ daily_session_id: string }>(
       `
         SELECT session.daily_session_id
@@ -279,6 +287,20 @@ export class PostgresJournalEligibilityRepository
   }
 
   public async recordDateOutcome(input: {
+    dailySessionId: DailySessionId;
+    userId: UserId;
+    expectedDataEpoch: number;
+    logicalDate: string;
+    outcome: JournalEligibilityDateOutcome;
+    eligibilityPolicyVersion: string;
+    sourceRevision: number;
+    workflowReceiptId: string;
+    computedAt: Date;
+  }): Promise<{ applied: boolean }> {
+    return retryPostgresTransaction(() => this.recordDateOutcomeOnce(input));
+  }
+
+  private async recordDateOutcomeOnce(input: {
     dailySessionId: DailySessionId;
     userId: UserId;
     expectedDataEpoch: number;

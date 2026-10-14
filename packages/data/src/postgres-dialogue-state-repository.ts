@@ -1,3 +1,4 @@
+import { retryPostgresTransaction } from "./postgres-transaction-retry";
 import type {
   CurrentDialogueState,
   DialogueStateCommand,
@@ -41,6 +42,7 @@ export class PostgresDialogueStateRepository implements DialogueStateRepository 
     let queued = 0;
     try {
       await client.query("BEGIN");
+      await client.query("SELECT user_id FROM app_users ORDER BY user_id FOR UPDATE");
       const policy = await client.query(
         `SELECT 1 FROM dialogue_state_policies
          WHERE policy_version = $1 AND prompt_version = $2 AND model_config_version = $3`,
@@ -437,9 +439,19 @@ export class PostgresDialogueStateRepository implements DialogueStateRepository 
     content: DialogueStateContent;
     now: Date;
   }): Promise<"published" | "stale"> {
+    return retryPostgresTransaction(() => this.publishOnce(input));
+  }
+
+  private async publishOnce(input: {
+    command: DialogueStateCommand;
+    content: DialogueStateContent;
+    now: Date;
+  }): Promise<"published" | "stale"> {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
+      await lockActiveOwnerEpoch(client, input.command.userId);
+      await client.query("SELECT daily_session_id FROM daily_sessions WHERE daily_session_id = $1 AND user_id = $2 FOR UPDATE", [input.command.dailySessionId, input.command.userId]);
       const claimed = await client.query<{ claim_id: string | null; status: string }>(
         `SELECT claim_id, status
          FROM dialogue_state_commands

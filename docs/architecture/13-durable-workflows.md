@@ -171,7 +171,7 @@ Vercel Workflows v4 原生 keyed concurrency 不作为前提。
 
 每次 authoritative write 必须在同一个数据库事务中：
 
-1. 锁定 User / Aggregate；
+1. 按 Owner → Session/Aggregate → 子记录的固定顺序加锁。多 Owner 按 ID 升序。锁定 User / Aggregate；
 2. 检查主体仍为 `active`；
 3. 检查 `data_epoch = expected_data_epoch`；
 4. 检查没有有效 tombstone；
@@ -254,3 +254,5 @@ callback，其编译后 runtime 会抛出 `MessageNotFoundError` / `MessageNotAv
 - [原始 核心架构 v0.1 快照](../archive/architecture/sayhear-core-agent-architecture-v0.1.md)
 - [隐私、安全与生命周期](18-20-privacy-security-lifecycle.md)
 - [测试与交付](24-29-testing-and-delivery.md)
+
+Journal 的有界恢复与事务外 Evidence 抽取遵守 [ADR-0152](../adr/0152-owner-first-transactions-and-bounded-journal-recovery.md)。

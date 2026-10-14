@@ -105,6 +105,7 @@ describe("registered G1 schema extensions", () => {
       "0068_recent_conversation_context_refs.sql",
       "0069_recent_context_request_timezone.sql",
       "0070_recent_context_governance.sql",
+      "0071_journal_workflow_recovery.sql",
     ]);
     expect(registeredSchemaExtensions("business")).toEqual(
       ONE_A_3B_G1_SCHEMA_EXTENSIONS,

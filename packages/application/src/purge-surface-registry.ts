@@ -43,6 +43,7 @@ export type PurgeSurfaceDisposition =
 
 export type PurgeSurfaceOwnerResolution =
   | Readonly<{ kind: "direct_user_id"; column: "user_id" }>
+  | Readonly<{ kind: "evidence_attempt_owner"; column: "user_id" }>
   | Readonly<{ kind: "daily_session_id"; column: "daily_session_id" }>
   | Readonly<{ kind: "evidence_item_id"; column: "evidence_item_id" }>
   | Readonly<{
@@ -887,11 +888,8 @@ export const PURGE_SURFACE_REGISTRY: readonly PurgeSurfaceEntry[] = [
   tableSurface({
     table: "evidence_model_run_attempts",
     privateContentFields: ["result_metadata"],
-    ownerResolution: {
-      kind: "evidence_source_snapshot_id",
-      column: "evidence_source_snapshot_id",
-    },
-    indexes: ["evidence_model_run_attempts_snapshot_idx"],
+    ownerResolution: { kind: "evidence_attempt_owner", column: "user_id" },
+    indexes: ["evidence_model_run_attempts_snapshot_idx", "evidence_model_run_attempts_dispatch_idx"],
     introducedBySchemaOrIntegration: "0012_journal_workflow_outcomes.sql",
     clearOrder: 620,
   }),
@@ -1577,7 +1575,7 @@ episodes|episode_id,user_id,episode_kind_id,current_version_id,status,created_at
 entity_versions|entity_version_id,entity_id,user_id,revision,entity_kind_id,status,merged_into_entity_id,supersedes_version_id,created_at,content_purged_at
 evidence_items|evidence_item_id,user_id,evidence_source_snapshot_id,source_event_id,source_revision_id,source_actor,source_status,locator_type,locator_key,extraction_policy_version,evidence_role,status,created_at
 evidence_lineage|evidence_item_id,command_id,attempt_id,created_at
-evidence_model_run_attempts|evidence_model_run_attempt_id,evidence_source_snapshot_id,role,provider,model,config_version,extraction_policy_version,prompt_fingerprint,provider_request_id,provider_completed_at,result_metadata,status,created_at
+evidence_model_run_attempts|evidence_model_run_attempt_id,evidence_source_snapshot_id,role,provider,model,config_version,extraction_policy_version,prompt_fingerprint,provider_request_id,provider_completed_at,result_metadata,status,created_at,user_id,daily_session_id,source_revision,expected_data_epoch,frozen_evidence_item_ids
 evidence_source_snapshots|evidence_source_snapshot_id,user_id,daily_session_id,source_revision,extraction_policy_version,command_id,attempt_id,champion_config_version,champion_provider,champion_model,champion_snapshot,champion_provider_policy_version,created_at
 fast_path_extraction_runs|fast_path_run_id,user_id,daily_session_id,event_revision_id,event_conversation_event_id,extraction_policy_version,workflow_command_id,model_attempt_id,memory_extract_config_version,memory_extract_model_version,memory_extract_prompt_version,entity_resolve_config_version,role_fallback_used,status,event_committed_at,extracted_at,visibility_lag_ms,visibility_target_met,item_count,mention_count,candidate_count,error_code,created_at,updated_at,retired_at
 fast_path_session_items|fast_path_item_id,user_id,daily_session_id,event_revision_id,fast_path_run_id,item_class,summary,memory_candidate_id,entity_mention_id,evidence_item_id,dedupe_key,created_at,retired_at
@@ -1594,7 +1592,7 @@ journal_statement_evidence_links|journal_statement_id,evidence_item_id,user_id,s
 journal_statements|journal_statement_id,journal_version_id,statement_index,statement_key,statement_text,user_id,source_revision,evidence_source_snapshot_id
 journal_validation_results|journal_validation_result_id,journal_version_id,daily_session_id,source_revision,generation_command_id,model_run_attempt_id,programmatic_valid,status,failure_code,validator_version,created_at,diagnostic_status
 journal_versions|journal_version_id,journal_id,user_id,daily_session_id,source_revision,generation_policy_version,validator_version,locale,evidence_source_snapshot_id,status,generation_command_id,model_run_attempt_id,created_at,supersedes_version_id,generation_kind
-journal_workflow_outcomes|workflow_command_id,user_id,daily_session_id,source_revision,expected_data_epoch,outcome,reason,created_at
+journal_workflow_outcomes|workflow_command_id,user_id,daily_session_id,source_revision,expected_data_epoch,outcome,reason,created_at,attempt_count,next_attempt_at,lease_token,lease_expires_at
 journals|journal_id,user_id,daily_session_id,current_version_id,created_at,deleted_at
 memory_candidate_evidence_links|memory_candidate_evidence_link_id,memory_candidate_id,user_id,evidence_item_id,created_at
 memory_candidates|memory_candidate_id,user_id,candidate_kind,basis,subject_entity_id,subject_entity_mention_id,object_entity_id,object_entity_mention_id,predicate_id,predicate_registry_version,predicate_resolution_status,proposed_concept,mapping_confidence,proposed_object_value,proposed_scope_key,proposed_temporal_status,proposed_valid_from,proposed_valid_from_precision,proposed_valid_to,proposed_valid_to_precision,source_reflection_version_id,generation_command_id,authoritative_model_attempt_id,model_version,prompt_version,extraction_policy_version,status,predicate_review_policy_version,review_eligible_at,review_due_at,registry_release_wait_started_at,registry_release_due_at,disposition_reason_code,disposition_policy_version,decided_at,terminal_effective_at,terminal_content_expires_at,reproposal_policy,predecessor_candidate_id,successor_trigger,material_change_reason_codes,dedupe_fingerprint,dedupe_fingerprint_key_version,created_at,content_purged_at,proposed_qualifiers
@@ -1721,7 +1719,7 @@ episodes|episode_id,user_id,status,created_at,deleted_at
 entity_versions|entity_version_id,entity_id,user_id,revision,supersedes_version_id,created_at,content_purged_at
 evidence_items|evidence_item_id,user_id,evidence_source_snapshot_id,source_event_id,source_revision_id,source_actor,source_status,locator_type,extraction_policy_version,evidence_role,status,created_at
 evidence_lineage|evidence_item_id,command_id,attempt_id,created_at
-evidence_model_run_attempts|evidence_model_run_attempt_id,evidence_source_snapshot_id,role,provider,model,config_version,extraction_policy_version,prompt_fingerprint,provider_request_id,provider_completed_at,status,created_at
+evidence_model_run_attempts|evidence_model_run_attempt_id,evidence_source_snapshot_id,role,provider,model,config_version,extraction_policy_version,prompt_fingerprint,provider_request_id,provider_completed_at,status,created_at,user_id,daily_session_id,source_revision,expected_data_epoch,frozen_evidence_item_ids
 evidence_source_snapshots|evidence_source_snapshot_id,user_id,daily_session_id,source_revision,extraction_policy_version,command_id,attempt_id,champion_config_version,champion_provider,champion_model,champion_provider_policy_version,created_at
 fast_path_extraction_runs|fast_path_run_id,user_id,daily_session_id,event_revision_id,event_conversation_event_id,extraction_policy_version,workflow_command_id,model_attempt_id,memory_extract_config_version,memory_extract_model_version,memory_extract_prompt_version,entity_resolve_config_version,role_fallback_used,status,event_committed_at,extracted_at,visibility_lag_ms,visibility_target_met,item_count,mention_count,candidate_count,error_code,created_at,updated_at,retired_at
 fast_path_session_items|fast_path_item_id,user_id,daily_session_id,event_revision_id,fast_path_run_id,item_class,memory_candidate_id,entity_mention_id,evidence_item_id,dedupe_key,created_at,retired_at
@@ -1738,7 +1736,7 @@ journal_statement_evidence_links|journal_statement_id,evidence_item_id,user_id,s
 journal_statements|journal_statement_id,journal_version_id,statement_index,statement_key,user_id,source_revision,evidence_source_snapshot_id
 journal_validation_results|journal_validation_result_id,journal_version_id,daily_session_id,source_revision,generation_command_id,model_run_attempt_id,programmatic_valid,status,failure_code,validator_version,created_at,diagnostic_status
 journal_versions|journal_version_id,journal_id,user_id,daily_session_id,source_revision,generation_policy_version,validator_version,locale,evidence_source_snapshot_id,status,generation_command_id,model_run_attempt_id,created_at,supersedes_version_id,generation_kind
-journal_workflow_outcomes|workflow_command_id,user_id,daily_session_id,source_revision,expected_data_epoch,outcome,reason,created_at
+journal_workflow_outcomes|workflow_command_id,user_id,daily_session_id,source_revision,expected_data_epoch,outcome,reason,created_at,attempt_count,next_attempt_at,lease_token,lease_expires_at
 journals|journal_id,user_id,daily_session_id,current_version_id,created_at,deleted_at
 memory_candidate_evidence_links|memory_candidate_evidence_link_id,memory_candidate_id,user_id,evidence_item_id,created_at
 memory_candidates|memory_candidate_id,user_id,candidate_kind,basis,subject_entity_id,subject_entity_mention_id,object_entity_id,object_entity_mention_id,predicate_id,predicate_registry_version,predicate_resolution_status,mapping_confidence,proposed_valid_from_precision,proposed_valid_to_precision,source_reflection_version_id,generation_command_id,authoritative_model_attempt_id,model_version,prompt_version,extraction_policy_version,status,predicate_review_policy_version,review_eligible_at,review_due_at,registry_release_wait_started_at,registry_release_due_at,disposition_reason_code,disposition_policy_version,decided_at,terminal_effective_at,terminal_content_expires_at,reproposal_policy,predecessor_candidate_id,successor_trigger,material_change_reason_codes,created_at,content_purged_at
@@ -1814,11 +1812,11 @@ export const PURGE_SURFACE_REGISTRY_SNAPSHOT: PurgeSurfaceRegistrySnapshot =
       PURGE_EXTERNAL_INTEGRATION_MANIFEST_VERSION,
     registeredColumns: PURGE_SURFACE_REGISTERED_COLUMNS,
     nonPrivateColumns: PURGE_SURFACE_REGISTERED_NON_PRIVATE_COLUMNS,
-    columnManifestHash: "fnv1a32:2505b361:1493",
-    constraintManifestHash: "fnv1a32:48961d31:802",
+    columnManifestHash: "fnv1a32:e4f47914:1502",
+    constraintManifestHash: "fnv1a32:551a28d8:803",
     externalIntegrations: PURGE_SURFACE_EXTERNAL_INTEGRATIONS,
-    foreignKeyManifestHash: "fnv1a32:c00e31f7:439",
-    indexManifestHash: "fnv1a32:4cf37a90:131",
+    foreignKeyManifestHash: "fnv1a32:c15d5a08:441",
+    indexManifestHash: "fnv1a32:15c41050:132",
     registryVersion: PURGE_SURFACE_REGISTRY_VERSION,
     surfaces: PURGE_SURFACE_REGISTRY,
     workflowSubjectManifestVersion: PURGE_WORKFLOW_SUBJECT_MANIFEST_VERSION,
