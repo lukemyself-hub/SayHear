@@ -71,7 +71,9 @@ session rows. Past-date navigation needs a completed prior-day exchange.
   unverified.
 - Past-date entry: the `delivery` journey clicks the exact
   `a[href='/internal?date=YYYY-MM-DD']` for the ended exchange's date and
-  requires the same read-only history as the URL entry. A date before today comes
+  requires the same read-only history as the URL entry; it checks the ended
+  exchange by direct date URL and Journal backlink, and excludes its duplicate
+  dated navigation entry. A date before today comes
   from the controlled clock in `interruption` and `cross-date`.
 
 ## Gotchas

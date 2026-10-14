@@ -13,6 +13,7 @@ import {
   createUserTextConversationService,
   InvalidConversationCursorError,
   OLDER_CONVERSATION_MESSAGE_LIMIT,
+  type CurrentConversationIdentity,
   type GenerationPolicy,
   type UserTextConversationRepository,
   type UserTextMessage,
@@ -41,6 +42,9 @@ function message(sequence: number): UserTextMessage {
 
 function createService() {
   const calls = {
+    findCurrentConversation: vi.fn<() => Promise<CurrentConversationIdentity | null>>(
+      async () => null,
+    ),
     findConversationSessionByDate: vi.fn(async () => ({
       dailySessionId,
       logicalDate: "2026-10-06",
@@ -68,7 +72,6 @@ function createService() {
   const repository = {
     ...calls,
     endContinuousExchangeExplicitly: vi.fn(),
-    findCurrentWritableConversation: vi.fn(async () => null),
     listInterruptedResponses: vi.fn(async () => []),
     listInterruptedResponsesForSession: vi.fn(async () => []),
     listRecentUserTextMessages: vi.fn(async () => []),
@@ -97,11 +100,40 @@ describe("conversation history pagination", () => {
     expect(calls.listConversationDates).toHaveBeenCalledWith({
       beforeDailySessionId: null,
       beforeLogicalDate: null,
+      excludedDailySessionId: null,
       limit: CONVERSATION_DATE_PAGE_LIMIT,
       userId,
     });
     expect(page.entries).toHaveLength(1);
     expect(typeof page.nextCursor).toBe("string");
+  });
+
+  it("excludes the current display identity on initial and cursor date pages", async () => {
+    const { calls, service } = createService();
+    calls.findCurrentConversation.mockResolvedValue({
+      activityState: "quiescent",
+      dailySessionId: otherSessionId,
+      logicalDate: "2026-10-06",
+      startedAt: now,
+      timezoneAtStart: "America/Los_Angeles",
+    });
+    const first = await service.listConversationDates(userId, { cursor: null });
+    await service.listConversationDates(userId, { cursor: first.nextCursor });
+    expect(calls.findCurrentConversation).toHaveBeenCalledWith({ now, userId });
+    expect(calls.listConversationDates).toHaveBeenNthCalledWith(1, {
+      beforeDailySessionId: null,
+      beforeLogicalDate: null,
+      excludedDailySessionId: otherSessionId,
+      limit: CONVERSATION_DATE_PAGE_LIMIT,
+      userId,
+    });
+    expect(calls.listConversationDates).toHaveBeenNthCalledWith(2, {
+      beforeDailySessionId: dailySessionId,
+      beforeLogicalDate: "2026-10-06",
+      excludedDailySessionId: otherSessionId,
+      limit: CONVERSATION_DATE_PAGE_LIMIT,
+      userId,
+    });
   });
 
   it("seeds older messages from beforeSequence and continues with the returned cursor", async () => {

@@ -289,7 +289,7 @@ describe("Portal cross-date interrupted retry contract", () => {
     "appends a retry to the original historical session and reactivates it",
     async () => {
       await openPrivateWrites();
-      const original = await submitAndInterrupt("2026-10-01T16:00:00.000Z");
+      const original = await submitAndInterrupt("2026-10-06T16:00:00.000Z");
 
       // The exchange has ended and the day is no longer writable.
       await database.pool.query(
@@ -297,6 +297,7 @@ describe("Portal cross-date interrupted retry contract", () => {
          WHERE daily_session_id = $1`,
         [original.dailySessionId, clock()],
       );
+      clockNowMs = new Date("2026-10-07T16:00:00.000Z").getTime();
       expect(await service.readCurrentConversation(OWNER)).toBeNull();
 
       const retry = await service.retry(OWNER, {
