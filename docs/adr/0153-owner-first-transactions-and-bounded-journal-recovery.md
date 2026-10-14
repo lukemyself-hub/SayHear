@@ -45,9 +45,13 @@ An Evidence or Journal outcome that is transient rather than final is recorded
 as a failed attempt, so it re-arms through the same bounded budget instead of
 leaving a terminal row that no recovery surface accepts. That covers a lost
 dispatch claim, a stale or fenced freeze, disabled writes, and a validation
-failure other than a model-run failure. A day with no eligible source material
-is not a failure: it stays `needs_review` and is surfaced as an
-insufficient-expression day.
+failure other than a model-run failure. An Evidence `not_eligible` outcome is
+not a generation failure and is never retried: it keeps a terminal
+`needs_review` row. A day with nothing eligible to build from is normally
+surfaced by the expression gate as an insufficient-expression day; when a
+freeze reports `not_eligible` after the gate has already queued that day, the
+day stays unpublished and unlisted until the next revision, and no recovery
+surface re-arms it.
 
 The Journal page displays a failed-generation notice and an authenticated,
 same-origin retry action. The action only re-arms a current terminal failure,

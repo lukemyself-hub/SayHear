@@ -91,15 +91,16 @@ async function runEligibilityStep(input: {
       return { ...eligibility, outcome: "retryable_failed" as const };
     }
     if (evidence.outcome !== "frozen") {
-      // `not_eligible` is not a generation failure: the date list already
-      // surfaces an insufficient-expression day through `date_outcome`, so it
-      // keeps its terminal `needs_review` row and never becomes a failed
-      // generation with a retry action. Every other non-frozen outcome is
-      // transient, so it settles `retryable_failed` and lets the bounded
-      // three-attempt budget converge on the one terminal shape the recovery
-      // scan, date list, notice and retry action all accept
-      // (`needs_review` + `retry_budget_exhausted`). A fresh terminal row
-      // carrying a raw reason would be invisible to every one of them.
+      // `not_eligible` is not a generation failure: the expression gate
+      // reports a day with nothing eligible to build from as an
+      // insufficient-expression day through `date_outcome`. It keeps its
+      // terminal `needs_review` row and never becomes a failed generation with
+      // a retry action. Every other non-frozen outcome is transient, so it
+      // settles `retryable_failed` and lets the bounded three-attempt budget
+      // converge on the one terminal shape the recovery scan, date list,
+      // notice and retry action all accept (`needs_review` +
+      // `retry_budget_exhausted`). A fresh terminal row carrying a raw reason
+      // would be invisible to every one of them.
       await settle(evidence.outcome === "not_eligible" ? "needs_review" : "retryable_failed", evidence.outcome);
       return { ...eligibility, outcome: evidence.outcome === "not_eligible" ? "needs_review" as const : "retryable_failed" as const };
     }
