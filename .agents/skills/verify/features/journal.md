@@ -24,8 +24,8 @@ published text, and opens that day's original Conversation.
 Preconditions: healthy Owner instance. Delivery/copy/export/date-entry journeys
 need an exchange that ends, so launch the `live` or `provider` profile; `local`
 has a fixed clock and no exchange ever ends there. The `cross-date` journey
-launches `timeline`, whose test-only file clock ends two exchanges on two logical
-dates.
+launches `timeline` or `fault`: both carry the test-only file clock, and
+`fault`'s fault file stays empty unless a journey writes it.
 
 - Run `node scripts/verify-control.mjs drive "$VERIFY_RUN" journal` for the empty
   journey. It chooses the exact `日记` link and checks the real region's notice.
@@ -63,9 +63,9 @@ dates.
   prose with that date's stored statements, copies, exports and follows
   查看当天聊天, requiring each date's own expression and not the other's. The
   clock file is re-read per request; no session row or generation result is
-  edited. A 2026-10-13 attempt (`dev-345-cross-date-1`) reached the day-1
-  publication step but its Journal workflow lost the #340 deadlock; real-run
-  evidence for this journey waits for that fix.
+  edited. Two 2026-10-13 attempts lost a Journal workflow to the #340 deadlock
+  (`dev-345-cross-date-1` at day-1, `dev-345-cross-date-2` at day-2 after day-1
+  published); real-run evidence for this journey waits for that fix.
 
 ## Gotchas
 
@@ -80,9 +80,9 @@ dates.
   transactions deadlock in most runs, and when the Journal path is the victim no
   Journal is published
   ([#340](https://github.com/lukemyself-hub/SayHear/issues/340); 3 of 13 runs).
-  The journey then fails and writes `delivery-unpublished.json`; the 2026-10-13
-  `cross-date` attempt failed the same way and wrote
-  `cross-date-unpublished-2026-07-27.json`. Confirm with
+  The journey then fails and writes `delivery-unpublished.json`; both 2026-10-13
+  `cross-date` attempts failed the same way and wrote
+  `cross-date-unpublished-<date>.json`. Confirm with
   `grep "deadlock detected" postgres.log` before suspecting the driver.
 - After the exchange ends, `今天` incorrectly shows an empty chat while the dated
   navigation link still exposes that day's messages

@@ -1,16 +1,17 @@
 {
-  "recordedAt": "2026-10-14T01:35:15.000Z",
+  "recordedAt": "2026-10-14T01:54:03.000Z",
   "baseCommit": "b7fac60d3111726616c571840f33126d9a4b6e41",
-  "workingTree": "All runs launched from the issue-345 worktree with its changes uncommitted; each run's doctor.json and result JSON records the exact sourceStatus at launch. driverSha256 pins the driver revision regardless.",
+  "evidenceCommit": "6a0528ec9dc84f1a1e717a2312c6a2482e32a5f8",
+  "workingTree": "All runs launched at evidenceCommit with the review-fix edits still uncommitted; each run's doctor.json records the exact sourceStatus. driverSha256 pins the driver revision the evidence came from.",
   "driverSha256": {
-    "scripts/verify-control.mjs": "7b2312bd182b137c13eb9e87518627dcca4036c4c0fba0a42123ac089664d6c0",
+    "scripts/verify-control.mjs": "535b4e57022a93f8687f3b294039a09dd9cff401b73242669a70fa259515c7c7",
     "scripts/verify-fixture.mjs": "5edd2e7bc719d506aa46c300fde3d82131d0400a5dbb3cc623a498b4f6087807",
-    "scripts/verify-browser.mjs": "0f4e45f0b0cbc64100ffca184b4d735e94000f604b2a87ffd7f7e71ee80cbf48"
+    "scripts/verify-browser.mjs": "9fd2ad298019b831f606bd3d9c19f1b184a76463ca158f611755c67c65a120e6"
   },
   "host": "macOS, Node 24.18.0, PostgreSQL 17.10, playwright-core 1.61.1 with cached Chrome for Testing build 1200, no locale in the environment",
   "runs": {
     "local-regression": {
-      "run": "dev-345-local-2",
+      "run": "dev-345-local-3",
       "doctor": {
         "profile": "local",
         "deployment": "test",
@@ -26,20 +27,20 @@
         "businessMigrations": 78,
         "markerMigrations": 2
       },
-      "purpose": "Confirm the pre-existing journeys do not regress on the new driver revision before driving the new ones.",
+      "purpose": "Confirm the pre-existing journeys do not regress on the final driver revision.",
       "journeys": [
         { "feature": "access", "passed": true, "entries": ["/", "/api/internal/access"] },
-        { "feature": "text", "passed": true, "entries": ["/internal", "/internal?date=2026-07-27"], "events": 2 },
+        { "feature": "text", "passed": true, "entries": ["/internal", "/internal?date=2026-07-27"], "events": 2, "visibleReplyMs": 334 },
         { "feature": "journal", "passed": true, "entries": ["/internal/journals"], "coverage": "empty state only" },
         { "feature": "context", "passed": true, "entries": ["/internal/context-inspector"], "coverage": "entry only" },
         { "feature": "reflection", "passed": true, "entries": ["/internal/reflection-inspector"], "coverage": "entry only" },
-        { "feature": "context-trace", "passed": true, "entries": ["message 查看 context link", "/internal/context-inspector typed lookup", "GET /api/internal/inspection/conversation-content"] },
+        { "feature": "context-trace", "passed": true, "entries": ["message 查看 context link", "/internal/context-inspector typed lookup", "GET /api/internal/inspection/conversation-content"], "commandId": "019fa44d-f400-796a-93fe-e52b429faa7d", "provider": "openai / gpt-5.4", "sensitiveReadWithoutStepUp": "403 elevated_capability_required" },
         { "feature": "signout", "passed": true, "entries": ["/api/auth/signout"], "note": "This ends the run's only session; launch again before other journeys." }
       ],
       "scratchRemoved": true
     },
     "keyboard": {
-      "run": "dev-345-keyboard-1",
+      "run": "dev-345-keyboard-2",
       "doctor": {
         "profile": "local",
         "deployment": "test",
@@ -78,7 +79,7 @@
             "method": "browser-level composition through CDP Input.imeSetComposition; a real operating-system IME stays human-pending"
           },
           "responseRequests": 1,
-          "stored": "keyboard-stored.json: one succeeded conversation.text attempt; Shift+Enter added one newline with no response request; Enter during composition sent nothing; one Enter sent exactly one request and committed the multiline text",
+          "stored": "keyboard-stored.json: one succeeded conversation.text attempt; Shift+Enter added one newline with no response request; the observed Enter keydown during composition carried isComposing true and sent nothing; one Enter sent exactly one request and committed the multiline text",
           "unverified": [
             "a real operating-system IME (human pending)",
             "candidate selection and composition editing"
@@ -88,7 +89,7 @@
       "scratchRemoved": true
     },
     "history": {
-      "run": "dev-345-history-1",
+      "run": "dev-345-history-2",
       "doctor": {
         "profile": "local",
         "deployment": "test",
@@ -123,7 +124,7 @@
       "scratchRemoved": true
     },
     "interruption": {
-      "run": "dev-345-interruption-1",
+      "run": "dev-345-interruption-2",
       "doctor": {
         "profile": "fault",
         "deployment": "test",
@@ -168,31 +169,25 @@
   },
   "blockedRuns": {
     "cross-date": {
-      "run": "dev-345-cross-date-1",
-      "profile": "timeline",
-      "doctor": {
-        "deployment": "test",
-        "clock": "controllable",
-        "provider": "deterministic",
-        "oauth": "inert",
-        "session": "fixture",
-        "owner": "synthetic",
-        "anonymousStatus": 401,
-        "ownerFixture": true,
-        "authenticatedStatus": 200,
-        "composerPresent": true,
-        "businessMigrations": 78,
-        "markerMigrations": 2
-      },
-      "result": {
-        "feature": "cross-date",
-        "passed": false,
-        "step": "publishJournal(2026-07-27)",
-        "error": "No Journal was published for 2026-07-27 within four minutes; see cross-date-unpublished-2026-07-27.json."
-      },
-      "observation": "The controlled clock worked: the day-1 session quiesced by inactivity_timeout, eligibility created one command and the first scan dispatched fast-path extraction, dialogue state and Journal eligibility together. The Journal generation then ended as retryable_failed / journal_generation_failed, and postgres.log holds 'deadlock detected' at 2026-10-13 18:29:03.306 PDT. This is the known issue #340 deadlock, not a driver fault.",
-      "outcome": "Real-run evidence for cross-date waits for issue #340 to merge, as triaged for issue #345; the journey stays in the driver and feature map.",
-      "issue": "https://github.com/lukemyself-hub/SayHear/issues/340"
+      "attempts": [
+        {
+          "run": "dev-345-cross-date-1",
+          "profile": "timeline",
+          "passed": false,
+          "step": "publishJournal(2026-07-27)",
+          "observation": "The controlled clock worked: the day-1 session quiesced by inactivity_timeout, eligibility created one command and the first scan dispatched fast-path extraction, dialogue state and Journal eligibility together. The Journal generation ended as retryable_failed / journal_generation_failed, and postgres.log holds 'deadlock detected' at 2026-10-13 18:29:03.306 PDT."
+        },
+        {
+          "run": "dev-345-cross-date-2",
+          "profile": "timeline",
+          "passed": false,
+          "step": "publishJournal(2026-07-28)",
+          "observation": "Day-1 published its own Journal (one published outcome; journal.draft and journal.validate completed). The 24-hour clock advance opened a second Daily Session on 2026-07-28, which quiesced by inactivity_timeout and whose eligibility command was dispatched; its Journal generation then ended as retryable_failed / journal_generation_failed, and postgres.log holds 'deadlock detected' at 2026-10-13 18:47:52.363 PDT. The journey stopped before the per-date read/copy/export/backlink loop, so no passing cross-date evidence exists yet."
+        }
+      ],
+      "outcome": "Both attempts lost the Journal path to the known issue #340 deadlock, not a driver fault. Real-run evidence for cross-date waits for issue #340 to merge, as triaged for issue #345; the journey stays in the driver and feature map.",
+      "issue": "https://github.com/lukemyself-hub/SayHear/issues/340",
+      "scratchRemoved": true
     }
   },
   "notRun": [
@@ -202,7 +197,7 @@
     },
     {
       "journey": "cross-date acceptance evidence",
-      "reason": "one attempt was blocked by the issue #340 deadlock (see blockedRuns); per issue #345 triage it is rerun after that fix"
+      "reason": "two attempts were blocked by the issue #340 deadlock (see blockedRuns); per issue #345 triage it is rerun after that fix"
     },
     {
       "journey": "hosted Journal, Episode and Daily/Weekly generation, including hosted Workflow delivery",

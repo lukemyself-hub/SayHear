@@ -42,7 +42,7 @@ session rows. Past-date navigation needs a completed prior-day exchange.
   `page.getByRole('region', { name: '历史聊天记录' })`, no composer, preserved text,
   then chooses the exact `返回今天` link and requires the composer again.
 - Keyboard journey: run `node scripts/verify-control.mjs drive "$VERIFY_RUN"
-  keyboard` on `local`, `timeline` or `fault`. It types one line, requires
+  keyboard` on `local`, `live`, `timeline` or `fault`. It types one line, requires
   `Shift+Enter` to add exactly one newline with no
   `/api/internal/conversation/responses` request, starts a browser-level
   composition with CDP `Input.imeSetComposition` and requires Enter during it to
@@ -51,8 +51,9 @@ session rows. Past-date navigation needs a completed prior-day exchange.
   `keyboard-stored.json` records the observed composition and keydown events.
   This is emulated browser input; a real operating-system IME stays
   human-pending.
-- Long-history journey: run `... history` on `local`, `timeline` or `fault` with
-  a fresh instance. It sends 28 exchanges through the composer (56 events, past
+- Long-history journey: run `... history` on `local`, `live`, `timeline` or
+  `fault` with a fresh instance. It sends 28 exchanges through the composer
+  (56 events, past
   the 50-message window), reloads to require the bounded 25-exchange window,
   scrolls to the top, sends one more exchange and requires the viewport not to
   move and `回到最新` to appear and re-pin; then opens

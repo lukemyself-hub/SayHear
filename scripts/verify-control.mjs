@@ -195,7 +195,11 @@ async function launch() {
   mkdirSync(evidence, { recursive: true });
   const scratch = mkdtempSync(join(tmpdir(), "sayhear-verify-"));
   const state = { runId, root, scratch, ...prepared, profile, standIns, sessionToken: randomBytes(32).toString("hex"), scannerSecret: randomBytes(32).toString("hex"), ownerId: "01984477-31e1-7595-92c6-06889cb0fdde", cleaned: false };
-  if (standIns.clock === "real" || standIns.clock === "controllable") state.inactivityTimeoutMs = SHORT_INACTIVITY_MS;
+  // `fixed` freezes the clock, `real` lets exchanges end by wall time, and
+  // `controllable` does both: the driver freezes it and advances it by hand.
+  const freezesClock = standIns.clock !== "real";
+  const endsExchangesByTime = standIns.clock !== "fixed";
+  if (endsExchangesByTime) state.inactivityTimeoutMs = SHORT_INACTIVITY_MS;
   if (standIns.clock === "controllable") {
     // The driver rewrites this file between requests; the runtime re-reads it
     // per configuration load. `SAYHEAR_TEST_NOW` stays the launch fallback.
@@ -231,10 +235,10 @@ async function launch() {
       NEXTAUTH_URL: state.origin, NEXTAUTH_SECRET: randomBytes(32).toString("hex"), SAYHEAR_AUTH_SECRET_SOURCE: "managed", SAYHEAR_DEPLOYMENT: "test",
       SAYHEAR_BACKUP_CONFIGURATION_FINGERPRINT: "sha256:local-verification-fixture", SAYHEAR_BACKUP_POLICY_VERSION: "local-verification:v1",
       SAYHEAR_CONTEXT_HMAC_SECRET: randomBytes(32).toString("hex"), CRON_SECRET: state.scannerSecret, SAYHEAR_EPISODE_BUILD_ENABLED: "false", SAYHEAR_REFLECTION_ENABLED: "false",
-      ...(standIns.clock === "real" || standIns.clock === "controllable"
+      ...(endsExchangesByTime
         ? { SAYHEAR_INACTIVITY_TIMEOUT_MS: String(SHORT_INACTIVITY_MS), SAYHEAR_INACTIVITY_POLICY_VERSION: "continuous-exchange-inactivity:verify-short" }
         : {}),
-      ...(standIns.clock === "fixed" || standIns.clock === "controllable"
+      ...(freezesClock
         ? { SAYHEAR_TEST_NOW: FIXED_NOW }
         : {}),
       ...(standIns.clock === "controllable"

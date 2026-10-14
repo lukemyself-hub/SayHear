@@ -6,19 +6,17 @@
 对应 Issue：[#345](https://github.com/lukemyself-hub/SayHear/issues/345) 的 hosted
 部分。执行环境为 ADR-0144 定义的隔离验收环境 `sayhear-g1-acceptance`，别名
 `sayhear-g1-canary-lukemyself.vercel.app`；部署身份、配置与验收授权相互独立
-（ADR-0148）。本方案不改变产品定义、认证、隐私或发布门槛。
+（ADR-0148）。本方案不改变产品定义、认证、隐私或发布门槛。[#322](https://github.com/lukemyself-hub/SayHear/issues/322)
+的发布授权不覆盖本方案中的部署、绕过链接、配置变更或 paid Provider 调用，这些
+动作逐项走下面的授权表。
 
 ## 已核实的起点
 
-2026-10-12 的历史只读盘点（见 [`README.md`](README.md) 的“Hosted 验收环境现状”）
-只能作为旧快照：开始执行前必须重新读取，不能直接采用。
-
-- 别名受 Vercel Authentication 保护，匿名请求被重定向到 Vercel SSO。
-- 部署由 CLI 上传，没有 Git 元数据；平台读不出它对应的 commit。
-- `/api/internal/inspection/release-identity` 需要 Owner session 或 operator secret。
-- Preview 环境变量中的 OAuth client、业务库、Purge Marker 库、Provider key 与
-  G1 开关全部是不可读 secret；变量列表中没有 G1 release manifest，当前 G1 是否
-  开启未知。
+2026-10-12 的历史只读盘点只能作为旧快照，开始执行前必须重新读取，不能直接采用。
+环境事实（别名保护、未读的部署 commit、G1 manifest/pins 状态）以
+[`README.md`](README.md) 的“Hosted 验收环境现状”和
+[`SKILL.md`](../../.agents/skills/verify/SKILL.md) 的 Hosted target 为维护源，
+本方案不复制；执行时刷新并逐项核对。
 
 ## 需要的授权与参与（逐项确认，不默认）
 

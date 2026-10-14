@@ -131,6 +131,9 @@ async function sendThroughComposer(text, options = {}) {
 const storedMessages = () => rows("SELECT e.actor, r.canonical_text, e.daily_session_id, e.created_at FROM conversation_events e JOIN conversation_event_revisions r ON r.conversation_event_revision_id=e.current_revision_id ORDER BY e.sequence_no");
 // Content-free Provider lineage for the conversation replies in this instance.
 const storedAttempts = () => rows("SELECT generation_command_id, attempt_no, operation_type, provider, model, model_snapshot, prompt_version, status, finish_reason, error_category, input_tokens, output_tokens, reasoning_tokens, cost_micros, round(extract(epoch FROM (first_token_at - started_at)) * 1000) AS first_token_ms, round(extract(epoch FROM (completed_at - started_at)) * 1000) AS completed_ms FROM model_run_attempts ORDER BY started_at");
+// Journeys that build their own history assert an empty canonical store so a
+// reused instance cannot pass on rows an earlier journey left behind.
+const assertFreshLaunch = (proofName) => assert.equal(Number(sql("SELECT count(*) FROM conversation_events")), 0, `${proofName} needs a fresh launch; use a new run ID.`);
 
 async function accessJourney() {
   action("Visit / without a session through the real redirect chain.");
@@ -147,7 +150,7 @@ async function textJourney() {
   await enterWithFixtureSession();
   const deterministic = state.standIns.provider === "deterministic";
   const text = `Synthetic verification ${state.runId}: I went for a walk today and felt calmer afterwards.`;
-  assert.equal(Number(sql("SELECT count(*) FROM conversation_events")), 0, "Text proof needs a fresh launch; use a new run ID.");
+  assertFreshLaunch("Text proof");
   const sentAt = Date.now();
   await sendThroughComposer(text);
   const visibleReplyMs = Date.now() - sentAt;
@@ -270,7 +273,7 @@ async function scheduledScan() {
 
 async function deliveryJourney() {
   await enterWithFixtureSession();
-  assert.equal(Number(sql("SELECT count(*) FROM conversation_events")), 0, "Delivery proof needs a fresh launch; use a new run ID.");
+  assertFreshLaunch("Delivery proof");
   const text = `Synthetic verification ${state.runId}: this morning I finished the garden fence I had put off for weeks, and I felt proud and a little tired afterwards.`;
   await sendThroughComposer(text);
   await snapshot("sent");
@@ -399,7 +402,7 @@ const storedJournalProse = (logicalDate) => rows(`SELECT statement.statement_tex
 // published Journal appears, then cross-checks the rendered prose against the
 // stored statements. A scan may fail while dispatched workflows hold the Owner
 // lock (#341), so failures are recorded and the schedule simply runs again.
-async function publishJournal(logicalDate, tokens) {
+async function publishJournal(logicalDate, { includes, excludes }) {
   const journal = page.getByRole("region", { name: "日记" });
   const scans = [];
   action(`Run the scheduled recovery scan until ${logicalDate} has a published Journal.`);
@@ -418,15 +421,15 @@ async function publishJournal(logicalDate, tokens) {
   }
   const prose = await journalProse(journal);
   assert(prose.length > 0, `The published Journal for ${logicalDate} has no readable prose.`);
-  for (const token of tokens.includes) assert(squash(prose).includes(squash(token)), `The ${logicalDate} Journal does not carry its own ${token}.`);
-  for (const token of tokens.excludes) assert(!squash(prose).includes(squash(token)), `The ${logicalDate} Journal carries the other date's ${token}.`);
+  for (const token of includes) assert(squash(prose).includes(squash(token)), `The ${logicalDate} Journal does not carry its own ${token}.`);
+  for (const token of excludes) assert(!squash(prose).includes(squash(token)), `The ${logicalDate} Journal carries the other date's ${token}.`);
   assert.equal(squash(prose), squash(storedJournalProse(logicalDate)), `The ${logicalDate} rendered Journal differs from the stored statements.`);
   return { heading: await journal.locator(".journalViewTitle").innerText(), prose, scans };
 }
 
 async function keyboardJourney() {
   await enterWithFixtureSession();
-  assert.equal(Number(sql("SELECT count(*) FROM conversation_events")), 0, "Keyboard proof needs a fresh launch; use a new run ID.");
+  assertFreshLaunch("Keyboard proof");
   const responsesPath = "/api/internal/conversation/responses";
   const responseCount = () => requestsTo(responsesPath).length;
   const input = composer();
@@ -447,6 +450,7 @@ async function keyboardJourney() {
   assert(composition.compositions.some((event) => event.type === "compositionstart"), "The composition never started on the composer.");
   const imeEnter = composition.keys.findLast((event) => event.key === "Enter");
   assert(imeEnter, "The Enter keydown during composition was not observed.");
+  assert.equal(imeEnter.isComposing, true, "The observed Enter keydown was not inside the composition.");
   await snapshot("ime-after-enter");
 
   action("Reload to end the emulated composition; the composer must return to plain input.");
@@ -489,7 +493,7 @@ async function keyboardJourney() {
 
 async function historyJourney() {
   await enterWithFixtureSession();
-  assert.equal(Number(sql("SELECT count(*) FROM conversation_events")), 0, "History proof needs a fresh launch; use a new run ID.");
+  assertFreshLaunch("History proof");
   const responsesPath = "/api/internal/conversation/responses";
   const messageText = (index) => `Synthetic verification ${state.runId}: history-${String(index).padStart(2, "0")} through the composer.`;
   const composerExchanges = 28;
@@ -572,7 +576,7 @@ async function historyJourney() {
 
 async function interruptionJourney() {
   await enterWithFixtureSession();
-  assert.equal(Number(sql("SELECT count(*) FROM conversation_events")), 0, "Interruption proof needs a fresh launch; use a new run ID.");
+  assertFreshLaunch("Interruption proof");
   const responsesPath = "/api/internal/conversation/responses";
   const retriesPath = "/api/internal/conversation/retries";
   const text = `Synthetic verification ${state.runId}: interruption original.`;
@@ -648,7 +652,7 @@ async function interruptionJourney() {
 
 async function crossDateJourney() {
   await enterWithFixtureSession();
-  assert.equal(Number(sql("SELECT count(*) FROM conversation_events")), 0, "Cross-date proof needs a fresh launch; use a new run ID.");
+  assertFreshLaunch("Cross-date proof");
   const dayOneText = `Synthetic verification ${state.runId}: I walked along the river and watched the herons.`;
   const dayTwoText = `Synthetic verification ${state.runId}: I repaired the lighthouse lamp and felt relieved.`;
   const dayOne = logicalDateInLosAngeles(state.testNowInitial);
