@@ -255,4 +255,4 @@ callback，其编译后 runtime 会抛出 `MessageNotFoundError` / `MessageNotAv
 - [隐私、安全与生命周期](18-20-privacy-security-lifecycle.md)
 - [测试与交付](24-29-testing-and-delivery.md)
 
-Journal 的有界恢复与事务外 Evidence 抽取遵守 [ADR-0152](../adr/0152-owner-first-transactions-and-bounded-journal-recovery.md)。
+Journal 的有界恢复与事务外 Evidence 抽取遵守 [ADR-0153](../adr/0153-owner-first-transactions-and-bounded-journal-recovery.md)。
