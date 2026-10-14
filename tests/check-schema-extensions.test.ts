@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
@@ -129,6 +130,94 @@ describe("protected-surface DDL deny-list", () => {
         "CREATE TABLE recent_context_policies (policy_version TEXT PRIMARY KEY);",
       ),
     ).toEqual([]);
+  });
+});
+
+describe("generation stage CHECK widening exception (#314, ADR-0094)", () => {
+  const drop =
+    "ALTER TABLE generation_commands DROP CONSTRAINT generation_commands_generation_stage_check;";
+  const add = (values: string) =>
+    `ALTER TABLE generation_commands ADD CONSTRAINT generation_commands_generation_stage_check CHECK (generation_stage IN (${values}));`;
+  const existing = "'decision', 'action_finalization', 'proactive_followup'";
+  const STAGE_FILE = "0071_history_answer_generation_stage.sql";
+
+  it("admits widening the stage CHECK by exactly the history_answer value", () => {
+    const sql = [drop, add(`${existing}, 'history_answer'`)].join("\n");
+    expect(protectedSurfaceDdlViolations(STAGE_FILE, sql)).toEqual([]);
+  });
+
+  it("still admits the committed 0071 migration", () => {
+    const sql = readFileSync(
+      new URL(`../packages/data/migrations/${STAGE_FILE}`, import.meta.url),
+      "utf8",
+    );
+    expect(protectedSurfaceDdlViolations(STAGE_FILE, sql)).toEqual([]);
+  });
+
+  it("rejects a DROP of the stage CHECK that is not immediately followed by the admitted ADD", () => {
+    // Alone: the constraint would simply be gone.
+    expect(protectedSurfaceDdlViolations(STAGE_FILE, drop)).toHaveLength(1);
+    // Followed by something else first.
+    expect(
+      protectedSurfaceDdlViolations(
+        STAGE_FILE,
+        [drop, "CREATE TABLE unrelated (id INTEGER);", add(`${existing}, 'history_answer'`)].join("\n"),
+      ).length,
+    ).toBeGreaterThanOrEqual(1);
+    // Followed by an ADD that does not qualify: both statements are refused.
+    expect(
+      protectedSurfaceDdlViolations(STAGE_FILE, [drop, add(existing)].join("\n")),
+    ).toHaveLength(2);
+  });
+
+  it("rejects an ADD whose value set is not exactly the frozen stages plus history_answer", () => {
+    const pair = (values: string) => [drop, add(values)].join("\n");
+    // Back to the three frozen values only: history_answer rows would violate it.
+    expect(protectedSurfaceDdlViolations(STAGE_FILE, pair(existing)).length).toBeGreaterThanOrEqual(1);
+    expect(
+      protectedSurfaceDdlViolations(STAGE_FILE, pair(`${existing}, 'history_answer', 'surprise'`)).length,
+    ).toBeGreaterThanOrEqual(1);
+    expect(
+      protectedSurfaceDdlViolations(STAGE_FILE, pair("'decision', 'history_answer'")).length,
+    ).toBeGreaterThanOrEqual(1);
+    expect(
+      protectedSurfaceDdlViolations(
+        STAGE_FILE,
+        pair(`${existing}, 'history_answer', 'history_answer'`),
+      ).length,
+    ).toBeGreaterThanOrEqual(1);
+    // An ADD with no DROP before it is not the admitted pair either.
+    expect(
+      protectedSurfaceDdlViolations(STAGE_FILE, add(`${existing}, 'history_answer'`)),
+    ).toHaveLength(1);
+  });
+
+  it("does not lend the exception to any other migration file", () => {
+    const sql = [drop, add(`${existing}, 'history_answer'`)].join("\n");
+    for (const other of ["0071.sql", "0099_another_stage.sql", "0072_history_recall_results.sql"]) {
+      expect(protectedSurfaceDdlViolations(other, sql)).toHaveLength(2);
+    }
+  });
+
+  it("rejects narrowing, an unknown value, or any other generation_commands constraint", () => {
+    expect(
+      protectedSurfaceDdlViolations(STAGE_FILE, add("'decision', 'history_answer'")),
+    ).toHaveLength(1);
+    expect(
+      protectedSurfaceDdlViolations(STAGE_FILE, add(`${existing}, 'history_answer', 'surprise'`)),
+    ).toHaveLength(1);
+    expect(
+      protectedSurfaceDdlViolations(
+        "bad.sql",
+        "ALTER TABLE generation_commands DROP CONSTRAINT generation_commands_action_receipt_snapshot_check;",
+      ),
+    ).toHaveLength(1);
+    expect(
+      protectedSurfaceDdlViolations(
+        "bad.sql",
+        "ALTER TABLE generation_commands DROP CONSTRAINT generation_commands_generation_stage_check, DROP COLUMN status;",
+      ),
+    ).toHaveLength(1);
   });
 });
 

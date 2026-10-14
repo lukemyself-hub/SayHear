@@ -1,0 +1,54 @@
+{
+  "caseId": "H04",
+  "findings": [
+    {
+      "criterionId": "S-detail",
+      "itemId": "a-place",
+      "quote": "下班后和表弟去城北那条河里游了一会儿",
+      "reason": "Place, companion and occasion match the source.",
+      "verdict": "pass"
+    },
+    {
+      "criterionId": "S-detail",
+      "itemId": "a-angler",
+      "quote": "扔了个旧救生圈给你抱着",
+      "reason": "The life ring from the man fishing is retold.",
+      "verdict": "pass"
+    },
+    {
+      "criterionId": "S-detail",
+      "itemId": "tm-when",
+      "quote": "七月十五号那天你跟我说",
+      "reason": "Correct date of telling.",
+      "verdict": "pass"
+    },
+    {
+      "criterionId": "S-detail",
+      "itemId": "f-no-record",
+      "reason": "It confirms the experience was told.",
+      "verdict": "pass"
+    },
+    {
+      "criterionId": "S-no-invention",
+      "itemId": "f-river-name",
+      "reason": "No river name, distance or duration is added.",
+      "verdict": "pass"
+    },
+    {
+      "criterionId": "S-no-invention",
+      "itemId": "f-person-name",
+      "reason": "Nobody is named.",
+      "verdict": "pass"
+    },
+    {
+      "criterionId": "S-no-invention",
+      "itemId": "f-lesson-mixup",
+      "reason": "The daughter's lessons are not mixed in.",
+      "verdict": "pass"
+    }
+  ],
+  "reviewer": "agent:claude-opus-5.5-t08",
+  "rubricVersion": "continuity-rubric:v1",
+  "runId": "run-1c818101-cbd7-4114-9deb-c3346f1f58c5",
+  "schemaVersion": "continuity-acceptance-review:v1"
+}

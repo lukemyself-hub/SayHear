@@ -1,0 +1,55 @@
+{
+  "schemaVersion": "continuity-acceptance-fixture:v1",
+  "id": "UL1",
+  "fixtureVersion": "final-2",
+  "stage": "final",
+  "languageVariant": "zh",
+  "defaults": {
+    "locale": "zh-CN",
+    "timezone": "Asia/Shanghai"
+  },
+  "history": [
+    {
+      "key": "market",
+      "at": "2026-10-10T12:15:00.000Z",
+      "user": "今天带外甥女豆豆去逛了庙会，我们俩在戏台边的石阶上坐着，分着吃了一串糖葫芦。",
+      "assistant": "石阶上分一串糖葫芦，逛庙会就该是这个吃法。"
+    },
+    {
+      "key": "kite",
+      "at": "2026-10-10T12:24:00.000Z",
+      "user": "回来的路上我们说好了，趁天还没冷透，去江边放一次风筝，就像小时候我舅舅带我去的那样。",
+      "assistant": "照着舅舅当年的样子带她去放风筝，这里头装着不少东西。"
+    }
+  ],
+  "steps": [
+    {
+      "id": "ask",
+      "type": "say",
+      "at": "2026-10-12T09:00:00.000Z",
+      "continueInBackground": true,
+      "text": "我跟你说过逛庙会那天的事吧，都说了些什么？"
+    },
+    {
+      "id": "supplement",
+      "type": "say",
+      "at": "2026-10-12T09:00:08.000Z",
+      "text": "其实我只想知道那天是谁跟我一起去的。"
+    },
+    {
+      "id": "stall",
+      "type": "say",
+      "at": "2026-10-12T09:02:00.000Z",
+      "providerFault": {
+        "delayBeforeFirstChunkMs": 75000
+      },
+      "text": "那放风筝的事我们当时是怎么说的？"
+    },
+    {
+      "id": "after",
+      "type": "say",
+      "at": "2026-10-12T09:04:00.000Z",
+      "text": "算了不管那个了。这个时节去江边放风筝，会不会已经太冷了？"
+    }
+  ]
+}

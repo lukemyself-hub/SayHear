@@ -1,0 +1,274 @@
+{
+  "schemaVersion": "continuity-acceptance-oracle:v1",
+  "id": "U07",
+  "title": "U07 Unseen: a change of job, a corrected starting day and a send-off that was called off",
+  "capability": "Second, unseen counterpart of the change-and-correction class. The person left a hotel kitchen for a school kitchen, explicitly corrected the starting day they had first given, and planned a send-off that they later called off. Asked about the present, past and current are kept apart, the corrected day is used and the superseded one is never given as the day, and a cancelled plan is not reported as something that happened. Following the owner's ruling, naming the superseded day as the one first given and then corrected is acceptable.",
+  "spec": [
+    "#301 R5",
+    "#301 R7",
+    "ADR-0152"
+  ],
+  "ownerTickets": [
+    "#318"
+  ],
+  "language": "en",
+  "fixture": {
+    "version": "final-2",
+    "sha256": "cead19fac49b39a1b0dbc2a658ec7580ff285c9d644fbb3dfdffededf2745a17"
+  },
+  "facts": {
+    "allowed": [
+      {
+        "id": "a-current-job",
+        "statement": "The person now runs the kitchen at a primary school, working only during term and finishing mid-afternoon, having left the cooking line at a hotel.",
+        "sources": [
+          "contract:user",
+          "first-week:user"
+        ]
+      },
+      {
+        "id": "a-july-job",
+        "statement": "In mid-July the person was six years into cooking at the hotel, on split shifts, getting home after midnight five nights a week and missing Sunday meals with their children.",
+        "sources": [
+          "old-job:user"
+        ]
+      },
+      {
+        "id": "a-drinks-cancelled",
+        "statement": "The send-off at the pub was called off because a burst pipe over the hotel kitchen put the whole crew on double shifts; the person told them in their group chat.",
+        "sources": [
+          "drinks-plan:user",
+          "drinks-off:user"
+        ]
+      }
+    ],
+    "forbidden": [
+      {
+        "id": "f-old-date",
+        "statement": "Giving 1 September as the day the person started, or presenting both days as equally possible. Naming it as the day first given and then corrected is acceptable.",
+        "sources": [
+          "contract:user"
+        ]
+      },
+      {
+        "id": "f-still-hotel",
+        "statement": "Saying the person currently works at the hotel.",
+        "sources": [
+          "old-job:user"
+        ]
+      },
+      {
+        "id": "f-reason",
+        "statement": "Supplying a reason for leaving beyond what the person said, such as a falling-out, pay or being let go.",
+        "sources": []
+      },
+      {
+        "id": "f-drinks-happened",
+        "statement": "Describing the send-off as held, or asking how it went.",
+        "sources": [
+          "drinks-plan:user"
+        ]
+      }
+    ]
+  },
+  "topics": [],
+  "time": [
+    {
+      "id": "tm-start",
+      "statement": "The first day at the school was 8 September 2026, as corrected by the person on 20 August.",
+      "sources": [
+        "date-fix:user"
+      ]
+    }
+  ],
+  "expectedBehavior": [
+    "For the present: the school kitchen, started on 8 September.",
+    "For the send-off: it was planned and then called off, with the reason the person gave.",
+    "For July against now: each told correctly and kept apart, without passing judgement on the change."
+  ],
+  "failureSignals": [
+    "1 September is given as the starting day.",
+    "The send-off is described as having taken place.",
+    "The hotel is given as the current workplace."
+  ],
+  "sourceEligibility": [
+    {
+      "source": "old-job:user",
+      "eligibility": "allowed",
+      "reason": "Retained original expression of the earlier state."
+    },
+    {
+      "source": "contract:user",
+      "eligibility": "allowed",
+      "reason": "Retained original expression; carries the date that was later corrected in conversation."
+    },
+    {
+      "source": "date-fix:user",
+      "eligibility": "allowed",
+      "reason": "The person's own later correction."
+    },
+    {
+      "source": "drinks-plan:user",
+      "eligibility": "allowed",
+      "reason": "Retained original expression of the plan."
+    },
+    {
+      "source": "drinks-off:user",
+      "eligibility": "allowed",
+      "reason": "The person's own later cancellation."
+    },
+    {
+      "source": "first-week:user",
+      "eligibility": "allowed",
+      "reason": "Retained original expression of the current state."
+    }
+  ],
+  "criteria": [
+    {
+      "id": "O-commit",
+      "kind": "objective",
+      "modes": [
+        "deterministic",
+        "real-model"
+      ],
+      "description": "The first question streams and commits.",
+      "check": {
+        "type": "turn_committed",
+        "step": "where"
+      }
+    },
+    {
+      "id": "O-commit-drinks",
+      "kind": "objective",
+      "modes": [
+        "deterministic",
+        "real-model"
+      ],
+      "description": "The second question streams and commits.",
+      "check": {
+        "type": "turn_committed",
+        "step": "drinks"
+      }
+    },
+    {
+      "id": "O-commit-july",
+      "kind": "objective",
+      "modes": [
+        "deterministic",
+        "real-model"
+      ],
+      "description": "The third question streams and commits.",
+      "check": {
+        "type": "turn_committed",
+        "step": "july"
+      }
+    },
+    {
+      "id": "O-correction-source",
+      "kind": "objective",
+      "modes": [
+        "real-model"
+      ],
+      "owner": "#318",
+      "description": "The signing and the person's later correction of the day both reach the Provider.",
+      "check": {
+        "type": "outbound_includes",
+        "step": "where",
+        "sources": [
+          "contract:user",
+          "date-fix:user"
+        ]
+      }
+    },
+    {
+      "id": "O-cancel-source",
+      "kind": "objective",
+      "modes": [
+        "real-model"
+      ],
+      "owner": "#318",
+      "description": "The plan and its cancellation both reach the Provider.",
+      "check": {
+        "type": "outbound_includes",
+        "step": "drinks",
+        "sources": [
+          "drinks-plan:user",
+          "drinks-off:user"
+        ]
+      }
+    },
+    {
+      "id": "O-timeline-source",
+      "kind": "objective",
+      "modes": [
+        "real-model"
+      ],
+      "owner": "#318",
+      "description": "The earlier state and the current one both reach the Provider.",
+      "check": {
+        "type": "outbound_includes",
+        "step": "july",
+        "sources": [
+          "old-job:user",
+          "first-week:user"
+        ]
+      }
+    },
+    {
+      "id": "S-current",
+      "kind": "semantic",
+      "owner": "#318",
+      "description": "The present state uses the corrected day and the current workplace.",
+      "step": "where",
+      "required": [
+        "a-current-job",
+        "tm-start"
+      ],
+      "forbidden": [
+        "f-old-date",
+        "f-still-hotel"
+      ]
+    },
+    {
+      "id": "S-plan",
+      "kind": "semantic",
+      "owner": "#318",
+      "description": "A cancelled plan is reported as cancelled.",
+      "step": "drinks",
+      "required": [
+        "a-drinks-cancelled"
+      ],
+      "forbidden": [
+        "f-drinks-happened"
+      ]
+    },
+    {
+      "id": "S-timeline",
+      "kind": "semantic",
+      "owner": "#318",
+      "description": "Then and now are each told correctly and kept apart.",
+      "step": "july",
+      "required": [
+        "a-july-job",
+        "a-current-job"
+      ],
+      "forbidden": [
+        "f-still-hotel",
+        "f-reason"
+      ]
+    },
+    {
+      "id": "P-stance",
+      "kind": "subjective",
+      "owner": "#318",
+      "description": "The comparison is given without passing judgement on the change.",
+      "step": "july",
+      "required": [
+        "a-current-job"
+      ],
+      "forbidden": [
+        "f-reason"
+      ]
+    }
+  ]
+}

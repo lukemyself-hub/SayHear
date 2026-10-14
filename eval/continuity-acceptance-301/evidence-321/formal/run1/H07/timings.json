@@ -1,0 +1,47 @@
+[
+  {
+    "appState": "warm",
+    "caseId": "H07",
+    "committedMs": null,
+    "firstVisibleTextMs": null,
+    "kind": "ordinary",
+    "liveRequests": 1,
+    "outcome": "response_failed",
+    "outputTokens": 472,
+    "reasoningTokens": 370,
+    "runId": "run-d93f8ab4-379e-478c-b315-cc1e909d09f8",
+    "stepId": "where",
+    "streamClosedMs": 3969.3303750000196,
+    "withinContract": false
+  },
+  {
+    "appState": "warm",
+    "caseId": "H07",
+    "committedMs": null,
+    "firstVisibleTextMs": null,
+    "kind": "ordinary",
+    "liveRequests": 1,
+    "outcome": "response_failed",
+    "outputTokens": 736,
+    "reasoningTokens": 584,
+    "runId": "run-d93f8ab4-379e-478c-b315-cc1e909d09f8",
+    "stepId": "party",
+    "streamClosedMs": 6083.46204199997,
+    "withinContract": false
+  },
+  {
+    "appState": "warm",
+    "caseId": "H07",
+    "committedMs": null,
+    "firstVisibleTextMs": null,
+    "kind": "ordinary",
+    "liveRequests": 1,
+    "outcome": "response_failed",
+    "outputTokens": 806,
+    "reasoningTokens": 617,
+    "runId": "run-d93f8ab4-379e-478c-b315-cc1e909d09f8",
+    "stepId": "september",
+    "streamClosedMs": 6081.073249999958,
+    "withinContract": false
+  }
+]

@@ -14,7 +14,10 @@ import type {
   UserTextMessage,
   UserTextTurn,
 } from "@sayhear/application";
-import { resolveLocalePackVersion } from "@sayhear/application";
+import {
+  LATEST_USER_INPUT_FENCE_VERSION,
+  resolveLocalePackVersion,
+} from "@sayhear/application";
 import {
   asConversationEventId,
   asConversationEventRevisionId,
@@ -1104,13 +1107,15 @@ export class PostgresUserTextConversationRepository
           expected_data_epoch,
           status,
           created_at,
-          request_timezone
+          request_timezone,
+          request_deadline_at,
+          latest_input_fence_version
         )
         VALUES (
           $1, $2, $3, 'conversation.text', $4, 'conversation_event', $5,
           'conversation_event_revision', $6, $7, $8, $9, $10, $11, $12, $13,
           $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26,
-          'prepared', $27, $28
+          'prepared', $27, $28, $29, $30
         )
       `,
       [
@@ -1148,6 +1153,8 @@ export class PostgresUserTextConversationRepository
         ownerRow.data_epoch,
         input.now,
         source.request_timezone,
+        input.requestDeadlineAt ?? null,
+        LATEST_USER_INPUT_FENCE_VERSION,
       ],
     );
     await client.query(
@@ -1557,13 +1564,15 @@ export class PostgresUserTextConversationRepository
           expected_data_epoch,
           status,
           created_at,
-          request_timezone
+          request_timezone,
+          request_deadline_at,
+          latest_input_fence_version
         )
         VALUES (
           $1, $2, $3, 'conversation.text', $4, 'conversation_event', $5,
           'conversation_event_revision', $6, $7, $8, $9, $10, $11, $12, $13,
           $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26,
-          'prepared', $27, $28
+          'prepared', $27, $28, $29, $30
         )
       `,
       [
@@ -1601,6 +1610,8 @@ export class PostgresUserTextConversationRepository
         ownerRow.data_epoch,
         input.now,
         input.timezone,
+        input.requestDeadlineAt ?? null,
+        LATEST_USER_INPUT_FENCE_VERSION,
       ],
     );
     await client.query(

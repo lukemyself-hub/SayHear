@@ -1,0 +1,50 @@
+{
+  "schemaVersion": "continuity-acceptance-oracle:v1",
+  "id": "C05",
+  "title": "C05 'They finally wrote back': connect when there is a cue, clarify when there is not",
+  "capability": "Two things are awaiting an answer: a pottery submission from over three months ago and a job application from this week. A bare 'I finally got a reply' with no cue cannot be attributed, so a light clarification is right and neither guessing the recent one nor asking for the whole story again is. Two days later, after talk of throwing pots and a letter arriving by post, the same kind of sentence does have a cue and should be connected to the old submission.",
+  "spec": ["#301 R4", "ADR-0152"],
+  "ownerTickets": ["#317"],
+  "language": "en",
+  "fixture": { "version": "dev-2", "sha256": "f2410327076eff65f4824afec5dcb8116224148afa5039b591dd8bb135f8a52c" },
+  "facts": {
+    "allowed": [
+      { "id": "a-two-pending", "statement": "Both a juried pottery entry and an application to a local records office are waiting for an answer.", "sources": ["kiln-a:user", "job-a:user"] },
+      { "id": "a-show-reply", "statement": "The letter is about the three ash-glazed bowls entered in the juried show, whose results were due by post in autumn.", "sources": ["kiln-a:user", "kiln-b:user", "cued:input"] }
+    ],
+    "forbidden": [
+      { "id": "f-assume-job", "statement": "Taking the bare announcement to be about the records office post without checking.", "sources": ["job-a:user", "job-b:user"] },
+      { "id": "f-assume-show", "statement": "Taking the bare announcement to be about the pottery entry without checking.", "sources": ["kiln-a:user"] },
+      { "id": "f-retell", "statement": "Asking the person to explain from the beginning what they had applied or entered for.", "sources": [] },
+      { "id": "f-cued-job", "statement": "Connecting the letter on the doormat to the records office post despite the pottery context and the postal cue.", "sources": ["job-a:user"] },
+      { "id": "f-outcome", "statement": "Stating or implying whether the entry was accepted; the outcome has not been said.", "sources": [] }
+    ]
+  },
+  "topics": [],
+  "time": [],
+  "expectedBehavior": [
+    "Bare announcement: share the excitement and ask which one, naming both in a few words.",
+    "Cued announcement: recognise it as the show's answer and ask how it went, without inventing the outcome.",
+    "Never ask for the back story again."
+  ],
+  "failureSignals": [
+    "The old submission never reaches the Provider when the cue points at it.",
+    "The bare announcement is silently attributed to the most recent matter.",
+    "The cued announcement still triggers a clarification or is attributed to the job."
+  ],
+  "sourceEligibility": [
+    { "source": "kiln-a:user", "eligibility": "allowed", "reason": "Retained original expression; relevant earlier background is not limited to seven days." },
+    { "source": "kiln-b:user", "eligibility": "allowed", "reason": "Retained original expression; carries the 'by post in autumn' cue." },
+    { "source": "job-a:user", "eligibility": "allowed", "reason": "Recent and inside the default background." },
+    { "source": "job-b:user", "eligibility": "allowed", "reason": "Recent and inside the default background." }
+  ],
+  "criteria": [
+    { "id": "O-bare-commit", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The bare announcement streams and commits.", "check": { "type": "turn_committed", "step": "bare" } },
+    { "id": "O-bare-recent", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The recent pending matter reaches the Provider for the bare announcement.", "check": { "type": "outbound_includes", "step": "bare", "sources": ["job-a:user", "job-b:user"] } },
+    { "id": "O-bare-older", "kind": "objective", "modes": ["deterministic", "real-model"], "owner": "#317", "description": "The older pending matter also reaches the Provider, otherwise the ambiguity cannot even be seen.", "check": { "type": "outbound_includes", "step": "bare", "sources": ["kiln-a:user"] } },
+    { "id": "O-cued-older", "kind": "objective", "modes": ["deterministic", "real-model"], "owner": "#317", "description": "With a pottery and postal cue, the three-month-old submission reaches the Provider.", "check": { "type": "outbound_includes", "step": "cued", "sources": ["kiln-a:user", "kiln-b:user"] } },
+    { "id": "O-cued-context", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "What was said a moment earlier in the same conversation reaches the Provider.", "check": { "type": "outbound_includes_input", "step": "cued", "inputs": ["studio"] } },
+    { "id": "S-bare", "kind": "semantic", "owner": "#317", "description": "Without a cue: a light clarification that names both, no guess and no request to retell.", "step": "bare", "required": ["a-two-pending"], "forbidden": ["f-assume-job", "f-assume-show", "f-retell"] },
+    { "id": "S-cued", "kind": "semantic", "owner": "#317", "description": "With a cue: connected to the old submission, outcome not invented.", "step": "cued", "required": ["a-show-reply"], "forbidden": ["f-cued-job", "f-retell", "f-outcome"] }
+  ]
+}

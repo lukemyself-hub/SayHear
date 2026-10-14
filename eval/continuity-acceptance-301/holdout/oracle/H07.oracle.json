@@ -1,0 +1,60 @@
+{
+  "schemaVersion": "continuity-acceptance-oracle:v1",
+  "id": "H07",
+  "title": "H07 Holdout: an old home and a new one, a corrected moving date, and a plan that was called off",
+  "capability": "Holdout counterpart of the change-and-correction class. The person left a shared flat for a place of their own, explicitly corrected the moving date they had first given, and planned a get-together that they later called off. Asked about the present, SayHear keeps past and current apart, uses the corrected date and never the superseded one, and does not report a cancelled plan as something that happened.",
+  "spec": ["#301 R5", "#301 R7", "ADR-0152"],
+  "ownerTickets": ["#318"],
+  "language": "zh",
+  "fixture": { "version": "final-1", "sha256": "ba315566baf06305ffe16934fc54cbb89b2df93455b9ab92da083eced8dc8d0a" },
+  "facts": {
+    "allowed": [
+      { "id": "a-current-home", "statement": "The person now lives alone in a south-facing one-bedroom flat with a small balcony on the east side of the city, having left a three-person flat share in the old quarter.", "sources": ["lease:user", "first-week:user", "old-flat:user"] },
+      { "id": "a-september-home", "statement": "In early September the person was in the old-quarter flat share, three years in, sharing one bathroom among three and fed up with a neighbour's late-night gaming.", "sources": ["old-flat:user"] },
+      { "id": "a-party-cancelled", "statement": "The housewarming meal the person meant to cook was called off because of a sprained ankle from the stairs; the friends were told in their group chat.", "sources": ["party-plan:user", "party-cancel:user"] }
+    ],
+    "forbidden": [
+      { "id": "f-old-date", "statement": "Giving 7 November as the moving day, or presenting both dates as equally possible.", "sources": ["lease:user"] },
+      { "id": "f-still-old-home", "statement": "Saying the person currently lives in the old-quarter flat share.", "sources": ["old-flat:user"] },
+      { "id": "f-move-reason", "statement": "Supplying a reason for moving beyond what the person said, such as a rent rise, a falling-out or an eviction.", "sources": [] },
+      { "id": "f-party-happened", "statement": "Describing the housewarming as held, or asking how it went.", "sources": ["party-plan:user"] }
+    ]
+  },
+  "topics": [],
+  "time": [
+    { "id": "tm-move", "statement": "The moving day is 14 November 2026, as corrected by the person on 27 October.", "sources": ["date-fix:user"] }
+  ],
+  "expectedBehavior": [
+    "Name the current home and the corrected moving day, mentioning the former flat share only as the past.",
+    "Say the housewarming was planned and then called off, and why.",
+    "Do not surface the superseded date."
+  ],
+  "failureSignals": [
+    "The correction or the cancellation never reaches the Provider because both are older than seven days.",
+    "The superseded date is given.",
+    "The cancelled gathering is treated as having taken place."
+  ],
+  "sourceEligibility": [
+    { "source": "old-flat:user", "eligibility": "allowed", "reason": "Retained original expression of the earlier state." },
+    { "source": "lease:user", "eligibility": "allowed", "reason": "Retained original expression; its date was later corrected by the person in a separate message." },
+    { "source": "party-plan:user", "eligibility": "allowed", "reason": "Retained original expression of the plan." },
+    { "source": "date-fix:user", "eligibility": "allowed", "reason": "The person's own correction." },
+    { "source": "party-cancel:user", "eligibility": "allowed", "reason": "The person's own cancellation." },
+    { "source": "first-week:user", "eligibility": "allowed", "reason": "Retained original expression of the current state." }
+  ],
+  "criteria": [
+    { "id": "O-commit", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The first question streams and commits.", "check": { "type": "turn_committed", "step": "where" } },
+    { "id": "O-commit-party", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The second question streams and commits.", "check": { "type": "turn_committed", "step": "party" } },
+    { "id": "O-commit-september", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The third question streams and commits.", "check": { "type": "turn_committed", "step": "september" } },
+    { "id": "O-correction-source", "kind": "objective", "modes": ["real-model"], "owner": "#318", "description": "The signing and the person's later correction of the date both reach the Provider.", "check": { "type": "outbound_includes", "step": "where", "sources": ["lease:user", "date-fix:user"] } },
+    { "id": "O-cancel-source", "kind": "objective", "modes": ["real-model"], "owner": "#318", "description": "The plan and its cancellation both reach the Provider.", "check": { "type": "outbound_includes", "step": "party", "sources": ["party-plan:user", "party-cancel:user"] } },
+    { "id": "O-timeline-source", "kind": "objective", "modes": ["real-model"], "owner": "#318", "description": "The earlier state and the current one both reach the Provider.", "check": { "type": "outbound_includes", "step": "september", "sources": ["old-flat:user", "first-week:user"] } },
+    { "id": "O-where-deadline", "kind": "objective", "modes": ["real-model"], "owner": "#319", "description": "Response-time contract for the first question.", "check": { "type": "deadline", "step": "where", "firstVisibleTextMaxMs": 3000, "completeMaxMs": 10000 } },
+    { "id": "O-party-deadline", "kind": "objective", "modes": ["real-model"], "owner": "#319", "description": "Response-time contract for the second question.", "check": { "type": "deadline", "step": "party", "firstVisibleTextMaxMs": 3000, "completeMaxMs": 10000 } },
+    { "id": "O-september-deadline", "kind": "objective", "modes": ["real-model"], "owner": "#319", "description": "Response-time contract for the third question.", "check": { "type": "deadline", "step": "september", "firstVisibleTextMaxMs": 3000, "completeMaxMs": 10000 } },
+    { "id": "S-current", "kind": "semantic", "owner": "#318", "description": "The present state uses the corrected date and the current home.", "step": "where", "required": ["a-current-home", "tm-move"], "forbidden": ["f-old-date", "f-still-old-home"] },
+    { "id": "S-plan", "kind": "semantic", "owner": "#318", "description": "A cancelled plan is reported as cancelled.", "step": "party", "required": ["a-party-cancelled"], "forbidden": ["f-party-happened"] },
+    { "id": "S-timeline", "kind": "semantic", "owner": "#318", "description": "Then and now are each told correctly and kept apart.", "step": "september", "required": ["a-september-home", "a-current-home"], "forbidden": ["f-still-old-home", "f-move-reason"] },
+    { "id": "P-stance", "kind": "subjective", "owner": "#318", "description": "The comparison is given without passing judgement on the move.", "step": "september", "required": ["a-current-home"], "forbidden": ["f-move-reason"] }
+  ]
+}

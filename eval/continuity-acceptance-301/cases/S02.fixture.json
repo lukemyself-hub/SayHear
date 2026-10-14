@@ -1,0 +1,36 @@
+{
+  "schemaVersion": "continuity-acceptance-fixture:v1",
+  "id": "S02",
+  "fixtureVersion": "dev-1",
+  "stage": "development",
+  "languageVariant": "en",
+  "defaults": { "locale": "en-US", "timezone": "America/New_York" },
+  "history": [
+    {
+      "key": "brother",
+      "at": "2026-09-11T23:40:00.000Z",
+      "user": "My brother Tomas told me last night that the tremor in his hand has a name now. He asked me not to tell our parents yet.",
+      "assistant": "That is a lot to be handed and then asked to hold quietly."
+    },
+    {
+      "key": "garden",
+      "at": "2026-09-13T15:10:00.000Z",
+      "user": "Spent the morning pulling up the last of the tomato plants. The soil smelled like autumn already.",
+      "assistant": "The end of the tomatoes always seems to arrive a week before you are ready for it."
+    }
+  ],
+  "steps": [
+    {
+      "id": "forget",
+      "type": "say",
+      "at": "2026-09-14T14:00:00.000Z",
+      "text": "Please forget what I told you about my brother's health. It was not mine to share."
+    },
+    {
+      "id": "plain",
+      "type": "say",
+      "at": "2026-09-14T14:03:00.000Z",
+      "text": "Anyway. It rained all night here and the gutters are overflowing."
+    }
+  ]
+}

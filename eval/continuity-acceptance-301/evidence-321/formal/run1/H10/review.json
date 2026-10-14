@@ -1,0 +1,47 @@
+{
+  "caseId": "H10",
+  "findings": [
+    {
+      "criterionId": "S-supplement",
+      "itemId": "a-companions",
+      "quote": "Marek from work and his daughter Zofia rode with you",
+      "reason": "Both companions are named.",
+      "verdict": "pass"
+    },
+    {
+      "criterionId": "S-supplement",
+      "itemId": "f-whole-ride",
+      "reason": "The second day is not retold.",
+      "verdict": "pass"
+    },
+    {
+      "criterionId": "S-supplement",
+      "itemId": "f-technical-talk",
+      "reason": "No system vocabulary.",
+      "verdict": "pass"
+    },
+    {
+      "criterionId": "S-switch",
+      "itemId": "a-repair-today",
+      "quote": "So it's the clutch",
+      "reason": "Stays with the repair decision.",
+      "verdict": "pass"
+    },
+    {
+      "criterionId": "S-switch",
+      "itemId": "f-stale-continuation",
+      "reason": "The abandoned answer is not continued.",
+      "verdict": "pass"
+    },
+    {
+      "criterionId": "S-switch",
+      "itemId": "f-technical-talk",
+      "reason": "No system vocabulary.",
+      "verdict": "pass"
+    }
+  ],
+  "reviewer": "agent:claude-opus-5.5-t08",
+  "rubricVersion": "continuity-rubric:v1",
+  "runId": "run-d79d2fd2-011d-4cb3-bd91-59da9e329169",
+  "schemaVersion": "continuity-acceptance-review:v1"
+}

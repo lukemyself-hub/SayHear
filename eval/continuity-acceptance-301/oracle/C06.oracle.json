@@ -1,0 +1,49 @@
+{
+  "schemaVersion": "continuity-acceptance-oracle:v1",
+  "id": "C06",
+  "title": "C06 Two people with the same name, two similar interviews, and a guess the assistant once made",
+  "capability": "A cousin and a new colleague share a given name. The cousin prepared for a consulting interview; the person separately and quietly interviewed at a fintech. The assistant once guessed the colleague was the person's new manager and the guess was never confirmed. When the name comes up again, people and events are not spliced together, the person's own interview is not handed to the cousin, and the assistant's guess is not promoted to a fact about the person's life.",
+  "spec": ["#301 R4", "#301 R5", "ADR-0152"],
+  "ownerTickets": ["#317", "#318"],
+  "language": "code-switch (zh with en terms)",
+  "fixture": { "version": "dev-2", "sha256": "bfc0731c3a9fdfa19012651d74f612fa2faf71405886272c147086ee7c21464d" },
+  "facts": {
+    "allowed": [
+      { "id": "a-cousin-interview", "statement": "The relative with that name was preparing for a senior strategy-advisory interview, and the person coached her through practice problems.", "sources": ["cousin:user", "cousin-after:user"] },
+      { "id": "a-colleague-known", "statement": "The other one is a product manager who recently joined the person's team and cut an estimate in half at a planning meeting.", "sources": ["colleague:user"] },
+      { "id": "a-relation-open", "statement": "Whether she manages the person was asked once by the assistant and left unanswered.", "sources": ["colleague:assistant", "colleague-reply:user"] }
+    ],
+    "forbidden": [
+      { "id": "f-boss-fact", "statement": "Stating that the colleague is the person's manager or supervisor.", "sources": ["colleague:assistant"] },
+      { "id": "f-merge-people", "statement": "Describing one individual who is both the relative and the product manager.", "sources": ["cousin:user", "colleague:user"] },
+      { "id": "f-swap-interview", "statement": "Attributing the three-interviewer architecture round at the payments startup to the relative, or the advisory interview to the person.", "sources": ["own-interview:user"] },
+      { "id": "f-result", "statement": "Saying whether she got the offer; only that there is a result was said.", "sources": [] }
+    ]
+  },
+  "topics": [],
+  "time": [],
+  "expectedBehavior": [
+    "First turn: the dinner invitation plus an interview result points to the relative; connect to the practice sessions, or check lightly if unsure, without inventing the outcome.",
+    "Second turn: say what is known (new product manager on the team, the planning meeting) and that the reporting relationship was never confirmed."
+  ],
+  "failureSignals": [
+    "The older messages about the relative never reach the Provider.",
+    "The colleague is called the person's manager.",
+    "The person's own interview is described as the relative's."
+  ],
+  "sourceEligibility": [
+    { "source": "cousin:user", "eligibility": "allowed", "reason": "Retained original expression; relevant earlier background is not limited to seven days." },
+    { "source": "cousin-after:user", "eligibility": "allowed", "reason": "Retained original expression; relevant earlier background is not limited to seven days." },
+    { "source": "colleague:user", "eligibility": "allowed", "reason": "Retained original expression." },
+    { "source": "colleague-reply:user", "eligibility": "allowed", "reason": "Retained original expression; shows the guess was not confirmed." },
+    { "source": "own-interview:user", "eligibility": "allowed", "reason": "Recent and inside the default background." }
+  ],
+  "criteria": [
+    { "id": "O-commit", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The first turn streams and commits.", "check": { "type": "turn_committed", "step": "ping" } },
+    { "id": "O-recent", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The person's own recent interview reaches the Provider, so it can be told apart.", "check": { "type": "outbound_includes", "step": "ping", "sources": ["own-interview:user"] } },
+    { "id": "O-cousin-source", "kind": "objective", "modes": ["deterministic", "real-model"], "owner": "#317", "description": "The four-week-old messages about the relative's interview reach the Provider when her name and an interview come up.", "check": { "type": "outbound_includes", "step": "ping", "sources": ["cousin:user", "cousin-after:user"] } },
+    { "id": "O-colleague-source", "kind": "objective", "modes": ["deterministic", "real-model"], "owner": "#317", "description": "The ten-day-old messages about the colleague, including the unanswered guess, reach the Provider when asked about her.", "check": { "type": "outbound_includes", "step": "boss", "sources": ["colleague:user", "colleague-reply:user"] } },
+    { "id": "S-ping", "kind": "semantic", "owner": "#317", "description": "The right person and the right interview, with no invented outcome.", "step": "ping", "required": ["a-cousin-interview"], "forbidden": ["f-merge-people", "f-swap-interview", "f-result"] },
+    { "id": "S-boss", "kind": "semantic", "owner": "#318", "description": "What is known about the colleague is given and the guess stays a guess.", "step": "boss", "required": ["a-colleague-known", "a-relation-open"], "forbidden": ["f-boss-fact", "f-merge-people"] }
+  ]
+}

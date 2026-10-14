@@ -18,10 +18,13 @@
 import {
   ONE_A_3B_G1_ENABLED_ROLES,
   ONE_A_3B_ROLE_POLICIES,
+  HISTORY_RECALL_CONVERSATION_HARNESS_POLICY,
+  HISTORY_RECALL_DEFAULT_POLICY,
   RECENT_CONTEXT_COMPILER_VERSION,
   RECENT_CONTEXT_DEFAULT_POLICY,
   RECENT_CONTEXT_SELECTION_POLICY_VERSION,
   sha256Hex,
+  type HistoryRecallGovernanceEffectiveState,
   type RecentContextGovernanceEffectiveState,
 } from "@sayhear/application";
 
@@ -30,7 +33,10 @@ import {
   buildHostedReleaseIdentity,
   normalizeDatabaseIdentity,
 } from "./release-identity";
-import { loadRuntimeConfiguration } from "./runtime-config";
+import {
+  CONVERSATION_REQUEST_MAX_MS,
+  loadRuntimeConfiguration,
+} from "./runtime-config";
 
 export const EFFECTIVE_RUNTIME_CONFIG_VERSION =
   "1a3b-g1-effective-runtime-config:v1";
@@ -103,6 +109,8 @@ export function buildEffectiveRuntimeConfiguration(
      * probe as equal.
      */
     recentContextGovernance?: RecentContextGovernanceEffectiveState | null;
+    /** #320: content-free history-recall governance snapshot; null = unverified. */
+    historyRecallGovernance?: HistoryRecallGovernanceEffectiveState | null;
   } = {},
 ): EffectiveRuntimeConfigurationSnapshot {
   const runtime = loadRuntimeConfiguration(environment);
@@ -289,6 +297,7 @@ export function buildEffectiveRuntimeConfiguration(
     ["switch.journal_publish_enabled", runtime.writeSwitches.journalPublishEnabled],
     ["switch.episode_build_enabled", runtime.writeSwitches.episodeBuildEnabled],
     ["switch.reflection_enabled", runtime.writeSwitches.reflectionEnabled],
+    ["switch.history_recall_enabled", runtime.writeSwitches.historyRecallEnabled],
   ] as const) {
     add({
       category: "roles-switches",
@@ -408,6 +417,34 @@ export function buildEffectiveRuntimeConfiguration(
     key: "parameters.recent_context.read_timeout_ms",
     source: policySource,
     value: governanceMatchesRuntime ? activeGovernance.readTimeoutMs : null,
+  });
+
+  // History-recall governance (#320): the deployment switch alone does not
+  // enable the path; an active immutable governance version that names the
+  // budget identity wired here must also exist.
+  const historyGovernance = options.historyRecallGovernance ?? null;
+  const activeHistoryGovernance = historyGovernance?.active ?? null;
+  const historyGovernanceMatches =
+    activeHistoryGovernance !== null &&
+    activeHistoryGovernance.historyPolicyVersion ===
+      HISTORY_RECALL_DEFAULT_POLICY.version &&
+    activeHistoryGovernance.harnessPolicyVersion ===
+      HISTORY_RECALL_CONVERSATION_HARNESS_POLICY.version;
+  add({
+    category: "roles-switches",
+    critical: false,
+    inManifestFingerprint: false,
+    key: "switch.history_recall_governance_enabled",
+    source: historyGovernance ? "override" : "unverified",
+    value: historyGovernance ? historyGovernanceMatches : null,
+  });
+  add({
+    category: "prompt-schema-policy",
+    critical: false,
+    inManifestFingerprint: false,
+    key: "policy.history_recall_governance_version",
+    source: historyGovernanceMatches ? "override" : "unverified",
+    value: historyGovernanceMatches ? activeHistoryGovernance.policyVersion : null,
   });
 
   // Runtime / hosted identity.
@@ -664,6 +701,26 @@ export function buildEffectiveRuntimeConfiguration(
     value: runtime.provider.timeoutMs,
     defaultValue: PROVIDER_DEFAULT_TIMEOUT_MS,
   });
+  // Issue #319: the chat path's own budget and Provider timeout, separate from
+  // the background roles' shared deadline above (ADR-0152: 60 s stop).
+  add({
+    category: "deadline-budgets",
+    critical: true,
+    inManifestFingerprint: false,
+    key: "deadline.conversation_request_ms",
+    source: overrideSource(environment, "SAYHEAR_CONVERSATION_REQUEST_BUDGET_MS"),
+    value: runtime.conversationRequest.budgetMs,
+    defaultValue: CONVERSATION_REQUEST_MAX_MS,
+  });
+  add({
+    category: "deadline-budgets",
+    critical: true,
+    inManifestFingerprint: false,
+    key: "deadline.conversation_provider_ms",
+    source: overrideSource(environment, "SAYHEAR_CONVERSATION_PROVIDER_TIMEOUT_MS"),
+    value: runtime.conversationRequest.providerTimeoutMs,
+    defaultValue: CONVERSATION_REQUEST_MAX_MS,
+  });
   for (const key of [
     "deadline.gateway_limit_ms",
     "deadline.workflow_step_budget_ms",
@@ -734,6 +791,7 @@ export type EffectiveRuntimeConfigHandlerDependencies = Readonly<{
    * instead of guessing; it never fails the whole report.
    */
   loadRecentContextGovernance?: () => Promise<RecentContextGovernanceEffectiveState | null>;
+  loadHistoryRecallGovernance?: () => Promise<HistoryRecallGovernanceEffectiveState | null>;
 }>;
 
 /**
@@ -764,9 +822,20 @@ export async function handleEffectiveRuntimeConfigRequest(
         recentContextGovernance = null;
       }
     }
+    let historyRecallGovernance: HistoryRecallGovernanceEffectiveState | null =
+      null;
+    if (dependencies.loadHistoryRecallGovernance) {
+      try {
+        historyRecallGovernance =
+          await dependencies.loadHistoryRecallGovernance();
+      } catch {
+        historyRecallGovernance = null;
+      }
+    }
     return Response.json(
       buildEffectiveRuntimeConfiguration(dependencies.environment, {
         ...(dependencies.now ? { now: dependencies.now } : {}),
+        historyRecallGovernance,
         recentContextGovernance,
       }),
       { headers: { "Cache-Control": "no-store" } },

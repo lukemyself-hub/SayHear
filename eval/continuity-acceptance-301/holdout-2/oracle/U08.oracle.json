@@ -1,0 +1,161 @@
+{
+  "schemaVersion": "continuity-acceptance-oracle:v1",
+  "id": "U08",
+  "title": "U08 Unseen: an earlier remark gives meaning to a present feeling the person cannot explain",
+  "capability": "Second, unseen counterpart of the history-for-meaning class. A month ago, after clearing a late parent's room, the person said that what they dread is not noise but a home with no sound in it. Today a long stretch of building noise ends, everyone else is relieved, and the person feels hollow without knowing why. History is used to understand the present feeling: the earlier remark is the relevant meaning, the unrelated trip is not. The reply does not slide into advice, does not tell the person they ought to enjoy the quiet, and does not turn one feeling into a fixed description of who they are.",
+  "spec": [
+    "#301 R6",
+    "#301 R8",
+    "ADR-0108",
+    "ADR-0110",
+    "ADR-0152"
+  ],
+  "ownerTickets": [
+    "#318"
+  ],
+  "language": "zh",
+  "fixture": {
+    "version": "final-2",
+    "sha256": "167f19ae58e40479bbf549523eb316029a4f21149889f2f1d08366f095b99b65"
+  },
+  "facts": {
+    "allowed": [
+      {
+        "id": "a-quiet-meaning",
+        "statement": "The person earlier said that it is not noise they fear but a home without any sound, because a little sound makes it feel as though someone is still there; this was after removing their late father's television.",
+        "sources": [
+          "quiet-a:user",
+          "quiet-b:user"
+        ]
+      },
+      {
+        "id": "a-empty-now",
+        "statement": "Now that the building work overhead has stopped and the neighbours are glad of the calm, the person sits alone feeling hollow and cannot say why.",
+        "sources": [
+          "finish:input"
+        ]
+      }
+    ],
+    "forbidden": [
+      {
+        "id": "f-advice",
+        "statement": "Recommending a course of action such as putting on music or a radio, getting a pet, going out or calling someone.",
+        "sources": []
+      },
+      {
+        "id": "f-fixed-trait",
+        "statement": "Declaring a permanent trait or a condition, such as that the person cannot be alone or has not got over the loss.",
+        "sources": []
+      },
+      {
+        "id": "f-trip",
+        "statement": "Bringing up the walled town, the sunburn or the delayed train.",
+        "sources": [
+          "trip:user"
+        ]
+      },
+      {
+        "id": "f-cheerlead",
+        "statement": "Telling the person that calm is a good thing or that they ought to enjoy it.",
+        "sources": []
+      }
+    ]
+  },
+  "topics": [],
+  "time": [],
+  "expectedBehavior": [
+    "Meet the hollow feeling first, in the person's own terms.",
+    "Connect it, gently, to what they said about a home with no sound and about their father.",
+    "No advice, no label, no instruction to feel otherwise."
+  ],
+  "failureSignals": [
+    "The month-old remark never reaches the Provider, so the reply can only be generic.",
+    "The reply turns to suggestions for filling the silence.",
+    "The unrelated trip is brought in."
+  ],
+  "sourceEligibility": [
+    {
+      "source": "quiet-a:user",
+      "eligibility": "allowed",
+      "reason": "Retained original expression; the setting of the remark."
+    },
+    {
+      "source": "quiet-b:user",
+      "eligibility": "allowed",
+      "reason": "Retained original expression; the remark itself."
+    }
+  ],
+  "criteria": [
+    {
+      "id": "O-commit",
+      "kind": "objective",
+      "modes": [
+        "deterministic",
+        "real-model"
+      ],
+      "description": "The turn streams and commits.",
+      "check": {
+        "type": "turn_committed",
+        "step": "finish"
+      }
+    },
+    {
+      "id": "O-meaning-source",
+      "kind": "objective",
+      "modes": [
+        "real-model"
+      ],
+      "owner": "#318",
+      "description": "The month-old remark and its setting reach the Provider.",
+      "check": {
+        "type": "outbound_includes",
+        "step": "finish",
+        "sources": [
+          "quiet-a:user",
+          "quiet-b:user"
+        ]
+      }
+    },
+    {
+      "id": "O-no-action",
+      "kind": "objective",
+      "modes": [
+        "real-model"
+      ],
+      "description": "Sharing a feeling triggers no Trust Action.",
+      "check": {
+        "type": "no_action",
+        "step": "finish"
+      }
+    },
+    {
+      "id": "S-meaning",
+      "kind": "semantic",
+      "owner": "#318",
+      "description": "The present feeling is met and connected to what the person said about silence at home.",
+      "step": "finish",
+      "required": [
+        "a-empty-now",
+        "a-quiet-meaning"
+      ],
+      "forbidden": [
+        "f-trip"
+      ]
+    },
+    {
+      "id": "P-stance",
+      "kind": "subjective",
+      "owner": "#318",
+      "description": "Empathy without advice, labelling or cheerleading.",
+      "step": "finish",
+      "required": [
+        "a-empty-now"
+      ],
+      "forbidden": [
+        "f-advice",
+        "f-fixed-trait",
+        "f-cheerlead"
+      ]
+    }
+  ]
+}

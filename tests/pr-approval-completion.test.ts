@@ -16,7 +16,7 @@ const initial: CompletionRecord = {
   identity: { repositoryId: SAYHEAR_REPOSITORY_ID, pullRequestNumber: 339, pullRequestNodeId: "PR_339", headSha: head,
     approvedBaseSha: base, requirementDigest: requirement, baseRepositoryId: SAYHEAR_REPOSITORY_ID, baseRef: "main",
     botActorId: 999, reviewId: 9, appId: 123, policyVersion: PR_REVIEW_GATE_POLICY_VERSION,
-    issueNumbers: [337] },
+    issueNumbers: [337], humanChannel: "app", humanReviewId: 9, epoch: null },
 };
 class MemoryStore implements CompletionStore {
   value: CompletionRecord = initial;
@@ -235,6 +235,10 @@ describe("trusted completion readback", () => {
   it("rejects a real reviewer mismatch and later request changes", async () => {
     await expect(confirmCompletionMerge(apiFor(mergedPull, [{ ...approval, user: { id: 123 } }]), initial.identity)).rejects.toThrow("reviewer_mismatch");
     await expect(confirmCompletionMerge(apiFor(mergedPull, [approval, { ...approval, id: 10, state: "CHANGES_REQUESTED" }]), initial.identity)).rejects.toThrow("reviewer_mismatch");
+  });
+  it("refuses Issue completion for an approval that deferred pre-merge checks", async () => {
+    const deferred = { ...approval, body: approval.body.replace("outcome=approve -->", "outcome=approve_deferred -->") };
+    await expect(confirmCompletionMerge(apiFor(mergedPull, [deferred]), initial.identity)).rejects.toThrow("reviewer_mismatch");
   });
   it.each([{ state: "closed" }, { merged: true }, { ...mergedPull, merge_commit_sha: null }, { ...mergedPull, state: "open" }])("incomplete or contradictory response remains retryable", async (pull) => {
     await expect(confirmCompletionMerge(apiFor(pull, [approval]), initial.identity)).rejects.toBeInstanceOf(CompletionUnavailable);

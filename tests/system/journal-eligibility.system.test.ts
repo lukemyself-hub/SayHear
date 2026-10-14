@@ -216,6 +216,7 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
         internal_diagnostic_access_grants,
         provider_egress_consents,
         provider_egress_dispositions,
+        history_recall_results,
         compiled_context_revision_refs,
         compiled_contexts,
         model_run_attempts,

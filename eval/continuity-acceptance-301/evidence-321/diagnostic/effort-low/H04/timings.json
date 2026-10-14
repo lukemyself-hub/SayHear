@@ -1,0 +1,17 @@
+[
+  {
+    "appState": "warm",
+    "caseId": "H04",
+    "committedMs": null,
+    "firstVisibleTextMs": null,
+    "kind": "ordinary",
+    "liveRequests": 1,
+    "outcome": "response_failed",
+    "outputTokens": 212,
+    "reasoningTokens": 132,
+    "runId": "run-98df0b73-aad8-42f1-a7f0-b2a00a782802",
+    "stepId": "ask",
+    "streamClosedMs": 2503.983749999985,
+    "withinContract": false
+  }
+]

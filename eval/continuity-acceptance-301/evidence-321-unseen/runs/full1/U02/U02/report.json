@@ -1,0 +1,497 @@
+{
+  "budget": {
+    "blockers": [],
+    "capUsdMicros": 10000000,
+    "estimatedCostUsdMicros": 345600,
+    "inputTokenUpperBound": 288000,
+    "mode": "real-model",
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "outputTokenUpperBound": 216000,
+    "paidRequestUpperBound": 18,
+    "remainingUsdMicros": 3030546,
+    "requestsPerStepUpperBound": 4,
+    "shape": {
+      "generationSteps": 4,
+      "scheduledScans": 1,
+      "seedTurns": 3
+    },
+    "status": "ready",
+    "unknownCostEntries": 0,
+    "waivedPreconditions": [
+      {
+        "by": "Luke",
+        "date": "2026-10-11",
+        "statement": "Relayed to the T08 agent by the coordinating agent as Luke's words: \"#307 的遗留问题,应当在 T01–T07 开发期间解决了(包括耗时问题和回忆历史消息等),因此 T08 可以正常启动\" and \"授权 T08 调用 OpenCode Go 跑真实 DeepSeek V4.1 Flash 模型\". This is a decision to proceed. It is not a record that the #307 online acceptance was completed: #307 was closed with its online acceptance not passed.",
+        "id": "issue-307-online-acceptance"
+      }
+    ]
+  },
+  "case": {
+    "caseId": "U02",
+    "criteria": [
+      {
+        "description": "Seeded history is read back verbatim through the normal history API.",
+        "evidence": [],
+        "id": "INV-seed-readback",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "All 3 seeded turns are present exactly once.",
+        "status": "pass"
+      },
+      {
+        "description": "No oracle text, scenario title or expected answer appears in any Provider request.",
+        "evidence": [],
+        "id": "INV-oracle-not-in-outbound",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "Scanned 777 outbound strings; none carries oracle text.",
+        "status": "pass"
+      },
+      {
+        "description": "Authoritative history contains every message exactly once.",
+        "evidence": [],
+        "id": "INV-no-duplicate-messages",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "14 messages, no duplicates.",
+        "status": "pass"
+      },
+      {
+        "description": "The first question streams and commits.",
+        "evidence": [
+          "steps[said].chat.httpStatus=200",
+          "steps[said].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-commit",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "The second question streams and commits.",
+        "evidence": [
+          "steps[happened].chat.httpStatus=200",
+          "steps[happened].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-commit-happened",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "The third question streams and commits.",
+        "evidence": [
+          "steps[when].chat.httpStatus=200",
+          "steps[when].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-commit-when",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "The fourth question streams and commits.",
+        "evidence": [
+          "steps[springs-when].chat.httpStatus=200",
+          "steps[springs-when].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-commit-springs-when",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "All three of yesterday's messages reach the Provider for the question about what happened.",
+        "evidence": [
+          "springs:user: providerRequest=present, inspector.referencedEvents=present",
+          "latch:user: providerRequest=present, inspector.referencedEvents=present",
+          "coach:user: providerRequest=present, inspector.referencedEvents=present"
+        ],
+        "id": "O-sources",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Every required source reached the Provider and is recorded by the Inspector.",
+        "status": "pass"
+      },
+      {
+        "description": "The messages are filed under the day they were said.",
+        "evidence": [
+          "seed.turns[springs] -> session 01a11283-f400-71b6-b965-2876b85530f7 logicalDate 2026-10-06 (expected 2026-10-06)",
+          "seed.turns[coach] -> session 01a11283-f400-71b6-b965-2876b85530f7 logicalDate 2026-10-06 (expected 2026-10-06)"
+        ],
+        "id": "O-ownership",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Every message is owned by the expected Daily Session date.",
+        "status": "pass"
+      },
+      {
+        "description": "What was talked about yesterday: three subjects, none presented as yesterday's event unless it was.",
+        "evidence": [],
+        "id": "S-said",
+        "kind": "semantic",
+        "owner": null,
+        "reason": "No independent review was supplied for this answer.",
+        "status": "needs-review"
+      },
+      {
+        "description": "What the person did yesterday: the repair, with the drive placed on its own day.",
+        "evidence": [],
+        "id": "S-happened",
+        "kind": "semantic",
+        "owner": null,
+        "reason": "No independent review was supplied for this answer.",
+        "status": "needs-review"
+      },
+      {
+        "description": "The undated meeting stays undated.",
+        "evidence": [],
+        "id": "S-when",
+        "kind": "semantic",
+        "owner": null,
+        "reason": "No independent review was supplied for this answer.",
+        "status": "needs-review"
+      },
+      {
+        "description": "A relative day inside an old message is resolved from when it was said.",
+        "evidence": [],
+        "id": "S-springs-when",
+        "kind": "semantic",
+        "owner": "#307",
+        "reason": "No independent review was supplied for this answer.",
+        "status": "needs-review"
+      }
+    ],
+    "mode": "real-model",
+    "pipelineOnly": [],
+    "reviewer": null,
+    "runId": "run-415b55b5-9ffd-4043-b46a-42ea11872c06",
+    "status": "needs-review"
+  },
+  "diagnosis": [
+    {
+      "diagnosis": {
+        "disagreements": [],
+        "payloadReadStatus": "partial",
+        "readState": "partial",
+        "sources": [
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: present",
+              "provider payload: earlier-messages entry 1",
+              "day of entry 1: 2026-10-06 (expected 2026-10-06)",
+              "semantic review: none yet; the source reached the model intact, its use is not judged"
+            ],
+            "fault": "undetermined",
+            "source": "springs:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-7",
+              "requestSequence": 7
+            }
+          },
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: present",
+              "provider payload: earlier-messages entry 3",
+              "day of entry 3: 2026-10-06 (expected 2026-10-06)",
+              "semantic review: none yet; the source reached the model intact, its use is not judged"
+            ],
+            "fault": "undetermined",
+            "source": "latch:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-7",
+              "requestSequence": 7
+            }
+          },
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: present",
+              "provider payload: earlier-messages entry 5",
+              "day of entry 5: 2026-10-06 (expected 2026-10-06)",
+              "semantic review: none yet; the source reached the model intact, its use is not judged"
+            ],
+            "fault": "undetermined",
+            "source": "coach:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-7",
+              "requestSequence": 7
+            }
+          }
+        ]
+      },
+      "stepId": "happened"
+    }
+  ],
+  "identity": {
+    "fixtureSha256": "ce1a8a38e8c130771a8815ca259ab16222a011e92946f463214c904789bd2d38",
+    "fixtureVersion": "final-2",
+    "gitCommit": "b48f2fb03614b8f6a485a000c6efcda9e85f625d",
+    "gitDirty": true,
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "historyRecallGovernance": "active",
+    "recentContextGovernance": "active",
+    "runId": "run-415b55b5-9ffd-4043-b46a-42ea11872c06",
+    "oracleSha256": "7e95628764a98c082e82803f3f924953a464922c4a4dcc084c20a8de2e3cd39e",
+    "title": "U02 Unseen: what was said yesterday versus what took place yesterday"
+  },
+  "remainingRisks": [
+    "The working tree had uncommitted changes; the commit alone does not identify the code that ran.",
+    "Timings are CLI network observations, not browser rendering times (T08 #321 covers the browser)."
+  ],
+  "reproducibilityDigest": "5e75460d39db05834123d0f7b5451472c316d3a76a3fe88e95607badeb88162f",
+  "schemaVersion": "continuity-acceptance-report:v1",
+  "sourceManifest": [
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "springs:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "springs:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "latch:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "latch:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "coach:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "coach:assistant"
+        }
+      ],
+      "stepId": "said"
+    },
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "springs:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "springs:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "latch:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "latch:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "coach:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "coach:assistant"
+        }
+      ],
+      "stepId": "happened"
+    },
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "springs:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "springs:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "latch:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "latch:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "coach:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "coach:assistant"
+        }
+      ],
+      "stepId": "when"
+    },
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "springs:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "springs:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "latch:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "latch:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "coach:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "coach:assistant"
+        }
+      ],
+      "stepId": "springs-when"
+    }
+  ],
+  "timings": [
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 41.655459000000064,
+      "cliCommittedMs": 5379.825167,
+      "cliFirstVisibleTextMs": 4233.3535,
+      "cliStreamClosedMs": 5379.966084000001,
+      "providerLatencyMs": 0,
+      "stepId": "said"
+    },
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 20.185041999999157,
+      "cliCommittedMs": 18246.829375,
+      "cliFirstVisibleTextMs": 17579.90425,
+      "cliStreamClosedMs": 18246.943208999997,
+      "providerLatencyMs": 0,
+      "stepId": "happened"
+    },
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 16.929167000002053,
+      "cliCommittedMs": 2626.672042000002,
+      "cliFirstVisibleTextMs": 2347.760459000001,
+      "cliStreamClosedMs": 2626.7378750000025,
+      "providerLatencyMs": 0,
+      "stepId": "when"
+    },
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 18.208083999998053,
+      "cliCommittedMs": 1952.7452919999996,
+      "cliFirstVisibleTextMs": 1675.7730420000007,
+      "cliStreamClosedMs": 1952.8318750000035,
+      "providerLatencyMs": 0,
+      "stepId": "springs-when"
+    }
+  ],
+  "transcript": [
+    {
+      "assistant": "Three things, all from yesterday.\n\nYour dad and the drive up to Glenwood — he insisted he could manage the steps down to the big pool himself, then held your elbow the whole way, and neither of you said anything about it.\n\nThe side gate. You fixed the latch before work, packed the rotted screw holes with matchsticks and wood glue the way your grandfather used to, and now it closes with a click.\n\nAnd Mrs Halvorsen, who coached you at the pool when you were a kid. You ran into her at the farmers' market — she uses a cane now, and she spent ten minutes on your ninth grade relay team.",
+      "at": "2026-10-07T18:20:00.000Z",
+      "stepId": "said",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "What were the things I told you about yesterday?"
+    },
+    {
+      "assistant": "The only one that actually lands on yesterday is the gate. You told me on Tuesday that you'd fixed the latch that morning before work — so that was yesterday morning. The Glenwood drive isn't yesterday: you said it was the day before you told me, so that's Sunday. And Mrs Halvorsen you only ever placed \"a while back,\" no day at all. That's the whole of what I have, and it's only what you said to me — there's a lot of yesterday in there that I don't know about.",
+      "at": "2026-10-07T18:22:00.000Z",
+      "stepId": "happened",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "And what did I actually do yesterday, on the day itself?"
+    },
+    {
+      "assistant": "You didn't say. All you gave me was \"a while back\" — no day, no month. I don't have anything more specific than that.",
+      "at": "2026-10-07T18:24:00.000Z",
+      "stepId": "when",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "Which day was it that I ran into Mrs Halvorsen?"
+    },
+    {
+      "assistant": "Sunday, October 4th. You wrote to me on Tuesday and said \"the day before yesterday,\" which puts the drive on Sunday. Same with the pool — that's the day itself, not a guess.",
+      "at": "2026-10-07T18:26:00.000Z",
+      "stepId": "springs-when",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "And the hot springs, what date was that?"
+    }
+  ],
+  "usage": {
+    "inputTokens": 18606,
+    "outputTokens": 2879,
+    "paidCostUsdMicros": null,
+    "providerRequests": 5
+  }
+}

@@ -80,6 +80,30 @@ _Avoid_: Technical retry, Action execution, Second tool round
 Conversation Decision 的主回应已经完成、当前 Event 的 DialogueState 已就绪且确定性门禁选中 target 后，创建的可选 GenerationCommand；它只根据冻结的主回应、target 与 framing 生成一个隔离的 Proactive Memory Follow-up 片段，不能调用工具、改写主回应或产生独立 Assistant Event。
 _Avoid_: Conversation Decision Command, Action Finalization Command, Background message
 
+**History Query Proposal**:
+Conversation Decision 可以提出的第三种互斥结果：一个受控只读历史查询提案，只描述查询意图、时间依据、来源范围和本地日期范围。时间依据（`time_basis`）有两种：`expressed_date`（消息何时写下，默认）与 `experienced_date`（事情何时发生；经历时间没有有来源的存储，这类查询只能把“说过的话”当线索，结果恒为 partial，不得宣称完整或“没发生”）。检索形态的提案还可带 `continuation_basis`（`current_input`、`adjacent_user`、`dialogue_state` 中至少一项），表示这次查找不是用户在问过去，而是当前表达需要较早背景，并声明线索取自哪些信号；依据无效则不查询，退化为普通回复。它不是 Conversation Action，不改变任何状态；日期/时区解析、owner 与权限核验、读取和资格检查都由确定性代码完成，模型不能提供 SQL、owner、游标或第二次查询。
+_Avoid_: Conversation Action, Search tool, Agent query loop
+
+**History Recall Result**:
+一次历史查询的冻结结果：确定性计划、读取状态（completed、partial、failed）、内容无关的覆盖统计（枚举覆盖与实际注入覆盖分开）和有序的 revision 引用，不含消息正文。零条命中不自动等于该日没有记录。
+_Avoid_: Cached search result, Memory, Summary
+
+**History Answer Command**:
+Decision 以历史查询提案结束并冻结 History Recall Result 后创建的独立第二阶段 GenerationCommand；它冻结新的 CompiledContext、结果引用与版本，强制 tools disabled，沿完整 Response 接受点提交唯一的 Assistant Event。它不是 ModelRunAttempt 重试，也不是已退役的 Proactive Follow-up。
+_Avoid_: Technical retry, Action Finalization Command, Proactive Follow-up Segment Command
+
+**Experience Search**:
+History Query Proposal 的第二种形态：用几个等价关键词、可选的人物线索和日期范围，在 owner 仍允许使用的 User 原文里确定性地找回未形成 Memory 的较早普通经历。关键词只是寻找线索，不是用户事实，也不创建 Claim、Entity 或别名；结果按“次经历”分组，覆盖不足或无匹配只说明“在可看范围里没找到”，不证明没聊过，也不证明是最早一次。
+_Avoid_: Memory retrieval, Claim search, Semantic search, Fuzzy match
+
+**Request Deadline**:
+一次聊天请求被接受时冻结在 GenerationCommand 上的绝对截止时刻（整体 30 秒，ADR-0152）。所有后续步骤共用剩余时间而不重新领取；截止后不再开始新步骤，迟到结果不展示、不提交，恢复扫描也不续跑。它与 Provider 传输超时是两个独立配置。
+_Avoid_: Provider timeout, Step timeout, Retry budget
+
+**Superseded Answer**:
+同一 Daily Session 出现更新的用户消息后，仍在准备中的旧回答。它失去展示与提交资格（由数据库围栏保证，取消信号只是优化）；新消息是新的 Turn，不追加进旧 Command。已展示的局部内容按 interrupted 保存并保留显式 Retry，不成为成功的历史事实。
+_Avoid_: Cancelled reply, Merged supplement, Appended Command
+
 ## 对话行为
 
 **Canonical Persona**:
@@ -165,6 +189,14 @@ _Avoid_: Intake question, Question stack
 **近期对话背景**:
 来自近期历史交流的有界背景，用于理解用户当前表达；它不等同于长期 Memory，也不表示其中内容已经通过长期记忆准入。
 _Avoid_: 短期 Memory Claim, 长期 Memory, Reflection
+
+**历史回顾**:
+用户明确询问过往交流或经历时，SayHear 根据仍保留且允许使用的历史作出的回忆与概括；它不以该经历已成为长期 Memory 为前提，也不限于近期对话背景的日期窗口。
+_Avoid_: 全量 Memory, 七天背景, 历史存在保证
+
+**话题接续**:
+用户聊到相关事情时，SayHear 结合过往交流理解并继续当前话题的体验；它不要求主动问进展，也不要求每次显式提及旧事。
+_Avoid_: Proactive Memory Follow-up, 记忆展示, 主动消息
 
 **DialogueState**:
 当前 Continuous Exchange 内、由已确认 Event 异步派生的非权威对话状态，包含 `current_topic`、`emotional_intensity`、`advice_explicitly_requested`、`current_request_requires_focus`、`close_intent` 与 `user_willing_to_elaborate` 六个语义字段；每个字段都带 source revision 与 confidence，证据不足时为 null。它只帮助当前对话理解和选择回应，不是 Safety Posture、Continuous Exchange End、Conversation Action 授权、Memory 或 Profile，也不能单独关闭交流或作出安全判断。

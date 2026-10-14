@@ -1,0 +1,58 @@
+{
+  "caseId": "C04",
+  "findings": [
+    {
+      "criterionId": "S-detail",
+      "itemId": "a-place",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-detail",
+      "itemId": "a-boy",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-detail",
+      "itemId": "tm-when",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-detail",
+      "itemId": "f-no-record",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-no-invention",
+      "itemId": "f-piece-name",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-no-invention",
+      "itemId": "f-person-name",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-no-invention",
+      "itemId": "f-speech-mixup",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    }
+  ],
+  "reviewer": "agent:<name> | human:<name>",
+  "rubricVersion": "continuity-rubric:v1",
+  "runId": "run-4fb68e76-3c89-49e3-9a89-3ff5406c220b",
+  "schemaVersion": "continuity-acceptance-review:v1"
+}

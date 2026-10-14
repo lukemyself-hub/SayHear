@@ -62,6 +62,17 @@ export const PREVIOUS_CONVERSATION_DECISION_TASK_INSTRUCTION_VERSION =
 export const ACTION_FINALIZATION_TASK_INSTRUCTION_VERSION =
   "task-instruction-action-finalization:v1";
 
+/** The independent History Answer stage (issue #314, ADR-0094). */
+export const HISTORY_ANSWER_TASK_INSTRUCTION_VERSION =
+  "task-instruction-history-answer:v1";
+
+/**
+ * History Answer for a continuation of the current talk (issue #317): the
+ * user did not ask about the past, so the reply answers the current message.
+ */
+export const HISTORY_CONTINUATION_ANSWER_TASK_INSTRUCTION_VERSION =
+  "task-instruction-history-answer:v2";
+
 /**
  * The reduced persona variant the Context Compiler renders while the Safety
  * Posture is active (issue #76, ADR-0112): the compiler swaps the ordinary
@@ -114,7 +125,10 @@ export const TRUST_ACTION_EXPRESSION_CONTRACT_VERSION =
 export const PREVIOUS_TRUST_ACTION_EXPRESSION_CONTRACT_VERSION =
   "trust-action-expression-contract:v1";
 
-export type GenerationCommandStage = "decision" | "action_finalization";
+export type GenerationCommandStage =
+  | "decision"
+  | "action_finalization"
+  | "history_answer";
 
 export class PromptArtifactResolutionError extends Error {
   public constructor(layer: string, version: string) {
@@ -253,6 +267,12 @@ const TASK_INSTRUCTION_CONTENT: Readonly<
     // different topic. Respect closing the conversation, not only its topic.
     [CONVERSATION_DECISION_TASK_INSTRUCTION_VERSION]:
       "Continue the private journal conversation: respond fully to what they actually said. A response with zero questions is complete — asking is optional, not expected. If the user says they are done or do not want to continue, acknowledge the close briefly and ask no ordinary question. Do not invite another topic or ask what they want to discuss instead. Keep the compiled immediate-safety requirements in force. Otherwise, if you ask, pick the one question that serves understanding best and ask only it: one sentence ending in one question mark, never two in a response. When an emotional check and a concrete follow-up compete, voice the emotional beat as a statement and spend the single question on the concrete one.",
+  },
+  history_answer: {
+    [HISTORY_ANSWER_TASK_INSTRUCTION_VERSION]:
+      "Answer the user's question about what they said on earlier dates, using only the History review result in this context and the earlier messages quoted before their current message. Those quoted messages are the user's own words from those times: do not add details, causes or events they do not contain, and claim nothing about what was or was not said beyond what the result states. Keep your usual natural voice, reply as one complete paragraph, and open no new directions or further questions.",
+    [HISTORY_CONTINUATION_ANSWER_TASK_INSTRUCTION_VERSION]:
+      "Respond fully to what the user actually said in their current message. The History review result and the earlier messages quoted before it are background they gave earlier, and the result says whether to continue from it, ask one short question, or leave it out: follow it. Those quoted messages are the user's own words from those times: do not add details, causes or events they do not contain, do not state how an earlier matter turned out, and let their current expression come first. Keep your usual natural voice. Ask at most one question, only when the result calls for it, and never ask for an update on an earlier matter they did not raise.",
   },
   action_finalization: {
     [ACTION_FINALIZATION_TASK_INSTRUCTION_VERSION]:

@@ -204,6 +204,7 @@ systemDescribe("G1 AC-L02 purge-before-backup restore drill", () => {
         internal_diagnostic_access_grants,
         provider_egress_consents,
         provider_egress_dispositions,
+        history_recall_results,
         compiled_context_revision_refs,
         compiled_contexts,
         model_run_attempts,
@@ -503,6 +504,24 @@ systemDescribe("G1 AC-L02 purge-before-backup restore drill", () => {
     // Simulate restoring the pre-purge backup: the snapshot rows replay into
     // the purged database, including the canary content as a new revision.
     await seedCanaryChainRestored();
+    // Issue 320: the backup also held a frozen history review (search clue,
+    // governance identity). Replaying it must not survive the marker gate.
+    await database.pool.query(
+      `INSERT INTO history_recall_results (
+         history_recall_result_id, user_id, interaction_turn_id,
+         decision_command_id, answer_command_id, policy_version, status,
+         plan, coverage, item_refs, expected_data_epoch, created_at,
+         governance_policy_version
+       ) VALUES (
+         '01984477-31e1-7595-92c6-06889cb0fa11', '${OWNER}', '${N1}',
+         '01984477-31e1-7595-92c6-06889cb0fa12',
+         '01984477-31e1-7595-92c6-06889cb0fa13', 'history-recall:v4',
+         'completed',
+         '{"plan":null,"proposal":{"kind":"search_experience","terms":["canary-restored-clue"]}}'::jsonb,
+         '{}'::jsonb, '[]'::jsonb, 1, now(), 'history-recall-governance:restored'
+       )`,
+    );
+    expect(await countRows("SELECT 1 FROM history_recall_results")).toBe(1);
     const restored = await database.pool.query<{ canonical_text: string }>(
       "SELECT canonical_text FROM conversation_event_revisions WHERE conversation_event_revision_id = $1",
       [R_RESTORED],
@@ -538,6 +557,7 @@ systemDescribe("G1 AC-L02 purge-before-backup restore drill", () => {
     ).resolves.toEqual({ outcome: "reapplied" });
     const reopened = await purgeRepository.findLatestOrder({ userId: OWNER });
     expect(reopened?.status).toBe("retention_pending");
+    expect(await countRows("SELECT 1 FROM history_recall_results")).toBe(0);
 
     // The restored canary content did not resurrect: rows are cleared again
     // and every revision (original and restored) is a content-free tombstone.
@@ -583,6 +603,23 @@ systemDescribe("G1 AC-L02 purge-before-backup restore drill", () => {
 
   it("AC-L02 drill new recent-context surfaces: purge clears the owner-scoped freeze and cannot revive global governance", async () => {
     await seedCanaryChain();
+    // Issue 314: a frozen history review result (references only) is an
+    // owner-scoped surface and must be cleared by the same purge.
+    await database.pool.query(
+      `INSERT INTO history_recall_results (
+         history_recall_result_id, user_id, interaction_turn_id,
+         decision_command_id, answer_command_id, policy_version, status,
+         plan, coverage, item_refs, expected_data_epoch, created_at
+       )
+       SELECT '01984477-31e1-7595-92c6-06889cb0fa01', turn.user_id,
+              turn.interaction_turn_id, '01984477-31e1-7595-92c6-06889cb0fa02',
+              '01984477-31e1-7595-92c6-06889cb0fa03', 'history-recall:v1',
+              'completed',
+              '{"plan":{"kind":"search_experience","groups":[{"id":0,"role":"term","variants":["canary-search-clue"]}]},"proposal":{"kind":"search_experience","terms":["canary-search-clue"]}}'::jsonb,
+              '{}'::jsonb, '[]'::jsonb, 1, now()
+       FROM interaction_turns turn LIMIT 1`,
+    );
+    expect(await countRows("SELECT 1 FROM history_recall_results")).toBe(1);
     await database.pool.query(`
       INSERT INTO recent_context_policies (
         policy_version, status, compiler_version, selector_policy_version,
@@ -608,6 +645,13 @@ systemDescribe("G1 AC-L02 purge-before-backup restore drill", () => {
     // cleared; nothing survives to be replayed into a later selection.
     expect(
       await countRows("SELECT 1 FROM compiled_context_revision_refs"),
+    ).toBe(0);
+    expect(await countRows("SELECT 1 FROM history_recall_results")).toBe(0);
+    // Issue 316: the search clues lived only in that row; nothing else keeps them.
+    expect(
+      await countRows(
+        "SELECT 1 FROM history_recall_results WHERE plan::text LIKE '%canary-search-clue%'",
+      ),
     ).toBe(0);
     expect(await countRows("SELECT 1 FROM compiled_contexts")).toBe(0);
     expect(await countRows("SELECT 1 FROM generation_commands")).toBe(0);

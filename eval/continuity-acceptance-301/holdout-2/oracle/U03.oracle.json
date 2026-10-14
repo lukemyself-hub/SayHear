@@ -1,0 +1,315 @@
+{
+  "schemaVersion": "continuity-acceptance-oracle:v1",
+  "id": "U03",
+  "title": "U03 Unseen: a night across midnight and a repeated hour, a message sent from another timezone, one with none recorded",
+  "capability": "Second, unseen counterpart of the midnight and timezone class, in the southern hemisphere where daylight time ends in April. One conversation runs from late Saturday evening through midnight and through the hour that is repeated when the clocks go back. It stays one Daily Session, but what was said before and after midnight is divided at the real midnight, and the order of two remarks inside the repeated hour follows real elapsed time. An earlier message sent on arrival abroad is dated in the timezone it was sent from, and no local time is invented for a message whose timezone was never recorded.",
+  "spec": [
+    "#301 R1",
+    "#307",
+    "ADR-0012",
+    "ADR-0152"
+  ],
+  "ownerTickets": [
+    "#314",
+    "#315"
+  ],
+  "language": "zh",
+  "fixture": {
+    "version": "final-2",
+    "sha256": "90e6c334ed392bc57b8a9a977d754c9c0c18bc82287c4ffe4b7c12bc5fa8d59b"
+  },
+  "facts": {
+    "allowed": [
+      {
+        "id": "a-before",
+        "statement": "Before midnight: the person had just got home from a friend's wedding with a rubbed heel and the bride's bouquet, and an old classmate who had given them a lift came up for tea on the balcony while fireworks went off below.",
+        "sources": [
+          "n1:user",
+          "n2:user"
+        ]
+      },
+      {
+        "id": "a-after",
+        "statement": "After midnight: the classmate said he is moving back to his home city at the end of the year to take over his father's teahouse, which hurt more than the person expected; he then left, and the person tidied up alone and stayed awake thinking about it.",
+        "sources": [
+          "n3:user",
+          "n4:user",
+          "n6:user"
+        ]
+      }
+    ],
+    "forbidden": [
+      {
+        "id": "f-all-one-day",
+        "statement": "Treating the whole conversation as said on Saturday 4 April because it belongs to that Daily Session.",
+        "sources": [
+          "n3:user",
+          "n11:user"
+        ]
+      },
+      {
+        "id": "f-wall-clock-order",
+        "statement": "Putting the cold leftover after the remark about the clocks because 2:32 reads later than 2:15.",
+        "sources": [
+          "n9:user",
+          "n11:user"
+        ]
+      },
+      {
+        "id": "f-invented-zone",
+        "statement": "Stating a definite local hour or place for the message about the balcony plants, whose timezone was never recorded.",
+        "sources": [
+          "legacy:user"
+        ]
+      },
+      {
+        "id": "f-arrival-unlabelled",
+        "statement": "Giving 30 March as the arrival day without saying that this is the date at home and not at the destination.",
+        "sources": [
+          "landing:user"
+        ]
+      }
+    ]
+  },
+  "topics": [],
+  "time": [
+    {
+      "id": "tm-split",
+      "statement": "Only the first two messages of that conversation were expressed before midnight, at 23:10 and 23:35 on Saturday 4 April Sydney time; everything from the classmate's news onward was expressed on Sunday 5 April.",
+      "sources": [
+        "n1:user",
+        "n2:user",
+        "n3:user"
+      ]
+    },
+    {
+      "id": "tm-leftover-first",
+      "statement": "The cold leftover was mentioned at 02:32 daylight time, forty-three minutes of real time before the clocks remark at 02:15 standard time.",
+      "sources": [
+        "n9:user",
+        "n11:user"
+      ]
+    },
+    {
+      "id": "tm-arrival",
+      "statement": "The arrival was expressed at 00:30 on Tuesday 31 March in Auckland, which is 22:30 on Monday 30 March in the timezone of the question; either date is correct only if its timezone is made clear.",
+      "sources": [
+        "landing:user"
+      ]
+    }
+  ],
+  "expectedBehavior": [
+    "Split the night at the real midnight, not at the session boundary.",
+    "Say the cold leftover came first, by real elapsed time.",
+    "Give the arrival with its timezone made explicit.",
+    "Do not invent a local time for the message without a recorded timezone."
+  ],
+  "failureSignals": [
+    "The news about moving away is placed before midnight, or the whole night is given as Saturday.",
+    "The two remarks in the repeated hour are ordered by the reading on the clock.",
+    "The arrival is dated in the home timezone without saying so."
+  ],
+  "sourceEligibility": [
+    {
+      "source": "landing:user",
+      "eligibility": "allowed",
+      "reason": "Retained original expression, sent from another timezone."
+    },
+    {
+      "source": "legacy:user",
+      "eligibility": "allowed",
+      "reason": "Retained original expression with no recorded timezone."
+    },
+    {
+      "source": "n1:user",
+      "eligibility": "allowed",
+      "reason": "Original expression before midnight."
+    },
+    {
+      "source": "n3:user",
+      "eligibility": "allowed",
+      "reason": "Original expression after midnight."
+    },
+    {
+      "source": "n9:user",
+      "eligibility": "allowed",
+      "reason": "Original expression in the first pass of the repeated hour."
+    },
+    {
+      "source": "n11:user",
+      "eligibility": "allowed",
+      "reason": "Original expression in the second pass of the repeated hour."
+    }
+  ],
+  "criteria": [
+    {
+      "id": "O-commit",
+      "kind": "objective",
+      "modes": [
+        "deterministic",
+        "real-model"
+      ],
+      "description": "The first question streams and commits.",
+      "check": {
+        "type": "turn_committed",
+        "step": "night"
+      }
+    },
+    {
+      "id": "O-commit-order",
+      "kind": "objective",
+      "modes": [
+        "deterministic",
+        "real-model"
+      ],
+      "description": "The second question streams and commits.",
+      "check": {
+        "type": "turn_committed",
+        "step": "order"
+      }
+    },
+    {
+      "id": "O-commit-trip",
+      "kind": "objective",
+      "modes": [
+        "deterministic",
+        "real-model"
+      ],
+      "description": "The third question streams and commits.",
+      "check": {
+        "type": "turn_committed",
+        "step": "trip"
+      }
+    },
+    {
+      "id": "O-one-session",
+      "kind": "objective",
+      "modes": [
+        "deterministic",
+        "real-model"
+      ],
+      "description": "The conversation that crossed midnight and the clock change stays one Daily Session dated 4 April.",
+      "check": {
+        "type": "session_ownership",
+        "expect": [
+          {
+            "source": "n1:user",
+            "logicalDate": "2026-04-04"
+          },
+          {
+            "source": "n3:user",
+            "logicalDate": "2026-04-04"
+          },
+          {
+            "source": "n11:user",
+            "logicalDate": "2026-04-04"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-travel-ownership",
+      "kind": "objective",
+      "modes": [
+        "deterministic",
+        "real-model"
+      ],
+      "description": "The message sent from Auckland is filed under its own local date.",
+      "check": {
+        "type": "session_ownership",
+        "expect": [
+          {
+            "source": "landing:user",
+            "logicalDate": "2026-03-31"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-night-sources",
+      "kind": "objective",
+      "modes": [
+        "real-model"
+      ],
+      "description": "Messages from both sides of midnight reach the Provider for the first question.",
+      "check": {
+        "type": "outbound_includes",
+        "step": "night",
+        "sources": [
+          "n1:user",
+          "n3:user"
+        ]
+      }
+    },
+    {
+      "id": "O-sources",
+      "kind": "objective",
+      "modes": [
+        "real-model"
+      ],
+      "description": "Both messages being ordered reach the Provider.",
+      "check": {
+        "type": "outbound_includes",
+        "step": "order",
+        "sources": [
+          "n9:user",
+          "n11:user"
+        ]
+      }
+    },
+    {
+      "id": "O-travel-source",
+      "kind": "objective",
+      "modes": [
+        "real-model"
+      ],
+      "description": "The arrival message reaches the Provider for the question about the trip.",
+      "check": {
+        "type": "outbound_includes",
+        "step": "trip",
+        "sources": [
+          "landing:user"
+        ]
+      }
+    },
+    {
+      "id": "S-midnight",
+      "kind": "semantic",
+      "description": "The night is divided at the real midnight.",
+      "step": "night",
+      "required": [
+        "a-before",
+        "a-after",
+        "tm-split"
+      ],
+      "forbidden": [
+        "f-all-one-day"
+      ]
+    },
+    {
+      "id": "S-repeated-hour",
+      "kind": "semantic",
+      "description": "Order follows real time through the repeated hour.",
+      "step": "order",
+      "required": [
+        "tm-leftover-first"
+      ],
+      "forbidden": [
+        "f-wall-clock-order"
+      ]
+    },
+    {
+      "id": "S-travel",
+      "kind": "semantic",
+      "description": "The arrival day is given with its timezone, and no zone is invented where none was recorded.",
+      "step": "trip",
+      "required": [
+        "tm-arrival"
+      ],
+      "forbidden": [
+        "f-arrival-unlabelled",
+        "f-invented-zone"
+      ]
+    }
+  ]
+}

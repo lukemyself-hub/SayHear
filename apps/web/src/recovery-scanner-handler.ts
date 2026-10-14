@@ -58,6 +58,7 @@ export function createRecoveryScannerHandler(dependencies: {
       const responses =
         await dependencies.conversationResponseService.scanStaleResponses();
       await dependencies.conversationResponseService.scanPendingActionFinalizations?.();
+      await dependencies.conversationResponseService.scanPendingHistoryAnswers?.();
       const inactivity =
         await dependencies.continuousExchangeService.scanDueInactivity();
       const eligibility =

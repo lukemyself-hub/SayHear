@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "continuity-acceptance-fixture:v1",
+  "id": "S01",
+  "fixtureVersion": "dev-1",
+  "stage": "development",
+  "languageVariant": "zh",
+  "defaults": { "locale": "zh-CN", "timezone": "Asia/Shanghai" },
+  "history": [
+    {
+      "key": "d1-a",
+      "at": "2026-09-14T04:20:00.000Z",
+      "user": "中午和组里新来的同事一起吃了碗牛肉面，聊了聊她以前在成都的工作。",
+      "assistant": "听起来是顿挺放松的午饭。"
+    },
+    {
+      "key": "d1-b",
+      "at": "2026-09-14T13:05:00.000Z",
+      "user": "晚上把阳台那盆快蔫掉的薄荷换了个大点的盆，手上现在还有土味。",
+      "assistant": "给它挪了个宽敞的新家。"
+    }
+  ],
+  "steps": [
+    {
+      "id": "t1",
+      "type": "say",
+      "at": "2026-09-15T01:30:00.000Z",
+      "text": "早上地铁特别挤，到公司的时候已经有点没力气了。"
+    }
+  ]
+}

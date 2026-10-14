@@ -29,7 +29,7 @@ Accepted
 
 - [`0063`](adr/0063-typescript-modular-monolith-is-the-domain-kernel.md)：TypeScript 模块化单体承载领域内核
 - [`0064`](adr/0064-postgresql-is-the-system-of-record-and-pgvector-is-rebuildable.md)：PostgreSQL 是 System of Record，pgvector 是可重建索引
-- [`0115`](adr/0115-memory-recall-starts-with-structured-lexical-retrieval.md)：1A.3a 先用 PostgreSQL structured-lexical retrieval 验证 Memory 价值，Embedding 与 pgvector 改为证据触发的后续升级
+- [`0115`](adr/0115-memory-recall-starts-with-structured-lexical-retrieval.md)：1A.3a 先用 PostgreSQL structured-lexical retrieval 验证 Memory 价值，Embedding 与 pgvector 改为证据触发的后续升级（2026-10 补充：未形成 Claim 的普通原文经历用独立的有界原位词法检索，无投影、无 embedding）
 - [`0065`](adr/0065-vercel-hosts-web-bff-and-durable-workflows.md)：Vercel 承载 Web、BFF 与 Durable Workflow
 - [`0066`](adr/0066-vercel-workflows-v4-runs-durable-asynchronous-work.md)：1A.2 起由 Vercel Workflows v4 承载持久异步任务
 - [`0151`](adr/0151-vercel-workflow-callback-redelivery-is-a-platform-limitation.md)：Vercel Workflow callback 的 at-least-once 重投是已接受的平台限制，应用层不拦截、等上游修复；不改变 outbox 幂等与 200ms retrieval deadline
@@ -40,8 +40,8 @@ Accepted
 - [`0129`](adr/0129-reflection-prose-uses-owner-auth-and-evidence-excerpts-require-step-up.md)：Reflection Inspector 正文使用 owner session 与专门 capability，底层 Evidence 原话仍需 step-up 与访问审计
 - [`0080`](adr/0080-backup-window-is-verified-before-private-data-writes.md)：真实私人数据写入前核验最长备份窗口
 - [`0081`](adr/0081-domain-transactions-use-node-and-pooled-postgresql-connections.md)：领域事务使用 Node runtime 与 pooled PostgreSQL interactive connection
-- [`0093`](adr/0093-conversation-runtime-uses-a-replaceable-bounded-agent-harness.md)：Conversation Runtime 使用可替换的受限 Agent Harness，暂不引入通用 Framework
-- [`0094`](adr/0094-conversation-agent-stages-use-separate-generation-commands.md)：Conversation Decision 与 Action Finalization 使用独立 GenerationCommand
+- [`0093`](adr/0093-conversation-runtime-uses-a-replaceable-bounded-agent-harness.md)：Conversation Runtime 使用可替换的受限 Agent Harness，暂不引入通用 Framework（2026-10 修订：新增受控只读历史查询为第三种互斥 Decision 结果，Trust-Control 确定性优先）
+- [`0094`](adr/0094-conversation-agent-stages-use-separate-generation-commands.md)：Conversation Decision、Action Finalization 与 History Answer 使用独立 GenerationCommand（2026-10 修订含 G1 stage CHECK 守卫的窄例外；#319 修订新输入取代旧回答与 Decision 结算）
 - [`0133`](adr/0133-bio-writing-and-validation-have-separate-command-budgets.md)：Bio 写作与验证使用独立 GenerationCommand 和可计算的 attempt 预算，repair 后必须重新验证
 - [`0136`](adr/0136-1a3b-model-pins-are-evidence-outputs.md)：1A.3b SPEC 固定角色评测合同，生产模型 pin 由冻结验收证据产生而不是提前指定
 - [`0140`](adr/0140-g1-deepseek-model-alias-is-pinned-evidence.md)：G1 接受 DeepSeek 可变 alias 作为有界例外，以完整 pin、运行时快照比对与 AC-M01 调用证据为前提
@@ -103,6 +103,7 @@ Accepted
 - [`0142`](adr/0142-high-risk-gate-requires-referral-not-a-crisis-number.md)：高风险硬门禁要求把用户引向真实帮助，不要求报出危机热线；号码准确性由白名单另行把关
 - [`0146`](adr/0146-f3-ordinary-double-questions-are-observations.md)：F3 普通回复偶尔两个问句只记录观察；禁止问题、安全姿态及三个以上问题仍阻断
 - [`0149`](adr/0149-recent-conversation-context-is-bounded-source-history.md)：近期对话背景用含今天的七个本地日有界原文，不依赖 Claim/Episode/Reflection；既有 Correction/Forget 明确关联的旧消息整条排除
+- [`0152`](adr/0152-continuity-requires-history-recall-and-response-acceptance.md)：连续记忆增加不限七天的历史回顾、时间语义、自然接续与可选两段式回应；实际模型回答进入小规模上线前验收，技术路线另行决策
 - [`0134`](adr/0134-1a3b-rollout-is-staged-and-correctness-triggered.md)：1A.3b 分三阶段直接切换，已确认的正确性失败立即回滚受影响阶段
 - [`0115`](adr/0115-memory-recall-starts-with-structured-lexical-retrieval.md)：1A.3a 不预装向量检索，先以可观测的 structured-lexical baseline 验证召回
 - [`0116`](adr/0116-ai-impressions-use-natural-relational-recall.md)：相关 AI Impression 可以用自然、朋友式的观察主动表达，不强制每次加入来源声明或仪式化保留语
@@ -174,7 +175,7 @@ Accepted
 
 - [`0074`](adr/0074-versioned-domain-artifacts-require-lineage.md)：版本化领域产物必须保留 revision 与 lineage
 - [`0077`](adr/0077-generation-command-is-separate-from-model-run-attempt.md)：逻辑 GenerationCommand 与每次 ModelRunAttempt 分离
-- [`0083`](adr/0083-generation-commands-use-versioned-freshness-policies.md)：Command 使用版本化 exact-head、source-valid 或 monotonic freshness policy
+- [`0083`](adr/0083-generation-commands-use-versioned-freshness-policies.md)：Command 使用版本化 exact-head、source-valid 或 monotonic freshness policy（#319 修订：对话响应冻结请求截止与最新输入围栏）
 - [`0085`](adr/0085-persistent-ids-are-opaque-and-semantic-ids-are-versioned.md)：持久实例使用 opaque UUIDv7，语义 ID 使用版本化 `sh.*` namespace
 - [`0086`](adr/0086-interaction-voice-and-event-identities-are-distinct.md)：InteractionTurn、VoiceTurn 与 Event Revision 使用独立身份和职责
 - [`0087`](adr/0087-evidence-item-is-a-typed-reference-to-user-event-revisions.md)：EvidenceItem 是指向 final / corrected User Event Revision 的一等类型化引用

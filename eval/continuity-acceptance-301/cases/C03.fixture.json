@@ -1,0 +1,92 @@
+{
+  "schemaVersion": "continuity-acceptance-fixture:v1",
+  "id": "C03",
+  "fixtureVersion": "dev-1",
+  "stage": "development",
+  "languageVariant": "en",
+  "defaults": { "locale": "en-US", "timezone": "America/Los_Angeles" },
+  "history": [
+    {
+      "key": "tokyo",
+      "at": "2026-10-27T15:30:00.000Z",
+      "timezone": "Asia/Tokyo",
+      "user": "Just got to the hotel in Shinagawa. The conference badge has my name spelled wrong and I am too tired to care.",
+      "assistant": "A long flight and a misspelled badge. Tired enough to let it go sounds about right."
+    },
+    {
+      "key": "legacy",
+      "at": "2026-10-30T02:15:00.000Z",
+      "legacyMissingTimezone": true,
+      "user": "Home again. The cat ignored me for an hour and then slept on my suitcase.",
+      "assistant": "An hour of protest, then claiming the suitcase. Message received."
+    },
+    {
+      "key": "h1",
+      "at": "2026-11-01T06:50:00.000Z",
+      "user": "The last trick-or-treaters just left. We went through four bags of candy and I am sitting on the porch steps with the empty bowl.",
+      "assistant": "Four bags gone and a quiet porch. That is a full Halloween."
+    },
+    {
+      "key": "h2",
+      "at": "2026-11-01T07:10:00.000Z",
+      "user": "It is past midnight now. My neighbor Odalys came over with cider and we are still out here talking.",
+      "assistant": "Cider on the steps after midnight is a good way to let the night wind down."
+    },
+    {
+      "key": "h3",
+      "at": "2026-11-01T07:35:00.000Z",
+      "user": "She told me she is selling the house in the spring. I did not expect that to land as hard as it did.",
+      "assistant": "That kind of news can arrive quietly and still knock something loose."
+    },
+    {
+      "key": "h4",
+      "at": "2026-11-01T08:00:00.000Z",
+      "user": "She has gone home. I am inside now, blowing out the pumpkins one at a time.",
+      "assistant": "One at a time sounds like you are not quite ready for the night to be over."
+    },
+    {
+      "key": "h5",
+      "at": "2026-11-01T08:25:00.000Z",
+      "user": "Found one more piece of candy at the bottom of the bowl, a peanut butter cup, and ate it standing at the sink.",
+      "assistant": "The last one always tastes like a small secret."
+    },
+    {
+      "key": "h6",
+      "at": "2026-11-01T08:50:00.000Z",
+      "user": "Still awake. I keep thinking about who will live next door after her.",
+      "assistant": "It is hard to picture someone else behind that door."
+    },
+    {
+      "key": "h7",
+      "at": "2026-11-01T09:15:00.000Z",
+      "user": "Ha, the clocks just went back. The oven says quarter past one again, so apparently I get this hour twice.",
+      "assistant": "A second pass at the same hour. Not everyone gets a do-over."
+    },
+    {
+      "key": "h8",
+      "at": "2026-11-01T09:40:00.000Z",
+      "user": "Okay, going to bed for real this time.",
+      "assistant": "Sleep well."
+    }
+  ],
+  "steps": [
+    {
+      "id": "night",
+      "type": "say",
+      "at": "2026-11-02T18:00:00.000Z",
+      "text": "What did I tell you on Halloween night before midnight, and what came after midnight?"
+    },
+    {
+      "id": "order",
+      "type": "say",
+      "at": "2026-11-02T18:02:00.000Z",
+      "text": "Which did I mention first, the last piece of candy or the clocks changing?"
+    },
+    {
+      "id": "trip",
+      "type": "say",
+      "at": "2026-11-02T18:04:00.000Z",
+      "text": "And what day did I get to the hotel on that trip?"
+    }
+  ]
+}

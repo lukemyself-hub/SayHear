@@ -22,6 +22,12 @@
  * This is deliberately not a generic SQL taxonomy. The protected-surface
  * deny-list lives in the CI guard (`scripts/check-schema-extensions.ts`), which
  * is the only other consumer.
+ *
+ * One registered extension is not purely additive: 0071 replaces the
+ * `generation_commands.generation_stage` CHECK to admit `history_answer`. It
+ * is the single exception the guard knows, bound to that file and to an exact
+ * DROP + ADD pair; see the guard's header and ADR-0094 (History Answer
+ * amendment) for why it was needed and where it ends.
  */
 
 export const ONE_A_3B_G1_SCHEMA_EXTENSION_REGISTRY_VERSION =
@@ -100,9 +106,45 @@ export const ONE_A_3B_G1_SCHEMA_EXTENSIONS: readonly OneA3bG1SchemaExtensionPin[
     }),
     Object.freeze({
       store: "business" as const,
-      name: "0071_journal_workflow_recovery.sql",
+      name: "0071_history_answer_generation_stage.sql",
+      sha256: "781b17348c5ca58714e00c9f8bbb2ca1eec587e0319d45da7bd7b779a894b30f",
+      justification:
+        "Widens the generation_commands.generation_stage CHECK by exactly the history_answer value (issue #314, ADR-0094). The only admitted protected-surface rewrite: scripts/check-schema-extensions.ts accepts this single DROP/ADD of that named constraint when the re-added set is the frozen stages plus history_answer, and nothing else; every pre-existing stage stays valid.",
+    }),
+    Object.freeze({
+      store: "business" as const,
+      name: "0072_history_recall_results.sql",
+      sha256: "fca7455ab3fbd289889f4879929f308e1f6e10c8c0c1439af060c863f71306f4",
+      justification:
+        "Creates the owner-scoped history_recall_results table (references and content-free coverage only, no message bodies, no foreign key to a protected relation) and extends the compiled_context_revision_refs section and metadata constraints and lineage trigger for the history_recall_context section (issue #314). It names no protected relation; the table is registered in the Purge Surface Registry.",
+    }),
+    Object.freeze({
+      store: "business" as const,
+      name: "0075_history_experience_search_refs.sql",
+      sha256: "18e6b466b827c637006548ea3ca7d350d57adbe18186311e01f6d87815ef6ecf",
+      justification:
+        "Widens the compiled_context_revision_refs history selection reasons for the original-text experience search (issue #316). It adds no table, index or projection (the search scans retained User text in place, so there is no second private copy to rebuild or purge) and names no protected relation.",
+    }),
+    Object.freeze({
+      store: "business" as const,
+      name: "0080_conversation_request_lifecycle.sql",
+      sha256: "6a2302cc7205760db9cb517593b260b9d5fac16df5c6a3e796921f3e7b752ab3",
+      justification:
+        "Adds two nullable columns to generation_commands: request_deadline_at (the end-to-end deadline frozen at acceptance) and latest_input_fence_version (the named newest-user-input freshness rule), issue #319. Additive ADD COLUMN only; freshness_policy and every existing constraint are untouched.",
+    }),
+    Object.freeze({
+      store: "business" as const,
+      name: "0081_history_recall_governance.sql",
+      sha256: "ecc1de93c1642241c0612223d38f72a5b6c398fe9a81b76e559d7a9c21033c71",
+      justification:
+        "Creates the content-free, non-owner-scoped history_recall_policies governance table (issue #320; no user_id, outside the owner Full Purge Surface Registry like recent_context_policies) and adds the nullable history_recall_results.governance_policy_version column (a version identity, no content; registered as a non-private column). It names no protected relation.",
+    }),
+    Object.freeze({
+      store: "business" as const,
+      name: "0082_journal_workflow_recovery.sql",
       sha256: "86392dc6d5f98b8d50f637eb4c31762a3678b8bfa4cb5ed1ce4071c0dc407b6f",
-      justification: "Adds bounded Journal recovery metadata and owner-scoped Evidence dispatch claims. Existing snapshot-linked attempts populate only the new ownership columns. No protected relation or private content is rewritten (Issues #340 and #341).",
+      justification:
+        "Adds bounded Journal recovery metadata and owner-scoped Evidence dispatch claims. Existing snapshot-linked attempts populate only the new ownership columns. No protected relation or private content is rewritten (Issues #340 and #341).",
     }),
   ]);
 

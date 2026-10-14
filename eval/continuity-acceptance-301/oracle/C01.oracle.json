@@ -1,0 +1,65 @@
+{
+  "schemaVersion": "continuity-acceptance-oracle:v1",
+  "id": "C01",
+  "title": "C01 Recap of a full day with five subjects, then a follow-up on one detail",
+  "capability": "Yesterday held five subjects spread from early morning to late night. The last one is long enough to crowd out the others, the day spans more than one history page (52 messages) and exceeds the default background budget. Asked to go over yesterday, SayHear covers all five subjects without mixing in today's similar bookkeeping problem; asked a follow-up, it answers the work detail from the original words.",
+  "spec": ["#301 R1", "#301 R2", "ADR-0152"],
+  "ownerTickets": ["#314", "#315"],
+  "language": "zh",
+  "fixture": { "version": "dev-3", "sha256": "523aed2400b99a3292e9dda58e32813715188060ef138e15ef1ee97f52e50868" },
+  "preconditions": [
+    { "description": "yesterday spans more than one history page of 50 messages", "localDate": "2026-09-14", "minMessages": 51 },
+    { "description": "yesterday's user text alone exceeds the 2,000-token default background budget", "localDate": "2026-09-14", "minUserContextTokens": 2001 },
+    { "description": "yesterday's text exceeds the 3,000-token history review budget, so the late long subject cannot fit with the early ones", "localDate": "2026-09-14", "minUserContextTokens": 3001 }
+  ],
+  "facts": {
+    "allowed": [
+      { "id": "a-duplicate", "statement": "The gap was traced to one August invoice from a packaging supplier that had been entered twice, for exactly the missing amount.", "sources": ["recon-3:user"] },
+      { "id": "a-colleague", "statement": "An older colleague pulled that month's goods-received notes, which showed a single delivery and confirmed it.", "sources": ["recon-4:user"] },
+      { "id": "a-reversal", "statement": "A reversal request was filed and is waiting for the finance manager's approval.", "sources": ["recon-5:user"] }
+    ],
+    "forbidden": [
+      { "id": "f-today-freight", "statement": "Presenting the freight discrepancy of eight hundred with the logistics carrier as part of yesterday; it was raised today.", "sources": ["today-1:user"] },
+      { "id": "f-fx-cause", "statement": "Giving exchange rates as the cause; that suspicion was checked and ruled out.", "sources": ["recon-2:user"] },
+      { "id": "f-decided", "statement": "Stating that the person decided to apply for, or to decline, the transfer; nothing was decided.", "sources": ["move-7:user", "move-8:user"] }
+    ]
+  },
+  "topics": [
+    { "id": "t-dentist", "statement": "A dental visit about a failed filling on a back molar, ending with an impression taken and a temporary fill.", "sources": ["tooth-1:user", "tooth-2:user", "tooth-3:user"] },
+    { "id": "t-reconciliation", "statement": "A morning spent hunting a quarterly supplier-ledger gap.", "sources": ["recon-1:user", "recon-3:user"] },
+    { "id": "t-roof", "statement": "A midday call from the person's mother about re-tiling the leaking family home and who pays.", "sources": ["roof-1:user", "roof-3:user", "roof-4:user"] },
+    { "id": "t-swim", "statement": "The daughter's swimming level test, which she did not pass.", "sources": ["swim-1:user", "swim-2:user", "swim-3:user"] },
+    { "id": "t-transfer", "statement": "A long late-evening weighing of an internal move to another city's branch.", "sources": ["move-1:user", "move-5:user", "move-7:user"] }
+  ],
+  "time": [
+    { "id": "tm-yesterday", "statement": "All five subjects were expressed on 14 September local time; the freight problem and the remark about tea belong to 15 September.", "sources": ["tooth-1:user", "move-8:user", "today-1:user"] }
+  ],
+  "expectedBehavior": [
+    "Name all five subjects; the early ones must not be dropped because the last one was long.",
+    "Keep yesterday and today apart.",
+    "For the follow-up, give the duplicated invoice and how it was confirmed, from the original words."
+  ],
+  "failureSignals": [
+    "An early subject (dentist, roof, swimming test) is missing from what reaches the Provider or from the recap.",
+    "Today's freight discrepancy is told as yesterday's.",
+    "The follow-up answer names a cause or amount that was never said."
+  ],
+  "sourceEligibility": [
+    { "source": "tooth-1:user", "eligibility": "allowed", "reason": "Yesterday's original expression." },
+    { "source": "recon-1:user", "eligibility": "allowed", "reason": "Yesterday's original expression." },
+    { "source": "recon-3:user", "eligibility": "allowed", "reason": "Yesterday's original expression; carries the asked-for detail." },
+    { "source": "recon-4:user", "eligibility": "allowed", "reason": "Yesterday's original expression; carries the asked-for detail." },
+    { "source": "roof-1:user", "eligibility": "allowed", "reason": "Yesterday's original expression." },
+    { "source": "swim-1:user", "eligibility": "allowed", "reason": "Yesterday's original expression." },
+    { "source": "move-1:user", "eligibility": "allowed", "reason": "Yesterday's original expression." }
+  ],
+  "criteria": [
+    { "id": "O-commit", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The recap request streams and commits.", "check": { "type": "turn_committed", "step": "recap" } },
+    { "id": "O-ownership", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The first and last of yesterday's messages are filed under 14 September and today's under 15 September.", "check": { "type": "session_ownership", "expect": [ { "source": "tooth-1:user", "logicalDate": "2026-09-14" }, { "source": "move-8:user", "logicalDate": "2026-09-14" }, { "source": "today-1:user", "logicalDate": "2026-09-15" } ] } },
+    { "id": "O-day-read", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "Yesterday is read as a non-empty day.", "check": { "type": "date_coverage", "step": "recap", "localDate": "2026-09-14", "expect": { "empty": false } } },
+    { "id": "O-topic-coverage", "kind": "objective", "modes": ["deterministic", "real-model"], "owner": "#315", "description": "At least the opening message of each of the five subjects reaches the Provider for the recap.", "check": { "type": "outbound_includes", "step": "recap", "sources": ["tooth-1:user", "recon-1:user", "roof-1:user", "swim-1:user", "move-1:user"] } },
+    { "id": "O-detail-source", "kind": "objective", "modes": ["deterministic", "real-model"], "owner": "#315", "description": "The messages holding the asked-for work detail reach the Provider for the follow-up.", "check": { "type": "outbound_includes", "step": "detail", "sources": ["recon-3:user", "recon-4:user"] } },
+    { "id": "S-topics", "kind": "semantic", "owner": "#315", "description": "The recap covers all five subjects, on the right day, without today's problem.", "step": "recap", "required": ["t-dentist", "t-reconciliation", "t-roof", "t-swim", "t-transfer", "tm-yesterday"], "forbidden": ["f-today-freight", "f-decided"] },
+    { "id": "S-detail", "kind": "semantic", "owner": "#315", "description": "The follow-up answer is grounded in the original words.", "step": "detail", "required": ["a-duplicate", "a-colleague"], "forbidden": ["f-today-freight", "f-fx-cause"] }
+  ]
+}

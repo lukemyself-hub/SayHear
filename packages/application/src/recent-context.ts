@@ -151,6 +151,12 @@ export type RecentContextSourceRequest = Readonly<{
  */
 export type RecentContextSourceItem = Readonly<{
   actor: "user" | "assistant";
+  /**
+   * Set when a user message's wording is the person's own correction: the
+   * instant the correction was made. Presentation only; selection and the
+   * existing Correction / Forget exclusions do not read it.
+   */
+  correctedAt?: string | null;
   dailySessionId: DailySessionId;
   exclusion: Readonly<{
     controlId: string;
@@ -158,6 +164,9 @@ export type RecentContextSourceItem = Readonly<{
   }> | null;
   /** Message expression instant (ISO-8601); never the Daily Session date. */
   expressedAt: string;
+  /** IANA zone used to interpret the expression instant, when known. */
+  expressionTimezone?: string | null;
+  expressionTimezoneSource?: "request" | "session_start_fallback" | "unknown";
   /**
    * The Assistant event's own `generation_command_id`, when the row is an
    * Assistant. `null` is the pre-0003 legacy shape; `undefined` is used only by
@@ -341,9 +350,13 @@ export type RecentContextOmission = Readonly<{
 
 export type RecentContextSelectedEvent = Readonly<{
   actor: "user" | "assistant";
+  /** See {@link RecentContextSourceItem.correctedAt}. */
+  correctedAt?: string;
   dailySessionId: DailySessionId;
   estimatedTokens: number;
   expressedAt: string;
+  expressionTimezone?: string | null;
+  expressionTimezoneSource?: "request" | "session_start_fallback" | "unknown";
   /** InteractionTurn of the source revision; see {@link RecentContextSourceItem}. */
   interactionTurnId?: InteractionTurnId | null;
   occurredAt: string | null;
@@ -745,9 +758,20 @@ export function selectRecentContext(input: {
     remaining -= estimatedTokens;
     selected.push({
       actor: item.actor,
+      ...(item.actor === "user" &&
+      item.correctedAt !== undefined &&
+      item.correctedAt !== null
+        ? { correctedAt: item.correctedAt }
+        : {}),
       dailySessionId: item.dailySessionId,
       estimatedTokens,
       expressedAt: item.expressedAt,
+      ...(item.expressionTimezone === undefined
+        ? {}
+        : { expressionTimezone: item.expressionTimezone }),
+      ...(item.expressionTimezoneSource === undefined
+        ? {}
+        : { expressionTimezoneSource: item.expressionTimezoneSource }),
       ...(item.interactionTurnId === undefined ||
       item.interactionTurnId === null
         ? {}

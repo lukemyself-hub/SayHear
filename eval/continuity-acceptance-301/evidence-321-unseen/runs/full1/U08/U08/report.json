@@ -1,0 +1,249 @@
+{
+  "budget": {
+    "blockers": [],
+    "capUsdMicros": 10000000,
+    "estimatedCostUsdMicros": 153600,
+    "inputTokenUpperBound": 128000,
+    "mode": "real-model",
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "outputTokenUpperBound": 96000,
+    "paidRequestUpperBound": 8,
+    "remainingUsdMicros": 2954543,
+    "requestsPerStepUpperBound": 4,
+    "shape": {
+      "generationSteps": 1,
+      "scheduledScans": 2,
+      "seedTurns": 3
+    },
+    "status": "ready",
+    "unknownCostEntries": 0,
+    "waivedPreconditions": [
+      {
+        "by": "Luke",
+        "date": "2026-10-11",
+        "statement": "Relayed to the T08 agent by the coordinating agent as Luke's words: \"#307 的遗留问题,应当在 T01–T07 开发期间解决了(包括耗时问题和回忆历史消息等),因此 T08 可以正常启动\" and \"授权 T08 调用 OpenCode Go 跑真实 DeepSeek V4.1 Flash 模型\". This is a decision to proceed. It is not a record that the #307 online acceptance was completed: #307 was closed with its online acceptance not passed.",
+        "id": "issue-307-online-acceptance"
+      }
+    ]
+  },
+  "case": {
+    "caseId": "U08",
+    "criteria": [
+      {
+        "description": "Seeded history is read back verbatim through the normal history API.",
+        "evidence": [],
+        "id": "INV-seed-readback",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "All 3 seeded turns are present exactly once.",
+        "status": "pass"
+      },
+      {
+        "description": "No oracle text, scenario title or expected answer appears in any Provider request.",
+        "evidence": [],
+        "id": "INV-oracle-not-in-outbound",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "Scanned 407 outbound strings; none carries oracle text.",
+        "status": "pass"
+      },
+      {
+        "description": "Authoritative history contains every message exactly once.",
+        "evidence": [],
+        "id": "INV-no-duplicate-messages",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "8 messages, no duplicates.",
+        "status": "pass"
+      },
+      {
+        "description": "The turn streams and commits.",
+        "evidence": [
+          "steps[finish].chat.httpStatus=200",
+          "steps[finish].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-commit",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "The month-old remark and its setting reach the Provider.",
+        "evidence": [
+          "quiet-a:user: providerRequest=absent, inspector.referencedEvents=absent",
+          "quiet-b:user: providerRequest=absent, inspector.referencedEvents=absent"
+        ],
+        "id": "O-meaning-source",
+        "kind": "objective",
+        "owner": "#318",
+        "reason": "A required source did not reach the Provider request for this turn.",
+        "status": "fail"
+      },
+      {
+        "description": "Sharing a feeling triggers no Trust Action.",
+        "evidence": [
+          "steps[finish].chat.actions=[]"
+        ],
+        "id": "O-no-action",
+        "kind": "objective",
+        "owner": null,
+        "reason": "No Action was admitted for this turn.",
+        "status": "pass"
+      },
+      {
+        "description": "The present feeling is met and connected to what the person said about silence at home.",
+        "evidence": [],
+        "id": "S-meaning",
+        "kind": "semantic",
+        "owner": "#318",
+        "reason": "No independent review was supplied for this answer.",
+        "status": "needs-review"
+      },
+      {
+        "description": "Empathy without advice, labelling or cheerleading.",
+        "evidence": [],
+        "id": "P-stance",
+        "kind": "subjective",
+        "owner": "#318",
+        "reason": "No independent review was supplied for this answer.",
+        "status": "needs-review"
+      }
+    ],
+    "mode": "real-model",
+    "pipelineOnly": [],
+    "reviewer": null,
+    "runId": "run-8b948aaa-692e-4d17-aca6-bcdc8e0471fc",
+    "status": "fail"
+  },
+  "diagnosis": [
+    {
+      "diagnosis": {
+        "disagreements": [],
+        "payloadReadStatus": null,
+        "readState": "unread",
+        "sources": [
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: no history branch",
+              "provider payload: absent",
+              "coverage: (the Decision took no history branch)"
+            ],
+            "fault": "selection_omitted",
+            "source": "quiet-a:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-6",
+              "requestSequence": 6
+            }
+          },
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: no history branch",
+              "provider payload: absent",
+              "coverage: (the Decision took no history branch)"
+            ],
+            "fault": "selection_omitted",
+            "source": "quiet-b:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-6",
+              "requestSequence": 6
+            }
+          }
+        ]
+      },
+      "stepId": "finish"
+    }
+  ],
+  "identity": {
+    "fixtureSha256": "167f19ae58e40479bbf549523eb316029a4f21149889f2f1d08366f095b99b65",
+    "fixtureVersion": "final-2",
+    "gitCommit": "b48f2fb03614b8f6a485a000c6efcda9e85f625d",
+    "gitDirty": true,
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "historyRecallGovernance": "active",
+    "recentContextGovernance": "active",
+    "runId": "run-8b948aaa-692e-4d17-aca6-bcdc8e0471fc",
+    "oracleSha256": "4e7441a1dfefc521217a599ded6801a0c80e11eece6bbde8b847938fcf7da021",
+    "title": "U08 Unseen: an earlier remark gives meaning to a present feeling the person cannot explain"
+  },
+  "remainingRisks": [
+    "The working tree had uncommitted changes; the commit alone does not identify the code that ran.",
+    "Timings are CLI network observations, not browser rendering times (T08 #321 covers the browser)."
+  ],
+  "reproducibilityDigest": "3a9fc1099ff3b84ed2f39ddc0746dd3726219eb673b43da8e7e7ca140e9e7a21",
+  "schemaVersion": "continuity-acceptance-report:v1",
+  "sourceManifest": [
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "quiet-a:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "quiet-a:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "quiet-b:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "quiet-b:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "trip:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "trip:assistant"
+        }
+      ],
+      "stepId": "finish"
+    }
+  ],
+  "timings": [
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 47.841583000000355,
+      "cliCommittedMs": 7304.7289580000015,
+      "cliFirstVisibleTextMs": 6911.79825,
+      "cliStreamClosedMs": 7304.7863750000015,
+      "providerLatencyMs": 0,
+      "stepId": "finish"
+    }
+  ],
+  "transcript": [
+    {
+      "assistant": "两个多月，那声音大概已经成了你屋里的背景音。今天一停，房子安静下来，反倒有点不习惯。\n\n业主群里说的是“终于清静了”，你坐在客厅里感觉到的却是空。同一件安静，落在人身上不一样。说不上来也正常，不一定非得有个原因。",
+      "at": "2026-10-16T12:20:00.000Z",
+      "stepId": "finish",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "楼上装修了两个多月，今天总算完工了。业主群里都在说终于清静了，我一个人坐在客厅里，却觉得心里空落落的，自己也说不上来是为什么。"
+    }
+  ],
+  "usage": {
+    "inputTokens": 4666,
+    "outputTokens": 643,
+    "paidCostUsdMicros": null,
+    "providerRequests": 1
+  }
+}

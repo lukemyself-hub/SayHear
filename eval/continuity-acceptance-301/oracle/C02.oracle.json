@@ -1,0 +1,53 @@
+{
+  "schemaVersion": "continuity-acceptance-oracle:v1",
+  "id": "C02",
+  "title": "C02 What was talked about versus what happened, with three kinds of experience time",
+  "capability": "Yesterday (Wednesday 16 September) the person mentioned three things: an outing that took place the previous Sunday, a repair done that same day, and a reunion whose date was never given. Asked what was talked about yesterday, all three count. Asked what actually happened yesterday, only the repair does. Asked when the reunion was, the honest answer is that no date was given. The day something was said is never passed off as the day it happened.",
+  "spec": ["#301 R1", "#301 R2", "#307", "ADR-0152"],
+  "ownerTickets": ["#314", "#315"],
+  "language": "zh",
+  "fixture": { "version": "dev-2", "sha256": "35bc798b5d2b52e3070a6d9d3f59817552da3d134dc2dd8184c0ab982d41a9a9" },
+  "facts": {
+    "allowed": [
+      { "id": "a-repair-done", "statement": "Yesterday after work the person fixed a kitchen wall-cupboard door by tightening a loose hinge.", "sources": ["cabinet:user"] }
+    ],
+    "forbidden": [
+      { "id": "f-park-yesterday", "statement": "Saying the riverside outing with the father took place yesterday.", "sources": ["park:user"] },
+      { "id": "f-reunion-dated", "statement": "Giving any specific day for meeting the old roommate, including yesterday or last Sunday.", "sources": ["classmate:user"] },
+      { "id": "f-reunion-unknown-person", "statement": "Saying nothing is known about that meeting at all; it was mentioned, only undated.", "sources": ["classmate:user"] }
+    ]
+  },
+  "topics": [
+    { "id": "t-park", "statement": "Taking the father, who uses a wheelchair, to a riverside green space.", "sources": ["park:user"] },
+    { "id": "t-cabinet", "statement": "Fixing a crooked kitchen cupboard door.", "sources": ["cabinet:user"] },
+    { "id": "t-classmate", "statement": "An evening catching up with a former university roommate.", "sources": ["classmate:user"] }
+  ],
+  "time": [
+    { "id": "tm-said-yesterday", "statement": "All three were said on Wednesday 16 September, the day before the questions.", "sources": ["park:user", "cabinet:user", "classmate:user"] },
+    { "id": "tm-park-sunday", "statement": "The outing happened on the Sunday of the week before it was told, that is 13 September, relative to when it was said and not to when it is asked about.", "sources": ["park:user"] },
+    { "id": "tm-reunion-undated", "statement": "The reunion was only described as recent; its date is unknown and must be reported as not given.", "sources": ["classmate:user"] }
+  ],
+  "expectedBehavior": [
+    "For 'what did we talk about': list all three subjects.",
+    "For 'what did I do yesterday': the cupboard repair only, optionally noting the other two were told yesterday but happened at other times.",
+    "For 'which day': say that only 'recently' was mentioned and no date was given."
+  ],
+  "failureSignals": [
+    "The outing is reported as yesterday's activity.",
+    "A date is invented for the reunion.",
+    "'Last Sunday' is resolved against the day of the question instead of the day it was said."
+  ],
+  "sourceEligibility": [
+    { "source": "park:user", "eligibility": "allowed", "reason": "Yesterday's original expression." },
+    { "source": "cabinet:user", "eligibility": "allowed", "reason": "Yesterday's original expression." },
+    { "source": "classmate:user", "eligibility": "allowed", "reason": "Yesterday's original expression." }
+  ],
+  "criteria": [
+    { "id": "O-commit", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The first question streams and commits.", "check": { "type": "turn_committed", "step": "said" } },
+    { "id": "O-sources", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "All three of yesterday's messages reach the Provider for each question.", "check": { "type": "outbound_includes", "step": "happened", "sources": ["park:user", "cabinet:user", "classmate:user"] } },
+    { "id": "O-ownership", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The three messages are filed under the day they were said, not the day they describe.", "check": { "type": "session_ownership", "expect": [ { "source": "park:user", "logicalDate": "2026-09-16" }, { "source": "classmate:user", "logicalDate": "2026-09-16" } ] } },
+    { "id": "S-said", "kind": "semantic", "owner": "#315", "description": "What was talked about yesterday: all three subjects, placed on the day they were said.", "step": "said", "required": ["t-park", "t-cabinet", "t-classmate", "tm-said-yesterday"], "forbidden": ["f-park-yesterday"] },
+    { "id": "S-happened", "kind": "semantic", "owner": "#314", "description": "What happened yesterday: the repair, without relocating the outing or the reunion.", "step": "happened", "required": ["a-repair-done", "tm-park-sunday"], "forbidden": ["f-park-yesterday", "f-reunion-dated"] },
+    { "id": "S-when", "kind": "semantic", "owner": "#314", "description": "The undated reunion stays undated.", "step": "when", "required": ["tm-reunion-undated"], "forbidden": ["f-reunion-dated", "f-reunion-unknown-person"] }
+  ]
+}

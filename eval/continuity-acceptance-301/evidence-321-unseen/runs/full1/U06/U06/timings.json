@@ -1,0 +1,32 @@
+[
+  {
+    "appState": "warm",
+    "caseId": "U06",
+    "committedMs": 31535.040083,
+    "firstVisibleTextMs": 31088.240458,
+    "kind": "history",
+    "liveRequests": 2,
+    "outcome": "assistant_committed",
+    "outputTokens": 3906,
+    "reasoningTokens": 3748,
+    "runId": "run-279a410d-cfbf-413f-9913-59b60637a96e",
+    "stepId": "ping",
+    "streamClosedMs": 31535.14325,
+    "withinContract": false
+  },
+  {
+    "appState": "warm",
+    "caseId": "U06",
+    "committedMs": 9704.237666,
+    "firstVisibleTextMs": 9310.386000000006,
+    "kind": "history",
+    "liveRequests": 2,
+    "outcome": "assistant_committed",
+    "outputTokens": 1122,
+    "reasoningTokens": 946,
+    "runId": "run-279a410d-cfbf-413f-9913-59b60637a96e",
+    "stepId": "role",
+    "streamClosedMs": 9704.327250000002,
+    "withinContract": true
+  }
+]

@@ -23,7 +23,7 @@ import {
   INITIAL_CONVERSATION_HARNESS_POLICY,
   PERSONA_BEHAVIOR_ANCHORS_VERSION,
   ProviderDispatchError,
-  RECENT_CONTEXT_COMPILER_VERSION,
+  TIME_AWARE_CONTEXT_COMPILER_VERSION,
   renderMinimumHighRiskResponse,
   validateMinimumHighRiskResponse,
   type ConversationResponseRepository,
@@ -44,6 +44,7 @@ import {
   runMigrations,
 } from "@sayhear/data";
 import {
+  acquireNextDevServerLock,
   createIsolatedPostgresSchema,
   fixedInternalOwnerPrincipal,
   type IsolatedPostgresSchema,
@@ -175,7 +176,9 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       database.connectionString,
       markerDatabase.connectionString,
     );
-  }, 60_000);
+    // Starting the app may first wait for another suite to release the
+    // single `next dev` slot (see acquireNextDevServerLock).
+  }, 240_000);
 
   beforeEach(async () => {
     await database.pool.query(`
@@ -277,6 +280,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
         internal_diagnostic_access_grants,
         provider_egress_consents,
         provider_egress_dispositions,
+        history_recall_results,
         compiled_context_revision_refs,
         compiled_contexts,
         model_run_attempts,
@@ -1206,10 +1210,16 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       attemptStatus: "succeeded",
       commandStatus: "succeeded",
       compiledContext: {
-        compilerVersion: RECENT_CONTEXT_COMPILER_VERSION,
+        compilerVersion: TIME_AWARE_CONTEXT_COMPILER_VERSION,
         // The compile never waits on the fast path: the committed User Event's
-        // extraction command is still pending (issue #113).
-        degradedReason: "fast_path_pending",
+        // extraction command is still pending (issue #113). This case runs
+        // through the spawned server on the real clock, so on a slow runner the
+        // 200 ms retrieval deadline can lapse first and outrank that reason;
+        // tests/system/fast-path-extraction.system.test.ts pins the reason
+        // where no retrieval deadline is in play.
+        degradedReason: expect.stringMatching(
+          /^(fast_path_pending|memory_retrieval_failed)$/,
+        ),
         dialogueRevision: 1,
         id: expect.any(String),
         integrity: {
@@ -5480,6 +5490,9 @@ async function startNextTestServer(
   const nextBinary = fileURLToPath(
     new URL("../../apps/web/node_modules/next/dist/bin/next", import.meta.url),
   );
+  // Next allows one `next dev` per project directory; suites that start the
+  // real app serialise on this lock instead of colliding across workers.
+  const releaseDevServerLock = await acquireNextDevServerLock(webDirectory);
   const child: ChildProcess = spawn(
     process.execPath,
     [nextBinary, "dev", "--hostname", "127.0.0.1", "--port", String(port)],
@@ -5522,6 +5535,7 @@ async function startNextTestServer(
 
   for (let attempt = 0; attempt < 200; attempt += 1) {
     if (child.exitCode !== null) {
+      releaseDevServerLock();
       throw new Error(`Next test server exited early.\n${output.read()}`);
     }
     try {
@@ -5532,6 +5546,7 @@ async function startNextTestServer(
           output: output.read,
           async stop() {
             await stopChild(child);
+            releaseDevServerLock();
           },
         };
       }
@@ -5542,6 +5557,7 @@ async function startNextTestServer(
   }
 
   await stopChild(child);
+  releaseDevServerLock();
   throw new Error(`Next test server did not become ready.\n${output.read()}`);
 }
 

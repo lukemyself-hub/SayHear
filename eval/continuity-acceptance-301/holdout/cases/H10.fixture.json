@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "continuity-acceptance-fixture:v1",
+  "id": "H10",
+  "fixtureVersion": "final-1",
+  "stage": "final",
+  "languageVariant": "en",
+  "defaults": { "locale": "en-GB", "timezone": "Europe/Dublin" },
+  "history": [
+    { "key": "ride-a", "at": "2026-10-12T18:30:00.000Z", "user": "We did the two-day coastal ride at the weekend. Marek from work and his daughter Zofia came with me, and Zofia had a puncture before we were even a mile out of the car park.", "assistant": "A puncture inside the first mile. I hope she saw the funny side of it." },
+    { "key": "ride-b", "at": "2026-10-12T18:37:00.000Z", "user": "She did. On the second day it rained so hard that we gave up at the ferry slip and got a lift back in a farmer's van with the bikes in the trailer.", "assistant": "Giving up at the ferry slip in that rain sounds like sense rather than defeat." },
+    { "key": "garage", "at": "2026-10-14T12:20:00.000Z", "user": "The garage wants a yes or no on the clutch repair by Friday and I keep not ringing them back.", "assistant": "A Friday deadline that you keep stepping around. It sounds like the answer is not easy yet." }
+  ],
+  "steps": [
+    { "id": "ask", "type": "say", "at": "2026-10-16T15:00:00.000Z", "abortAfterMs": 700, "text": "What did I tell you about the bike ride?" },
+    { "id": "supplement", "type": "say", "at": "2026-10-16T15:00:25.000Z", "text": "Sorry, I cut that short. Just remind me who rode with me." },
+    { "id": "ask-again", "type": "say", "at": "2026-10-16T15:02:00.000Z", "abortAfterMs": 1800, "text": "And how did the second day turn out?" },
+    { "id": "switch", "type": "say", "at": "2026-10-16T15:02:20.000Z", "text": "Leave the ride. It is the clutch business that is actually nagging at me today." },
+    { "id": "resend", "type": "resend", "at": "2026-10-16T15:02:45.000Z", "of": "switch" },
+    { "id": "restart", "type": "restart", "at": "2026-10-16T15:03:00.000Z" },
+    { "id": "reconnect", "type": "resend", "at": "2026-10-16T15:03:10.000Z", "of": "switch" },
+    { "id": "after", "type": "say", "at": "2026-10-16T15:04:00.000Z", "text": "I think I will just ring them and say go ahead." }
+  ]
+}

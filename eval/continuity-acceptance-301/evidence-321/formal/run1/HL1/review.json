@@ -1,0 +1,28 @@
+{
+  "caseId": "HL1",
+  "findings": [
+    {
+      "criterionId": "S-addition",
+      "itemId": "a-companion",
+      "quote": "Theo — your nephew",
+      "reason": "The narrowed question is answered.",
+      "verdict": "pass"
+    },
+    {
+      "criterionId": "S-addition",
+      "itemId": "f-technical",
+      "reason": "No system vocabulary.",
+      "verdict": "pass"
+    },
+    {
+      "criterionId": "S-addition",
+      "itemId": "f-whole-fair",
+      "reason": "The paddling plan is not brought in.",
+      "verdict": "pass"
+    }
+  ],
+  "reviewer": "agent:claude-opus-5.5-t08",
+  "rubricVersion": "continuity-rubric:v1",
+  "runId": "run-ca01c5f3-9899-487e-b242-c7b4db8f26c1",
+  "schemaVersion": "continuity-acceptance-review:v1"
+}

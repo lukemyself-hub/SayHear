@@ -12,6 +12,7 @@ import {
   main as runDailyReleaseValidation,
   parseDailyReleaseValidationRequest,
   planDailyReleaseValidation,
+  preMergeDeferralFor,
   type CapabilityAcceptanceTrigger,
   type ReleaseImpactKind,
   type ReleaseValidationRequest,
@@ -130,7 +131,43 @@ describe("per-impact check selection", () => {
     );
     expect(purge).toBeDefined();
     expect(purge?.source).toBe("path-hint");
+    expect(selectedIds(plan)).toContain("migration:upgrade-compatibility");
     expect(plan.fullAcceptance.required).toBe(false);
+  });
+
+  it.each(["migrations", "migrations-purge-marker"])(
+    "requires upgrade compatibility and retains Purge evidence for %s",
+    (directory) => {
+      const plan = planDailyReleaseValidation(
+        request({
+          declaredImpacts: ["ui"],
+          changedPaths: [`packages/data/${directory}/0099_add_column.sql`],
+        }),
+      );
+      const migration = plan.targeted.find(
+        (entry) => entry.check.id === "migration:upgrade-compatibility",
+      );
+
+      expect(migration?.source).toBe("path-hint");
+      expect(migration?.check.command).toBe(
+        "pnpm exec vitest run tests/ci/migration-upgrade-compatibility.test.ts",
+      );
+      expect(migration?.check.providerCalls).toBe(false);
+      expect(migration?.check.modelCalls).toBe(false);
+      expect(selectedIds(plan)).toContain("purge:full-restore-drill");
+      expect(plan.producerInvocations).toEqual([]);
+    },
+  );
+
+  it("does not require an upgrade drill for unrelated server behavior", () => {
+    const plan = planDailyReleaseValidation(
+      request({
+        declaredImpacts: ["server-business"],
+        changedPaths: ["packages/application/src/server/fix.ts"],
+      }),
+    );
+
+    expect(selectedIds(plan)).not.toContain("migration:upgrade-compatibility");
   });
 
   it("classifies path hints without granting capability acceptance", () => {
@@ -142,6 +179,80 @@ describe("per-impact check selection", () => {
     expect(impact.declared).toEqual(["ui"]);
     expect(impact.hinted).toContain("provider-migration");
     expect(impact.effective).toContain("provider-migration");
+  });
+});
+
+describe("migration upgrade compatibility", () => {
+  const MIGRATION_UPGRADE_CHECK = "migration:upgrade-compatibility";
+  const MIGRATION_UPGRADE_COMMAND =
+    "pnpm exec vitest run tests/ci/migration-upgrade-compatibility.test.ts";
+  const MIGRATION_PATHS = [
+    "packages/data/migrations/0099_add_column.sql",
+    "packages/data/migrations-purge-marker/0007_new_purge_table.sql",
+  ];
+
+  it.each(MIGRATION_PATHS)(
+    "selects the upgrade drill exactly once from the %s path hint",
+    (changedPath) => {
+      const plan = planDailyReleaseValidation(
+        request({ declaredImpacts: [], changedPaths: [changedPath] }),
+      );
+      const selected = plan.targeted.filter(
+        (entry) => entry.check.id === MIGRATION_UPGRADE_CHECK,
+      );
+
+      expect(selected).toHaveLength(1);
+      expect(selected[0]?.source).toBe("path-hint");
+      expect(selected[0]?.check.command).toBe(MIGRATION_UPGRADE_COMMAND);
+      expect(selected[0]?.check.evidenceLocation).toBe(
+        "artifacts/vitest-report.json",
+      );
+      expect(plan.fullAcceptance.required).toBe(false);
+    },
+  );
+
+  it("does not add the upgrade drill for a migration-free change", () => {
+    const plan = planDailyReleaseValidation(
+      request({ declaredImpacts: ["server-business"] }),
+    );
+
+    expect(selectedIds(plan)).not.toContain(MIGRATION_UPGRADE_CHECK);
+  });
+
+  it("keeps exactly the three registry-owned pre-merge deferrals", () => {
+    const DEPLOYED_EFFECTIVE_CONFIGURATION = {
+      reason: "requires-deployed-effective-configuration",
+      followUp: { stage: "acceptance", command: "pnpm release:config:compare" },
+    } as const;
+    const expected = new Map<string, unknown>([
+      ["prompt-budget:effective-config-diff", DEPLOYED_EFFECTIVE_CONFIGURATION],
+      ["provider:effective-config-diff", DEPLOYED_EFFECTIVE_CONFIGURATION],
+      [
+        "provider:affected-role-calls",
+        {
+          reason: "requires-paid-live-provider-calls",
+          followUp: {
+            stage: "acceptance",
+            command: "pnpm exec tsx scripts/capture-g1-role-provider-calls.ts",
+          },
+        },
+      ],
+    ]);
+
+    expect(
+      RELEASE_CHECKS.filter((check) => check.preMergeDeferral !== undefined)
+        .map((check) => check.id)
+        .sort(),
+    ).toEqual([...expected.keys()].sort());
+
+    for (const check of RELEASE_CHECKS) {
+      if (expected.has(check.id)) {
+        expect(preMergeDeferralFor(check.id)).toEqual(expected.get(check.id));
+      } else {
+        expect(preMergeDeferralFor(check.id)).toBeNull();
+      }
+    }
+    expect(preMergeDeferralFor("no:such-check")).toBeNull();
   });
 });
 
@@ -176,6 +287,23 @@ describe("unknown impact is located, never escalated", () => {
     expect(plan.fullAcceptance.required).toBe(false);
     expect(selectedIds(plan)).not.toContain(FULL_ACCEPTANCE_CHECK);
     expect(plan.producerInvocations).toEqual([]);
+  });
+
+  it("treats the PR approval apparatus as located without a behavior impact", () => {
+    const paths = [
+      "docs/agents/pr-auto-approval.md",
+      "scripts/daily-release-validation.ts",
+      "scripts/pr-approval-controller.ts",
+      "scripts/pr-review-gate.ts",
+      "tests/pr-review-gate.test.ts",
+    ];
+    const plan = planDailyReleaseValidation(request({ changedPaths: paths }));
+
+    expect(plan.requiresImpactLocation).toBe(false);
+    expect(selectedIds(plan)).toEqual(FIXED_PR_CI_BASELINE);
+    expect(classifyReleaseImpact([], [...paths, "unknown/tool.ts"]).located).toBe(false);
+    expect(classifyReleaseImpact([], [...paths, "packages/ai/src/provider.ts"]).effective)
+      .toContain("provider-migration");
   });
 });
 

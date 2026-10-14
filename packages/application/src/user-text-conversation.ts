@@ -48,10 +48,19 @@ export type RecordUserTextTurnInput = Readonly<{
   locale: string;
   logicalDate: string;
   now: Date;
+  /** The end-to-end deadline frozen onto the command (issue #319). */
+  requestDeadlineAt?: Date;
   text: string;
   timezone: string;
   userId: UserId;
 }>;
+
+/**
+ * The freshness rule frozen onto every new conversation command (issue #319):
+ * an answer may be kept only while its input is the newest user message of its
+ * Daily Session. Named, so the rule is versioned rather than implied.
+ */
+export const LATEST_USER_INPUT_FENCE_VERSION = "latest_user_input:v1";
 
 export type RecordConversationRetryInput = Readonly<{
   expectedBackupPolicyVersion: string;
@@ -60,6 +69,7 @@ export type RecordConversationRetryInput = Readonly<{
   inactivityPolicy: InactivityPolicy;
   now: Date;
   originalTurnId: InteractionTurnId;
+  requestDeadlineAt?: Date;
   retryRequestId: RetryRequestId;
   userId: UserId;
 }>;
@@ -382,6 +392,7 @@ export type UserTextConversationService = Readonly<{
       originalTurnId: string;
       retryRequestId: string;
     },
+    options?: Readonly<{ requestDeadlineAt?: Date }>,
   ): Promise<ConversationRetryTurn>;
   submit(
     userId: UserId,
@@ -392,6 +403,7 @@ export type UserTextConversationService = Readonly<{
       text: string;
       timezone: string;
     },
+    options?: Readonly<{ requestDeadlineAt?: Date }>,
   ): Promise<UserTextTurn>;
 }>;
 
@@ -635,7 +647,7 @@ export function createUserTextConversationService(dependencies: {
         userId,
       });
     },
-    async retry(userId, rawInput) {
+    async retry(userId, rawInput, options) {
       await dependencies.recoveryGate?.requireOpen(userId);
       let originalTurnId: InteractionTurnId;
       try {
@@ -657,6 +669,9 @@ export function createUserTextConversationService(dependencies: {
         inactivityPolicy,
         now: dependencies.clock(),
         originalTurnId,
+        ...(options?.requestDeadlineAt
+          ? { requestDeadlineAt: options.requestDeadlineAt }
+          : {}),
         retryRequestId,
         userId,
       });
@@ -674,7 +689,7 @@ export function createUserTextConversationService(dependencies: {
       }
       return result.retry;
     },
-    async submit(userId, rawInput) {
+    async submit(userId, rawInput, options) {
       await dependencies.recoveryGate?.requireOpen(userId);
       const input = validateUserTextInput(rawInput);
       const now = dependencies.clock();
@@ -688,6 +703,9 @@ export function createUserTextConversationService(dependencies: {
         inactivityPolicy,
         logicalDate: localDateAt(now, input.timezone),
         now,
+        ...(options?.requestDeadlineAt
+          ? { requestDeadlineAt: options.requestDeadlineAt }
+          : {}),
         userId,
       });
 

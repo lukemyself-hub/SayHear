@@ -1,0 +1,42 @@
+{
+  "schemaVersion": "continuity-acceptance-oracle:v1",
+  "id": "S01",
+  "title": "Smoke: ordinary turn with yesterday in the default background",
+  "capability": "An ordinary present-tense remark is answered through the full chat path. Yesterday's messages are inside the seven-day default background, so they reach the Provider, but the reply has no reason to bring them up. Guards the slow-turn clue from #312 on the plain path.",
+  "spec": ["#301 baseline", "#312"],
+  "ownerTickets": ["#313"],
+  "language": "zh",
+  "fixture": { "version": "dev-1", "sha256": "2d0e724ded65dab98ecb4811d40a016e555e901c1b6193980ac56bfa4d88b1bd" },
+  "facts": {
+    "allowed": [
+      { "id": "a-commute", "statement": "This morning's subway ride was crowded and left the person drained on arrival at work.", "sources": ["t1:input"] }
+    ],
+    "forbidden": [
+      { "id": "f-unprompted-advice", "statement": "Unrequested tips on how to commute or manage energy.", "sources": [] },
+      { "id": "f-forced-recall", "statement": "Steering the reply toward the noodle lunch or the repotted herb although nothing in the remark calls for them.", "sources": ["d1-a:user", "d1-b:user"] }
+    ]
+  },
+  "topics": [],
+  "time": [],
+  "expectedBehavior": [
+    "Receive the tiredness in the person's own language without advice.",
+    "Do not volunteer yesterday's subjects; an ordinary chat that mentions no past event is correct."
+  ],
+  "failureSignals": [
+    "The turn does not commit, or history disagrees with the stream.",
+    "Yesterday's messages are missing from the default background.",
+    "An Action is proposed for a plain remark."
+  ],
+  "sourceEligibility": [
+    { "source": "d1-a:user", "eligibility": "allowed", "reason": "Expressed yesterday, inside the seven-day default background." },
+    { "source": "d1-b:user", "eligibility": "allowed", "reason": "Expressed yesterday, inside the seven-day default background." }
+  ],
+  "criteria": [
+    { "id": "O-commit", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The turn streams and commits.", "check": { "type": "turn_committed", "step": "t1" } },
+    { "id": "O-history", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "Authoritative history holds the user message once, followed by exactly the streamed reply.", "check": { "type": "history_matches_stream", "step": "t1" } },
+    { "id": "O-background", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "Yesterday's user messages reach the Provider as default background.", "check": { "type": "outbound_includes", "step": "t1", "sources": ["d1-a:user", "d1-b:user"] } },
+    { "id": "O-usage", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "Token usage is recorded for the attempt.", "check": { "type": "usage_recorded", "step": "t1" } },
+    { "id": "O-deadline", "kind": "objective", "modes": ["real-model"], "description": "First visible text within 3 s and the complete reply within 10 s (CLI network).", "check": { "type": "deadline", "step": "t1", "firstVisibleTextMaxMs": 3000, "completeMaxMs": 10000 } },
+    { "id": "S-reply", "kind": "semantic", "description": "The reply addresses this morning's remark and neither advises nor forces yesterday in.", "step": "t1", "required": ["a-commute"], "forbidden": ["f-unprompted-advice", "f-forced-recall"] }
+  ]
+}

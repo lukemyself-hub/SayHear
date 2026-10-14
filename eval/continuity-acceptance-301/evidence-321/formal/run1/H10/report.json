@@ -1,0 +1,627 @@
+{
+  "budget": {
+    "blockers": [
+      "Real-model mode must be explicitly enabled with SAYHEAR_ACCEPTANCE_REAL_MODEL=enabled in addition to --mode real-model."
+    ],
+    "capUsdMicros": 10000000,
+    "estimatedCostUsdMicros": 460800,
+    "inputTokenUpperBound": 384000,
+    "mode": "real-model",
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "outputTokenUpperBound": 288000,
+    "paidRequestUpperBound": 24,
+    "remainingUsdMicros": 9155596,
+    "requestsPerStepUpperBound": 4,
+    "shape": {
+      "generationSteps": 5,
+      "scheduledScans": 2,
+      "seedTurns": 3
+    },
+    "status": "blocked",
+    "unknownCostEntries": 0,
+    "waivedPreconditions": [
+      {
+        "by": "Luke",
+        "date": "2026-10-11",
+        "statement": "Relayed to the T08 agent by the coordinating agent as Luke's words: \"#307 的遗留问题,应当在 T01–T07 开发期间解决了(包括耗时问题和回忆历史消息等),因此 T08 可以正常启动\" and \"授权 T08 调用 OpenCode Go 跑真实 DeepSeek V4.1 Flash 模型\". This is a decision to proceed. It is not a record that the #307 online acceptance was completed: #307 was closed with its online acceptance not passed.",
+        "id": "issue-307-online-acceptance"
+      }
+    ]
+  },
+  "case": {
+    "caseId": "H10",
+    "criteria": [
+      {
+        "description": "Seeded history is read back verbatim through the normal history API.",
+        "evidence": [],
+        "id": "INV-seed-readback",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "All 3 seeded turns are present exactly once.",
+        "status": "pass"
+      },
+      {
+        "description": "No oracle text, scenario title or expected answer appears in any Provider request.",
+        "evidence": [],
+        "id": "INV-oracle-not-in-outbound",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "Scanned 898 outbound strings; none carries oracle text.",
+        "status": "pass"
+      },
+      {
+        "description": "Authoritative history contains every message exactly once.",
+        "evidence": [],
+        "id": "INV-no-duplicate-messages",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "14 messages, no duplicates.",
+        "status": "pass"
+      },
+      {
+        "description": "Nothing is committed for the first abandoned question.",
+        "evidence": [
+          "after abort, message following 01a1453a-2180-73e2-84cb-3b5994c60b73: user \"Sorry, I cut that short. Just remind me who rode with me.\""
+        ],
+        "id": "O-cancel-1",
+        "kind": "objective",
+        "owner": null,
+        "reason": "No assistant reply was committed for the cancelled turn.",
+        "status": "pass"
+      },
+      {
+        "description": "The narrowed question streams and commits.",
+        "evidence": [
+          "steps[supplement].chat.httpStatus=200",
+          "steps[supplement].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-supplement-commit",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "History holds the narrowed question once, followed by exactly its reply.",
+        "evidence": [
+          "finalHistory has 1 message(s) with id 01a1453a-8328-761c-8fcf-ceefbe82caa6",
+          "next message: assistant \"Marek from work and his daughter Zofia rode with you — that \""
+        ],
+        "id": "O-supplement-history",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Authoritative history holds the user message once, followed by exactly the streamed reply.",
+        "status": "pass"
+      },
+      {
+        "description": "The message naming the companions reaches the Provider.",
+        "evidence": [
+          "ride-a:user: providerRequest=present, inspector.referencedEvents=present"
+        ],
+        "id": "O-supplement-sources",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Every required source reached the Provider and is recorded by the Inspector.",
+        "status": "pass"
+      },
+      {
+        "description": "Nothing is committed for the second abandoned question.",
+        "evidence": [
+          "after abort, message following 01a1453b-f640-7568-8878-6a759f4348f5: user \"Leave the ride. It is the clutch business that is actually n\""
+        ],
+        "id": "O-cancel-2",
+        "kind": "objective",
+        "owner": null,
+        "reason": "No assistant reply was committed for the cancelled turn.",
+        "status": "pass"
+      },
+      {
+        "description": "History holds the change of subject once, followed by exactly its reply.",
+        "evidence": [
+          "finalHistory has 1 message(s) with id 01a1453c-4460-7bf9-b6a5-1fe8dd8b3c46",
+          "next message: assistant \"Right, I'll leave the ride.\\n\\nSo it's the clutch. Friday's th\""
+        ],
+        "id": "O-switch-commit",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Authoritative history holds the user message once, followed by exactly the streamed reply.",
+        "status": "pass"
+      },
+      {
+        "description": "Sending the same message again is idempotent.",
+        "evidence": [
+          "steps[switch].chat.userMessageId=01a1453c-4460-7bf9-b6a5-1fe8dd8b3c46",
+          "steps[resend].chat.userMessageId=01a1453c-4460-7bf9-b6a5-1fe8dd8b3c46",
+          "steps[resend].providerRequests (conversation turn)=0",
+          "finalHistory copies=1"
+        ],
+        "id": "O-resend",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The resend resolved to the original message and caused no new generation.",
+        "status": "pass"
+      },
+      {
+        "description": "Sending it again after a restart is idempotent.",
+        "evidence": [
+          "steps[switch].chat.userMessageId=01a1453c-4460-7bf9-b6a5-1fe8dd8b3c46",
+          "steps[reconnect].chat.userMessageId=01a1453c-4460-7bf9-b6a5-1fe8dd8b3c46",
+          "steps[reconnect].providerRequests (conversation turn)=0",
+          "finalHistory copies=1"
+        ],
+        "id": "O-reconnect",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The resend resolved to the original message and caused no new generation.",
+        "status": "pass"
+      },
+      {
+        "description": "The conversation carries on normally after the restart.",
+        "evidence": [
+          "finalHistory has 1 message(s) with id 01a1453d-cb00-74e7-8bc0-3ec04fec7d23",
+          "next message: assistant \"You've landed on it, then. Ring them, say go ahead — done th\""
+        ],
+        "id": "O-after-restart",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Authoritative history holds the user message once, followed by exactly the streamed reply.",
+        "status": "pass"
+      },
+      {
+        "description": "Response-time contract for the narrowed question.",
+        "evidence": [
+          "steps[supplement].chat.timing.firstVisibleTextMs=2703.7873749999562 (CLI network, limit 3000)",
+          "steps[supplement].chat.timing.committedMs=2939.6495829999913 (CLI network, limit 10000)"
+        ],
+        "id": "O-supplement-deadline",
+        "kind": "objective",
+        "owner": "#319",
+        "reason": "CLI-observed timings are within the limits. Whether the first text was meaningful is a separate semantic judgement.",
+        "status": "pass"
+      },
+      {
+        "description": "Response-time contract for the change of subject.",
+        "evidence": [
+          "steps[switch].chat.timing.firstVisibleTextMs=13179.489624999987 (CLI network, limit 3000)",
+          "steps[switch].chat.timing.committedMs=13455.28904199996 (CLI network, limit 10000)"
+        ],
+        "id": "O-switch-deadline",
+        "kind": "objective",
+        "owner": "#319",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed.",
+        "status": "fail"
+      },
+      {
+        "description": "Response-time contract for the first turn after a restart (cold).",
+        "evidence": [
+          "steps[after].chat.timing.firstVisibleTextMs=3358.7375830000383 (CLI network, limit 3000)",
+          "steps[after].chat.timing.committedMs=3832.836083000002 (CLI network, limit 10000)"
+        ],
+        "id": "O-after-deadline",
+        "kind": "objective",
+        "owner": "#319",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed.",
+        "status": "fail"
+      },
+      {
+        "description": "The narrowed question is answered as narrowed.",
+        "evidence": [
+          "a-companions: pass — reply: \"Marek from work and his daughter Zofia rode with you\" — Both companions are named.",
+          "f-whole-ride: pass — The second day is not retold.",
+          "f-technical-talk: pass — No system vocabulary."
+        ],
+        "id": "S-supplement",
+        "kind": "semantic",
+        "owner": "#319",
+        "reason": "Every ledger item is settled by a finding that cites the reply.",
+        "status": "pass"
+      },
+      {
+        "description": "After the change of subject the reply stays with the new subject.",
+        "evidence": [
+          "a-repair-today: pass — reply: \"So it's the clutch\" — Stays with the repair decision.",
+          "f-stale-continuation: pass — The abandoned answer is not continued.",
+          "f-technical-talk: pass — No system vocabulary."
+        ],
+        "id": "S-switch",
+        "kind": "semantic",
+        "owner": "#319",
+        "reason": "Every ledger item is settled by a finding that cites the reply.",
+        "status": "pass"
+      }
+    ],
+    "mode": "real-model",
+    "pipelineOnly": [],
+    "reviewer": "agent:claude-opus-5.5-t08",
+    "runId": "run-d79d2fd2-011d-4cb3-bd91-59da9e329169",
+    "status": "fail"
+  },
+  "diagnosis": [
+    {
+      "diagnosis": {
+        "disagreements": [],
+        "payloadReadStatus": null,
+        "readState": "unread",
+        "sources": [
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: no history branch",
+              "provider payload: message 1",
+              "time of message 1: 2026-10-12 (expected 2026-10-12)"
+            ],
+            "fault": "none",
+            "source": "ride-a:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-7",
+              "requestSequence": 7
+            }
+          }
+        ]
+      },
+      "stepId": "supplement"
+    }
+  ],
+  "identity": {
+    "fixtureSha256": "64409e2d99d602c3a012ee077ad36d173d238155660b38b00cbf784f282b6881",
+    "fixtureVersion": "final-1",
+    "gitCommit": "1cfdf11a992d7bc7f6536c5dda783a4995fd8c28",
+    "gitDirty": true,
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "recentContextGovernance": "active",
+    "runId": "run-d79d2fd2-011d-4cb3-bd91-59da9e329169",
+    "oracleSha256": "2a376a6c428cc96af5c07198f75fcf197539477f89682d23b21e295ecc6f0be2",
+    "title": "H10 Holdout: giving up on a question, narrowing it, changing subject, sending again and coming back"
+  },
+  "remainingRisks": [
+    "The working tree had uncommitted changes; the commit alone does not identify the code that ran.",
+    "Timings are CLI network observations, not browser rendering times (T08 #321 covers the browser)."
+  ],
+  "reproducibilityDigest": "5523e20a16034c3f4b34fcdcb553a3ef78b7dff74e7aac668dc0a56406878d92",
+  "schemaVersion": "continuity-acceptance-report:v1",
+  "sourceManifest": [
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "ride-a:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "ride-a:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "ride-b:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "ride-b:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "garage:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "garage:assistant"
+        }
+      ],
+      "stepId": "ask"
+    },
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "ride-a:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "ride-a:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "ride-b:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "ride-b:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "garage:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "garage:assistant"
+        }
+      ],
+      "stepId": "supplement"
+    },
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "ride-a:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "ride-a:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "ride-b:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "ride-b:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "garage:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "garage:assistant"
+        }
+      ],
+      "stepId": "ask-again"
+    },
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "ride-a:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "ride-a:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "ride-b:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "ride-b:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "garage:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "garage:assistant"
+        }
+      ],
+      "stepId": "switch"
+    },
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "ride-a:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "ride-a:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "ride-b:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "ride-b:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "garage:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "garage:assistant"
+        }
+      ],
+      "stepId": "after"
+    }
+  ],
+  "timings": [
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 40.76437499996973,
+      "cliCommittedMs": null,
+      "cliFirstVisibleTextMs": null,
+      "cliStreamClosedMs": 705.099291999999,
+      "providerLatencyMs": 0,
+      "stepId": "ask"
+    },
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 23.208207999996375,
+      "cliCommittedMs": 2939.6495829999913,
+      "cliFirstVisibleTextMs": 2703.7873749999562,
+      "cliStreamClosedMs": 2939.736082999967,
+      "providerLatencyMs": 0,
+      "stepId": "supplement"
+    },
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 36.2105000000447,
+      "cliCommittedMs": null,
+      "cliFirstVisibleTextMs": null,
+      "cliStreamClosedMs": 1802.6375420000404,
+      "providerLatencyMs": 0,
+      "stepId": "ask-again"
+    },
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 22.213708999974187,
+      "cliCommittedMs": 13455.28904199996,
+      "cliFirstVisibleTextMs": 13179.489624999987,
+      "cliStreamClosedMs": 13455.359375,
+      "providerLatencyMs": 0,
+      "stepId": "switch"
+    },
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 17.70508299994981,
+      "cliCommittedMs": 18.585999999952037,
+      "cliFirstVisibleTextMs": 18.579957999987528,
+      "cliStreamClosedMs": 18.613790999981575,
+      "providerLatencyMs": 0,
+      "stepId": "resend"
+    },
+    {
+      "appState": "cold",
+      "cliAcceptedMs": 49.45433400000911,
+      "cliCommittedMs": 50.27195900003426,
+      "cliFirstVisibleTextMs": 50.26845900004264,
+      "cliStreamClosedMs": 50.29541700001573,
+      "providerLatencyMs": 0,
+      "stepId": "reconnect"
+    },
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 23.97087499999907,
+      "cliCommittedMs": 3832.836083000002,
+      "cliFirstVisibleTextMs": 3358.7375830000383,
+      "cliStreamClosedMs": 3832.9257920000236,
+      "providerLatencyMs": 0,
+      "stepId": "after"
+    }
+  ],
+  "transcript": [
+    {
+      "assistant": "",
+      "at": "2026-10-16T15:00:00.000Z",
+      "stepId": "ask",
+      "terminalEvent": null,
+      "type": "say",
+      "user": "What did I tell you about the bike ride?"
+    },
+    {
+      "assistant": "Marek from work and his daughter Zofia rode with you — that was the two-day coastal ride at the weekend. Zofia was the one who got the puncture before you'd even gone a mile from the car park.",
+      "at": "2026-10-16T15:00:25.000Z",
+      "stepId": "supplement",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "Sorry, I cut that short. Just remind me who rode with me."
+    },
+    {
+      "assistant": "",
+      "at": "2026-10-16T15:02:00.000Z",
+      "stepId": "ask-again",
+      "terminalEvent": null,
+      "type": "say",
+      "user": "And how did the second day turn out?"
+    },
+    {
+      "assistant": "Right, I'll leave the ride.\n\nSo it's the clutch. Friday's the garage's deadline, and from where I'm sitting what's chewing at you isn't the repair itself — it's that you still haven't rung them back. What makes picking up the phone hard?",
+      "at": "2026-10-16T15:02:20.000Z",
+      "stepId": "switch",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "Leave the ride. It is the clutch business that is actually nagging at me today."
+    },
+    {
+      "assistant": "Right, I'll leave the ride.\n\nSo it's the clutch. Friday's the garage's deadline, and from where I'm sitting what's chewing at you isn't the repair itself — it's that you still haven't rung them back. What makes picking up the phone hard?",
+      "at": "2026-10-16T15:02:45.000Z",
+      "stepId": "resend",
+      "terminalEvent": "assistant_committed",
+      "type": "resend",
+      "user": "Leave the ride. It is the clutch business that is actually nagging at me today."
+    },
+    {
+      "assistant": null,
+      "at": "2026-10-16T15:03:00.000Z",
+      "stepId": "restart",
+      "terminalEvent": null,
+      "type": "restart",
+      "user": null
+    },
+    {
+      "assistant": "Right, I'll leave the ride.\n\nSo it's the clutch. Friday's the garage's deadline, and from where I'm sitting what's chewing at you isn't the repair itself — it's that you still haven't rung them back. What makes picking up the phone hard?",
+      "at": "2026-10-16T15:03:10.000Z",
+      "stepId": "reconnect",
+      "terminalEvent": "assistant_committed",
+      "type": "resend",
+      "user": "Leave the ride. It is the clutch business that is actually nagging at me today."
+    },
+    {
+      "assistant": "You've landed on it, then. Ring them, say go ahead — done thinking.\n\nNothing fancy needed for the call either. They've asked for a yes or no, and you've got one.",
+      "at": "2026-10-16T15:04:00.000Z",
+      "stepId": "after",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "I think I will just ring them and say go ahead."
+    }
+  ],
+  "usage": {
+    "inputTokens": null,
+    "outputTokens": null,
+    "paidCostUsdMicros": null,
+    "providerRequests": 5
+  }
+}

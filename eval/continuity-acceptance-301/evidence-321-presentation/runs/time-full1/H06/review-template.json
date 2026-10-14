@@ -1,0 +1,65 @@
+{
+  "caseId": "H06",
+  "findings": [
+    {
+      "criterionId": "S-ping",
+      "itemId": "a-flatmate-pitch",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-ping",
+      "itemId": "f-merge-people",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-ping",
+      "itemId": "f-swap-pitch",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-ping",
+      "itemId": "f-result",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-role",
+      "itemId": "a-designer-known",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-role",
+      "itemId": "a-role-open",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-role",
+      "itemId": "f-lead-fact",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-role",
+      "itemId": "f-merge-people",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    }
+  ],
+  "reviewer": "agent:<name> | human:<name>",
+  "rubricVersion": "continuity-rubric:v1",
+  "runId": "run-664ee0f1-0b87-4c6b-b35f-f11d128df27b",
+  "schemaVersion": "continuity-acceptance-review:v1"
+}

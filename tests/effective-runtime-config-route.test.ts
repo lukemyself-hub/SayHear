@@ -13,6 +13,14 @@ const mocks = vi.hoisted(() => {
         policyCount: 0,
       }),
     },
+    historyRecallGovernanceRepository: {
+      findEffectiveState: async () => ({
+        active: null,
+        enabled: false,
+        latest: null,
+        policyCount: 0,
+      }),
+    },
   }));
   return { assertOperator, createServerComposition };
 });
@@ -22,6 +30,8 @@ vi.mock("../apps/web/src/server-composition", () => ({
 }));
 
 import {
+  HISTORY_RECALL_CONVERSATION_HARNESS_POLICY,
+  HISTORY_RECALL_DEFAULT_POLICY,
   RECENT_CONTEXT_COMPILER_VERSION,
   RECENT_CONTEXT_DEFAULT_POLICY,
   RECENT_CONTEXT_SELECTION_POLICY_VERSION,
@@ -191,6 +201,59 @@ describe("effective runtime configuration recent-context governance (#295)", () 
     expect(item("parameters.recent_context.budget_tokens")).toMatchObject({
       source: "unverified",
       value: null,
+    });
+  });
+
+  describe("history-recall governance (#320)", () => {
+    const historyPolicy = (historyPolicyVersion: string) => ({
+      changedBy: "owner",
+      compilerVersion: "context-compiler:history-time:v1",
+      createdAt: "2026-10-11T08:00:00.000Z",
+      harnessPolicyVersion: HISTORY_RECALL_CONVERSATION_HARNESS_POLICY.version,
+      historyPolicyVersion,
+      policyVersion: "history-recall-governance:test",
+      revokedAt: null,
+      revokedBy: null,
+      status: "active" as const,
+    });
+    const item = (snapshot: ReturnType<typeof buildEffectiveRuntimeConfiguration>, key: string) =>
+      snapshot.items.find((entry) => entry.key === key)!;
+
+    it("is unverified when the probe is missing, never read as enabled", () => {
+      const snapshot = buildEffectiveRuntimeConfiguration(environment, {});
+      expect(item(snapshot, "switch.history_recall_governance_enabled")).toMatchObject({
+        source: "unverified",
+        value: null,
+      });
+    });
+
+    it("reports the active identity only when it names the budget identity wired here", () => {
+      const matching = buildEffectiveRuntimeConfiguration(environment, {
+        historyRecallGovernance: {
+          active: historyPolicy(HISTORY_RECALL_DEFAULT_POLICY.version),
+          enabled: true,
+          latest: historyPolicy(HISTORY_RECALL_DEFAULT_POLICY.version),
+          policyCount: 1,
+        },
+      });
+      expect(item(matching, "switch.history_recall_governance_enabled").value).toBe(true);
+      expect(item(matching, "policy.history_recall_governance_version")).toMatchObject({
+        source: "override",
+        value: "history-recall-governance:test",
+      });
+      const mismatched = buildEffectiveRuntimeConfiguration(environment, {
+        historyRecallGovernance: {
+          active: historyPolicy("history-recall:v0"),
+          enabled: true,
+          latest: historyPolicy("history-recall:v0"),
+          policyCount: 1,
+        },
+      });
+      expect(item(mismatched, "switch.history_recall_governance_enabled").value).toBe(false);
+      expect(item(mismatched, "policy.history_recall_governance_version")).toMatchObject({
+        source: "unverified",
+        value: null,
+      });
     });
   });
 });

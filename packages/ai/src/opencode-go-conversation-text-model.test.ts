@@ -641,6 +641,16 @@ describe("OpenCode Go Chat Completions Conversation Text adapter", () => {
               model: MODEL,
             },
             { choices: [{ delta: {}, finish_reason: "stop", index: 0 }], model: MODEL },
+            {
+              choices: [],
+              model: MODEL,
+              usage: {
+                completion_tokens: 677,
+                completion_tokens_details: { reasoning_tokens: 675 },
+                prompt_tokens: 3597,
+                total_tokens: 4274,
+              },
+            },
             DONE,
           ),
         ),
@@ -648,6 +658,28 @@ describe("OpenCode Go Chat Completions Conversation Text adapter", () => {
 
     const error = await catchError(() => collect(model, baseRequest()));
     expect(error).toMatchObject({ category: "invalid_response" });
+    // The cause is proven, so the caller can tell an empty reply (worth one
+    // more try) from a malformed stream (never retried), and the spend of the
+    // empty call is still known.
+    expect((error as { failure?: unknown }).failure).toMatchObject({
+      inputTokens: 3597,
+      kind: "empty_output",
+      outputLength: 0,
+      outputTokens: 677,
+      providerReason: null,
+      reasoningTokens: 675,
+    });
+  });
+
+  it("does not call a stop stream that carried tool fragments an empty reply", async () => {
+    const model = createOpenCodeGoConversationTextModel({
+      apiKey: "synthetic-server-key",
+      fetchImplementation: async () =>
+        okResponse("data: {not json}\r\n\r\n" + "data: [DONE]\r\n\r\n"),
+    });
+    const error = await catchError(() => collect(model, baseRequest()));
+    expect(error).toMatchObject({ category: "invalid_response" });
+    expect((error as { failure?: unknown }).failure).toBeUndefined();
   });
 
   it("discards reasoning_content and emits only visible content", async () => {

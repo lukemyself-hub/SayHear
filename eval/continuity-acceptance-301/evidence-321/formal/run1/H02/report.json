@@ -1,0 +1,560 @@
+{
+  "budget": {
+    "blockers": [
+      "Real-model mode must be explicitly enabled with SAYHEAR_ACCEPTANCE_REAL_MODEL=enabled in addition to --mode real-model."
+    ],
+    "capUsdMicros": 10000000,
+    "estimatedCostUsdMicros": 345600,
+    "inputTokenUpperBound": 288000,
+    "mode": "real-model",
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "outputTokenUpperBound": 216000,
+    "paidRequestUpperBound": 18,
+    "remainingUsdMicros": 9155596,
+    "requestsPerStepUpperBound": 4,
+    "shape": {
+      "generationSteps": 4,
+      "scheduledScans": 1,
+      "seedTurns": 3
+    },
+    "status": "blocked",
+    "unknownCostEntries": 0,
+    "waivedPreconditions": [
+      {
+        "by": "Luke",
+        "date": "2026-10-11",
+        "statement": "Relayed to the T08 agent by the coordinating agent as Luke's words: \"#307 的遗留问题,应当在 T01–T07 开发期间解决了(包括耗时问题和回忆历史消息等),因此 T08 可以正常启动\" and \"授权 T08 调用 OpenCode Go 跑真实 DeepSeek V4.1 Flash 模型\". This is a decision to proceed. It is not a record that the #307 online acceptance was completed: #307 was closed with its online acceptance not passed.",
+        "id": "issue-307-online-acceptance"
+      }
+    ]
+  },
+  "case": {
+    "caseId": "H02",
+    "criteria": [
+      {
+        "description": "Seeded history is read back verbatim through the normal history API.",
+        "evidence": [],
+        "id": "INV-seed-readback",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "All 3 seeded turns are present exactly once.",
+        "status": "pass"
+      },
+      {
+        "description": "No oracle text, scenario title or expected answer appears in any Provider request.",
+        "evidence": [],
+        "id": "INV-oracle-not-in-outbound",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "Scanned 817 outbound strings; none carries oracle text.",
+        "status": "pass"
+      },
+      {
+        "description": "Authoritative history contains every message exactly once.",
+        "evidence": [],
+        "id": "INV-no-duplicate-messages",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "14 messages, no duplicates.",
+        "status": "pass"
+      },
+      {
+        "description": "The first question streams and commits.",
+        "evidence": [
+          "steps[said].chat.httpStatus=200",
+          "steps[said].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-commit",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "The second question streams and commits.",
+        "evidence": [
+          "steps[happened].chat.httpStatus=200",
+          "steps[happened].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-commit-happened",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "The third question streams and commits.",
+        "evidence": [
+          "steps[when].chat.httpStatus=200",
+          "steps[when].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-commit-when",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "All three of yesterday's messages reach the Provider for the question about what happened.",
+        "evidence": [
+          "market:user: providerRequest=present, inspector.referencedEvents=present",
+          "tyre:user: providerRequest=present, inspector.referencedEvents=present",
+          "mentor:user: providerRequest=present, inspector.referencedEvents=present"
+        ],
+        "id": "O-sources",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Every required source reached the Provider and is recorded by the Inspector.",
+        "status": "pass"
+      },
+      {
+        "description": "The messages are filed under the day they were said.",
+        "evidence": [
+          "seed.turns[market] -> session 01a1e94e-8680-7a8f-b7c7-1f2120fca5a3 logicalDate 2026-11-17 (expected 2026-11-17)",
+          "seed.turns[mentor] -> session 01a1e94e-8680-7a8f-b7c7-1f2120fca5a3 logicalDate 2026-11-17 (expected 2026-11-17)"
+        ],
+        "id": "O-ownership",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Every message is owned by the expected Daily Session date.",
+        "status": "pass"
+      },
+      {
+        "description": "Response-time contract for the first question.",
+        "evidence": [
+          "steps[said].chat.timing.firstVisibleTextMs=15574.246500000008 (CLI network, limit 3000)",
+          "steps[said].chat.timing.committedMs=16486.855666000003 (CLI network, limit 10000)"
+        ],
+        "id": "O-said-deadline",
+        "kind": "objective",
+        "owner": "#319",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed.",
+        "status": "fail"
+      },
+      {
+        "description": "Response-time contract for the second question.",
+        "evidence": [
+          "steps[happened].chat.timing.firstVisibleTextMs=18661.577124999996 (CLI network, limit 3000)",
+          "steps[happened].chat.timing.committedMs=19521.839041999992 (CLI network, limit 10000)"
+        ],
+        "id": "O-happened-deadline",
+        "kind": "objective",
+        "owner": "#319",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed.",
+        "status": "fail"
+      },
+      {
+        "description": "Response-time contract for the third question.",
+        "evidence": [
+          "steps[when].chat.timing.firstVisibleTextMs=3997.7104580000014 (CLI network, limit 3000)",
+          "steps[when].chat.timing.committedMs=4443.192791000009 (CLI network, limit 10000)"
+        ],
+        "id": "O-when-deadline",
+        "kind": "objective",
+        "owner": "#319",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed.",
+        "status": "fail"
+      },
+      {
+        "description": "What was talked about yesterday: three subjects, none presented as yesterday's event unless it was.",
+        "evidence": [
+          "t-market: pass — reply: \"陪我妈去了城南的花市\" — The plant market outing is listed.",
+          "t-tyre: pass — reply: \"把自行车后胎补了\" — The tyre repair is listed.",
+          "t-mentor: pass — reply: \"师傅老秦吃了顿饭\" — The meal with the former mentor is listed.",
+          "tm-said-yesterday: pass — reply: \"昨天你说了三件事\" — All three are placed on the day before the question, with clock times that match the fixture (19:40 to 19:55 local).",
+          "f-market-yesterday: pass — The outing is reported as something said yesterday about 'the day before yesterday', not as yesterday's event."
+        ],
+        "id": "S-said",
+        "kind": "semantic",
+        "owner": null,
+        "reason": "Every ledger item is settled by a finding that cites the reply.",
+        "status": "pass"
+      },
+      {
+        "description": "What the person did yesterday: the repair, with the outing placed on its own day.",
+        "evidence": [
+          "a-repair-done: pass — reply: \"中午趁午休把自行车后胎补了\" — Only the repair is given as what was done that day.",
+          "f-market-yesterday: pass — The reply says the market trip does not fall on yesterday.",
+          "f-meal-dated: pass — The reply says no specific day was given for the meal."
+        ],
+        "id": "S-happened",
+        "kind": "semantic",
+        "owner": null,
+        "reason": "Every ledger item is settled by a finding that cites the reply.",
+        "status": "pass"
+      },
+      {
+        "description": "The fourth question streams and commits.",
+        "evidence": [
+          "steps[market-when].chat.httpStatus=200",
+          "steps[market-when].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-commit-market-when",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "Response-time contract for the fourth question.",
+        "evidence": [
+          "steps[market-when].chat.timing.firstVisibleTextMs=2289.8204579999874 (CLI network, limit 3000)",
+          "steps[market-when].chat.timing.committedMs=2755.3336249999993 (CLI network, limit 10000)"
+        ],
+        "id": "O-market-when-deadline",
+        "kind": "objective",
+        "owner": "#319",
+        "reason": "CLI-observed timings are within the limits. Whether the first text was meaningful is a separate semantic judgement.",
+        "status": "pass"
+      },
+      {
+        "description": "A relative day inside an old message is resolved from when it was said.",
+        "evidence": [
+          "tm-market-day: pass — reply: \"也就是十一月十五号\" — Resolved from the day it was said (17 November), giving 15 November.",
+          "f-market-wrong-anchor: pass — 16 November is not given."
+        ],
+        "id": "S-market-when",
+        "kind": "semantic",
+        "owner": "#307",
+        "reason": "Every ledger item is settled by a finding that cites the reply.",
+        "status": "pass"
+      },
+      {
+        "description": "The undated meal stays undated.",
+        "evidence": [
+          "tm-meal-undated: pass — reply: \"具体哪天没提\" — States that only a vague 'a while back' was said.",
+          "f-meal-dated: pass — No date is invented.",
+          "f-meal-unknown: pass — The meal itself is acknowledged."
+        ],
+        "id": "S-when",
+        "kind": "semantic",
+        "owner": null,
+        "reason": "Every ledger item is settled by a finding that cites the reply.",
+        "status": "pass"
+      }
+    ],
+    "mode": "real-model",
+    "pipelineOnly": [],
+    "reviewer": "agent:claude-opus-5.5-t08",
+    "runId": "run-21814c86-83da-430d-b1a4-62a37008ef56",
+    "status": "fail"
+  },
+  "diagnosis": [
+    {
+      "diagnosis": {
+        "disagreements": [],
+        "payloadReadStatus": "partial",
+        "readState": "partial",
+        "sources": [
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: present",
+              "provider payload: message 1",
+              "time of message 1: 2026-11-17 (expected 2026-11-17)"
+            ],
+            "fault": "none",
+            "source": "market:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-8",
+              "requestSequence": 8
+            }
+          },
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: present",
+              "provider payload: message 3",
+              "time of message 3: 2026-11-17 (expected 2026-11-17)"
+            ],
+            "fault": "none",
+            "source": "tyre:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-8",
+              "requestSequence": 8
+            }
+          },
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: present",
+              "provider payload: message 5",
+              "time of message 5: 2026-11-17 (expected 2026-11-17)"
+            ],
+            "fault": "none",
+            "source": "mentor:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-8",
+              "requestSequence": 8
+            }
+          }
+        ]
+      },
+      "stepId": "happened"
+    }
+  ],
+  "identity": {
+    "fixtureSha256": "c0d1d7a67fbfc20276359ea9ab1a4fb44e9967b026412db3faf9ff184b703b7f",
+    "fixtureVersion": "final-1",
+    "gitCommit": "1cfdf11a992d7bc7f6536c5dda783a4995fd8c28",
+    "gitDirty": true,
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "recentContextGovernance": "active",
+    "runId": "run-21814c86-83da-430d-b1a4-62a37008ef56",
+    "oracleSha256": "9b99811ee5ff1805a6a422469d1c0432908f7e7bb97e910db74524ecc266d384",
+    "title": "H02 Holdout: what was said yesterday versus what took place yesterday"
+  },
+  "remainingRisks": [
+    "The working tree had uncommitted changes; the commit alone does not identify the code that ran.",
+    "Timings are CLI network observations, not browser rendering times (T08 #321 covers the browser)."
+  ],
+  "reproducibilityDigest": "0e69567cc255317adf5d813055bb952a0555a7d7584a397ae755b991c28ef262",
+  "schemaVersion": "continuity-acceptance-report:v1",
+  "sourceManifest": [
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "market:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "market:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "tyre:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "tyre:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "mentor:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "mentor:assistant"
+        }
+      ],
+      "stepId": "said"
+    },
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "market:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "market:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "tyre:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "tyre:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "mentor:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "mentor:assistant"
+        }
+      ],
+      "stepId": "happened"
+    },
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "market:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "market:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "tyre:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "tyre:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "mentor:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "mentor:assistant"
+        }
+      ],
+      "stepId": "when"
+    },
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "market:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "market:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "tyre:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "tyre:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "mentor:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "mentor:assistant"
+        }
+      ],
+      "stepId": "market-when"
+    }
+  ],
+  "timings": [
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 53.65429099999892,
+      "cliCommittedMs": 16486.855666000003,
+      "cliFirstVisibleTextMs": 15574.246500000008,
+      "cliStreamClosedMs": 16486.948458,
+      "providerLatencyMs": 0,
+      "stepId": "said"
+    },
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 22.039499999998952,
+      "cliCommittedMs": 19521.839041999992,
+      "cliFirstVisibleTextMs": 18661.577124999996,
+      "cliStreamClosedMs": 19521.910499999998,
+      "providerLatencyMs": 0,
+      "stepId": "happened"
+    },
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 18.181540999998106,
+      "cliCommittedMs": 4443.192791000009,
+      "cliFirstVisibleTextMs": 3997.7104580000014,
+      "cliStreamClosedMs": 4443.2642909999995,
+      "providerLatencyMs": 0,
+      "stepId": "when"
+    },
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 23.40291599999182,
+      "cliCommittedMs": 2755.3336249999993,
+      "cliFirstVisibleTextMs": 2289.8204579999874,
+      "cliStreamClosedMs": 2755.3886249999923,
+      "providerLatencyMs": 0,
+      "stepId": "market-when"
+    }
+  ],
+  "transcript": [
+    {
+      "assistant": "昨天你说了三件事。傍晚七点四十左右你说前天陪我妈去了城南的花市，她挑了两盆蟹爪兰，非要自己拎，走到公交站还是塞给了你；过了几分钟，你又说起那天中午趁午休把自行车后胎补了，扎进去的是颗小图钉，补完手上全是黑的；到快八点的时候，你说前阵子跟以前厂里带你的师傅老秦吃了顿饭，他头发全白了，席上一直在说当年车间的事。",
+      "at": "2026-11-18T11:20:00.000Z",
+      "stepId": "said",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "我昨天跟你说了哪几件事来着？"
+    },
+    {
+      "assistant": "就你说过的来看，昨天当天的事只有一件：昨天傍晚你提到中午趁午休把自行车后胎补了，扎进去的是颗小图钉，补完手上全是黑的。你自己说的是「今天中午」，所以这件事就是昨天中午。花市那趟你当时讲的是「前天」，按你的话算不落在昨天；老秦那顿饭你说的是「前阵子」，没给具体日子。这些只是你昨天跟我讲过的，不代表你那天就只做了这些。",
+      "at": "2026-11-18T11:22:00.000Z",
+      "stepId": "happened",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "那昨天当天，我自己到底干了什么？"
+    },
+    {
+      "assistant": "这个我没法给你准日子。你当时说的是「前阵子」，具体哪天没提。按昨天的话推，只能知道是在昨天之前的一段日子里，再往下我就没有依据了。",
+      "at": "2026-11-18T11:24:00.000Z",
+      "stepId": "when",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "我跟老秦是哪天吃的饭来着？"
+    },
+    {
+      "assistant": "按昨天傍晚你那句话算，就是前天，也就是十一月十五号。你说的时候是十一月十七号晚上，「前天」往前推两天，落在十五号。这是从你自己的说法推出来的，我这边没有别的记录能对上。",
+      "at": "2026-11-18T11:26:00.000Z",
+      "stepId": "market-when",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "那花市呢，是几号去的？"
+    }
+  ],
+  "usage": {
+    "inputTokens": 16334,
+    "outputTokens": 2711,
+    "paidCostUsdMicros": null,
+    "providerRequests": 6
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "continuity-acceptance-fixture:v1",
+  "id": "H08",
+  "fixtureVersion": "final-1",
+  "stage": "final",
+  "languageVariant": "en",
+  "defaults": { "locale": "en-US", "timezone": "America/Toronto" },
+  "history": [
+    { "key": "say-a", "at": "2026-09-19T00:20:00.000Z", "user": "My sister Imogen had already booked the venue for Mom's retirement dinner before she told any of us. I said I would have liked to be asked, we argued about it for an hour on the phone, and in the end she moved it to a place I suggested.", "assistant": "An hour of arguing, and a dinner you had a hand in. That seems to have mattered." },
+    { "key": "say-b", "at": "2026-09-19T00:27:00.000Z", "user": "It did. I would honestly rather be asked what I think and fight it out than be the one who just goes along. Having a say matters more to me than keeping the peace.", "assistant": "Being asked is the part you would not give up, even at the price of a fight." },
+    { "key": "ferry", "at": "2026-10-05T23:40:00.000Z", "user": "Back from two nights on Pelee Island. The ferry home was so rough that half the deck was green and we sat inside eating crackers.", "assistant": "A rough crossing and a sleeve of crackers. Not the worst way to get home." }
+  ],
+  "steps": [
+    { "id": "praise", "type": "say", "at": "2026-10-17T23:10:00.000Z", "text": "At dinner tonight Imogen told everyone I am the easiest person in the family, never any fuss. They all laughed and agreed. I know it was meant kindly and I just feel small." }
+  ]
+}

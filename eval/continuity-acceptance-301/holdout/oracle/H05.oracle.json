@@ -1,0 +1,54 @@
+{
+  "schemaVersion": "continuity-acceptance-oracle:v1",
+  "id": "H05",
+  "title": "H05 Holdout: an answer arrives, with and without a cue to which matter it belongs",
+  "capability": "Holdout counterpart of the older-natural-continuation class. Two things are awaiting an answer: a request for a growing plot made over three months ago and a request to try out for a singing group made this week. A bare announcement that an answer has come cannot be attributed, so a light clarification is right and neither guessing the recent one nor asking for the whole story again is. Two days later, after talk of digging and of a posted letter from a committee, the same kind of sentence does carry a cue and should be connected to the old request.",
+  "spec": ["#301 R4", "ADR-0152"],
+  "ownerTickets": ["#317"],
+  "language": "en",
+  "fixture": { "version": "final-1", "sha256": "edf3388e43829ef00332e2b1a1227c448b6c8655e12328d8ae40647e83281455" },
+  "facts": {
+    "allowed": [
+      { "id": "a-two-pending", "statement": "Both a place on the waiting list for a growing plot and a request to try out for the community singers' winter performance are waiting for an answer.", "sources": ["plot-a:user", "choir-a:user"] },
+      { "id": "a-plot-reply", "statement": "The letter is about the growing plot the person signed up for in July, for which the organisers were to write by post once one came free.", "sources": ["plot-a:user", "plot-b:user", "cued:input"] }
+    ],
+    "forbidden": [
+      { "id": "f-assume-choir", "statement": "Taking the bare announcement to be about the singing group without checking.", "sources": ["choir-a:user", "choir-b:user"] },
+      { "id": "f-assume-plot", "statement": "Taking the bare announcement to be about the growing plot without checking.", "sources": ["plot-a:user"] },
+      { "id": "f-retell", "statement": "Asking the person to explain from the beginning what they had asked or signed up for.", "sources": [] },
+      { "id": "f-cued-choir", "statement": "Connecting the posted letter to the singing group despite the digging context, the post and the word used for the senders.", "sources": ["choir-a:user"] },
+      { "id": "f-outcome", "statement": "Stating or implying whether a plot has been offered; what the letter says has not been told.", "sources": [] }
+    ]
+  },
+  "topics": [],
+  "time": [],
+  "expectedBehavior": [
+    "Bare announcement: share the excitement and ask which one, naming both in a few words.",
+    "Cued announcement: recognise it as the answer about the plot and ask what it says, without inventing the outcome.",
+    "Never ask for the back story again."
+  ],
+  "failureSignals": [
+    "The old request never reaches the Provider when the cue points at it.",
+    "The bare announcement is silently attributed to the most recent matter.",
+    "The cued announcement still triggers a clarification or is attributed to the singing group."
+  ],
+  "sourceEligibility": [
+    { "source": "plot-a:user", "eligibility": "allowed", "reason": "Retained original expression of the older pending matter." },
+    { "source": "plot-b:user", "eligibility": "allowed", "reason": "Retained original expression; says how the answer would arrive." },
+    { "source": "choir-a:user", "eligibility": "allowed", "reason": "Recent pending matter, inside the default background." },
+    { "source": "choir-b:user", "eligibility": "allowed", "reason": "Recent pending matter, inside the default background." }
+  ],
+  "criteria": [
+    { "id": "O-bare-commit", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The bare announcement streams and commits.", "check": { "type": "turn_committed", "step": "bare" } },
+    { "id": "O-cued-commit", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The cued announcement streams and commits.", "check": { "type": "turn_committed", "step": "cued" } },
+    { "id": "O-bare-recent", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The recent pending matter is in the background of the bare announcement.", "check": { "type": "outbound_includes", "step": "bare", "sources": ["choir-a:user", "choir-b:user"] } },
+    { "id": "O-bare-older", "kind": "objective", "modes": ["real-model"], "owner": "#317", "description": "The older pending matter reaches the Provider for the bare announcement, so both can be named.", "check": { "type": "outbound_includes", "step": "bare", "sources": ["plot-a:user"] } },
+    { "id": "O-cued-older", "kind": "objective", "modes": ["real-model"], "owner": "#317", "description": "The older pending matter reaches the Provider for the cued announcement.", "check": { "type": "outbound_includes", "step": "cued", "sources": ["plot-a:user", "plot-b:user"] } },
+    { "id": "O-cued-context", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "What was said a moment earlier reaches the Provider for the cued announcement.", "check": { "type": "outbound_includes_input", "step": "cued", "inputs": ["garden"] } },
+    { "id": "O-bare-deadline", "kind": "objective", "modes": ["real-model"], "owner": "#319", "description": "Response-time contract for the bare announcement.", "check": { "type": "deadline", "step": "bare", "firstVisibleTextMaxMs": 3000, "completeMaxMs": 10000 } },
+    { "id": "O-garden-deadline", "kind": "objective", "modes": ["real-model"], "owner": "#319", "description": "Response-time contract for the ordinary remark.", "check": { "type": "deadline", "step": "garden", "firstVisibleTextMaxMs": 3000, "completeMaxMs": 10000 } },
+    { "id": "O-cued-deadline", "kind": "objective", "modes": ["real-model"], "owner": "#319", "description": "Response-time contract for the cued announcement.", "check": { "type": "deadline", "step": "cued", "firstVisibleTextMaxMs": 3000, "completeMaxMs": 10000 } },
+    { "id": "S-bare", "kind": "semantic", "owner": "#317", "description": "Without a cue, both pending matters are named and neither is assumed.", "step": "bare", "required": ["a-two-pending"], "forbidden": ["f-assume-choir", "f-assume-plot", "f-retell"] },
+    { "id": "S-cued", "kind": "semantic", "owner": "#317", "description": "With a cue, the announcement is connected to the old request and the outcome is not invented.", "step": "cued", "required": ["a-plot-reply"], "forbidden": ["f-cued-choir", "f-retell", "f-outcome"] }
+  ]
+}

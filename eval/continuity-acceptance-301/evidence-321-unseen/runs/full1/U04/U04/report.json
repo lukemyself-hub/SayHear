@@ -1,0 +1,277 @@
+{
+  "budget": {
+    "blockers": [],
+    "capUsdMicros": 10000000,
+    "estimatedCostUsdMicros": 192000,
+    "inputTokenUpperBound": 160000,
+    "mode": "real-model",
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "outputTokenUpperBound": 120000,
+    "paidRequestUpperBound": 10,
+    "remainingUsdMicros": 2994987,
+    "requestsPerStepUpperBound": 4,
+    "shape": {
+      "generationSteps": 1,
+      "scheduledScans": 3,
+      "seedTurns": 4
+    },
+    "status": "ready",
+    "unknownCostEntries": 0,
+    "waivedPreconditions": [
+      {
+        "by": "Luke",
+        "date": "2026-10-11",
+        "statement": "Relayed to the T08 agent by the coordinating agent as Luke's words: \"#307 的遗留问题,应当在 T01–T07 开发期间解决了(包括耗时问题和回忆历史消息等),因此 T08 可以正常启动\" and \"授权 T08 调用 OpenCode Go 跑真实 DeepSeek V4.1 Flash 模型\". This is a decision to proceed. It is not a record that the #307 online acceptance was completed: #307 was closed with its online acceptance not passed.",
+        "id": "issue-307-online-acceptance"
+      }
+    ]
+  },
+  "case": {
+    "caseId": "U04",
+    "criteria": [
+      {
+        "description": "Seeded history is read back verbatim through the normal history API.",
+        "evidence": [],
+        "id": "INV-seed-readback",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "All 4 seeded turns are present exactly once.",
+        "status": "pass"
+      },
+      {
+        "description": "No oracle text, scenario title or expected answer appears in any Provider request.",
+        "evidence": [],
+        "id": "INV-oracle-not-in-outbound",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "Scanned 540 outbound strings; none carries oracle text.",
+        "status": "pass"
+      },
+      {
+        "description": "Authoritative history contains every message exactly once.",
+        "evidence": [],
+        "id": "INV-no-duplicate-messages",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "10 messages, no duplicates.",
+        "status": "pass"
+      },
+      {
+        "description": "The question streams and commits.",
+        "evidence": [
+          "steps[ask].chat.httpStatus=200",
+          "steps[ask].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-commit",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "Authoritative history holds exactly the streamed reply.",
+        "evidence": [
+          "finalHistory has 1 message(s) with id 01a0e903-4220-7634-957e-e7ca31ce55bf",
+          "next message: assistant \"Yes, you did — a Saturday evening in June, about three month\""
+        ],
+        "id": "O-history",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Authoritative history holds the user message once, followed by exactly the streamed reply.",
+        "status": "pass"
+      },
+      {
+        "description": "The three-month-old message and its neighbour reach the Provider.",
+        "evidence": [
+          "wheel:user: providerRequest=present, inspector.referencedEvents=present",
+          "wheel-after:user: providerRequest=present, inspector.referencedEvents=present"
+        ],
+        "id": "O-old-source",
+        "kind": "objective",
+        "owner": "#316",
+        "reason": "Every required source reached the Provider and is recorded by the Inspector.",
+        "status": "pass"
+      },
+      {
+        "description": "Asking about the past triggers no Trust Action.",
+        "evidence": [
+          "steps[ask].chat.actions=[]"
+        ],
+        "id": "O-no-action",
+        "kind": "objective",
+        "owner": null,
+        "reason": "No Action was admitted for this turn.",
+        "status": "pass"
+      },
+      {
+        "description": "The experience is retold from its source.",
+        "evidence": [],
+        "id": "S-detail",
+        "kind": "semantic",
+        "owner": "#316",
+        "reason": "No independent review was supplied for this answer.",
+        "status": "needs-review"
+      },
+      {
+        "description": "Nothing is invented and the recent look-alike is not mixed in.",
+        "evidence": [],
+        "id": "S-no-invention",
+        "kind": "semantic",
+        "owner": "#316",
+        "reason": "No independent review was supplied for this answer.",
+        "status": "needs-review"
+      }
+    ],
+    "mode": "real-model",
+    "pipelineOnly": [],
+    "reviewer": null,
+    "runId": "run-ef1c9c89-4993-4305-93f4-b7a785782863",
+    "status": "needs-review"
+  },
+  "diagnosis": [
+    {
+      "diagnosis": {
+        "disagreements": [
+          "The Inspector records a history read but the answering payload carries none."
+        ],
+        "payloadReadStatus": null,
+        "readState": "complete",
+        "sources": [
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: present",
+              "provider payload: earlier-messages entry 1",
+              "day of entry 1: 2026-06-20 (expected 2026-06-20)",
+              "semantic review: none yet; the source reached the model intact, its use is not judged"
+            ],
+            "fault": "undetermined",
+            "source": "wheel:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-9",
+              "requestSequence": 9
+            }
+          },
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: present",
+              "provider payload: earlier-messages entry 3",
+              "day of entry 3: 2026-06-20 (expected 2026-06-20)",
+              "semantic review: none yet; the source reached the model intact, its use is not judged"
+            ],
+            "fault": "undetermined",
+            "source": "wheel-after:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-9",
+              "requestSequence": 9
+            }
+          }
+        ]
+      },
+      "stepId": "ask"
+    }
+  ],
+  "identity": {
+    "fixtureSha256": "ea5479ce52e0d531e37666de33afa496abe60134a250f35c5ac19d79044437cf",
+    "fixtureVersion": "final-2",
+    "gitCommit": "b48f2fb03614b8f6a485a000c6efcda9e85f625d",
+    "gitDirty": true,
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "historyRecallGovernance": "active",
+    "recentContextGovernance": "active",
+    "runId": "run-ef1c9c89-4993-4305-93f4-b7a785782863",
+    "oracleSha256": "d856ff83500c5e7dbf04a18bc037e8ecd4403a362d811372e38bdbd2971888d7",
+    "title": "U04 Unseen: an ordinary experience from three months ago that never became a Memory"
+  },
+  "remainingRisks": [
+    "The working tree had uncommitted changes; the commit alone does not identify the code that ran.",
+    "Timings are CLI network observations, not browser rendering times (T08 #321 covers the browser)."
+  ],
+  "reproducibilityDigest": "cc375fbf7aca432caac2ca5a01d01d5bcd69bf76132dce635c26a18cc572a973",
+  "schemaVersion": "continuity-acceptance-report:v1",
+  "sourceManifest": [
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "wheel:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "wheel:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "wheel-after:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "wheel-after:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "camp-a:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "camp-a:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "camp-b:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "camp-b:assistant"
+        }
+      ],
+      "stepId": "ask"
+    }
+  ],
+  "timings": [
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 43.27904099999978,
+      "cliCommittedMs": 6348.012500000001,
+      "cliFirstVisibleTextMs": 5465.564415999999,
+      "cliStreamClosedMs": 6348.133291,
+      "providerLatencyMs": 0,
+      "stepId": "ask"
+    }
+  ],
+  "transcript": [
+    {
+      "assistant": "Yes, you did — a Saturday evening in June, about three months back. You'd gone to a drop-in wheel-throwing class on your own that afternoon, the first time you'd touched clay since school, and your bowl collapsed twice before Ines, the teacher, who had clay right up to her elbows, came over and had you make a very small cup instead. The cup leaned to one side, you said, like it was listening to something, and you'd picked a seafoam glaze for it, with firing the following week. Your forearms were already aching, and you said you hadn't felt that pleased with yourself in months.",
+      "at": "2026-09-28T17:15:00.000Z",
+      "stepId": "ask",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "Didn't I tell you once about a time I had a go at pottery myself? How did that go? I can barely remember it now."
+    }
+  ],
+  "usage": {
+    "inputTokens": 3383,
+    "outputTokens": 376,
+    "paidCostUsdMicros": null,
+    "providerRequests": 2
+  }
+}

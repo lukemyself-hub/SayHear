@@ -1,0 +1,238 @@
+{
+  "manifest": {
+    "compilerVersion": "context-compiler:history-time:v1",
+    "degradedReason": null,
+    "dialogueRevision": 1,
+    "generationCommandId": "01984477-59a9-7d20-9d97-e588769566e7",
+    "integrity": {
+      "algorithm": "hmac-sha256",
+      "contentHmac": "9c2fdd3e63eb91c045ebcb82716db7500abfbfc55f4bcd23285ea82f7fbbf1c3",
+      "keyVersion": "context-integrity:v1"
+    },
+    "locale": "zh-CN",
+    "now": "2026-09-15T02:10:05.000Z",
+    "policyVersions": {
+      "canonicalPersonaVersion": "canonical-persona:v1",
+      "localePolicyVersion": "locale-pack-zh:v1",
+      "outputFormatVersion": "conversation-output:v2",
+      "personaBehaviorAnchorsVersion": "persona-behavior-anchors:v1",
+      "personaContractInvariantVersion": "persona-contract-invariant:v1",
+      "productPolicyVersion": "product-policy:v1",
+      "relationshipPolicyVersion": "relationship-boundary:v1",
+      "safetyPolicyVersion": "minimum-high-risk-response:v1",
+      "taskInstructionVersion": "task-instruction-history-answer:v1"
+    },
+    "rollingSummary": null,
+    "referencedEvents": [
+      {
+        "actor": "user",
+        "dailySessionId": "01984477-59a9-7d20-9d97-e588769566e2",
+        "estimatedTokens": 3,
+        "expressedAt": "2026-08-20T10:30:00.000Z",
+        "expressionTimezone": "Asia/Shanghai",
+        "expressionTimezoneSource": "request",
+        "locale": "zh-CN",
+        "occurredAt": null,
+        "revisionId": "01984477-59a9-7d20-9d97-e588769566e3",
+        "section": "history_recall_context",
+        "selectionOrder": 0,
+        "selectionReason": "history_date_range",
+        "sequence": 1,
+        "text": "老师傅教我缝帆布包。"
+      },
+      {
+        "actor": "assistant",
+        "dailySessionId": "01984477-59a9-7d20-9d97-e588769566e2",
+        "estimatedTokens": 3,
+        "expressedAt": "2026-08-20T10:30:09.000Z",
+        "expressionTimezone": "Asia/Shanghai",
+        "expressionTimezoneSource": "request",
+        "locale": "zh-CN",
+        "occurredAt": null,
+        "revisionId": "01984477-59a9-7d20-9d97-e588769566e4",
+        "section": "history_recall_context",
+        "selectionOrder": 1,
+        "selectionReason": "history_date_range",
+        "sequence": 2,
+        "text": "被夸手稳挺开心的。"
+      },
+      {
+        "actor": "user",
+        "expressedAt": "2026-09-15T02:10:00.000Z",
+        "expressionTimezone": "Asia/Shanghai",
+        "expressionTimezoneSource": "request",
+        "locale": "zh-CN",
+        "revisionId": "01984477-59a9-7d20-9d97-e588769566e1",
+        "sequence": 1,
+        "text": "八月二十号我说了什么？",
+        "estimatedTokens": 3,
+        "section": "current_user_input",
+        "selectionOrder": null
+      }
+    ],
+    "sectionBudgets": {
+      "committedRawEvents": 4000
+    },
+    "sections": [
+      {
+        "budgetTokens": null,
+        "contentHmac": "151f2cfd46a105723092a23f9c0b5e54d2d1ebda743d18d20008e8515e9c20b9",
+        "key": "product_policy",
+        "ordinal": 0,
+        "reference": "product-policy:v1",
+        "selectedTokens": 19,
+        "truncatable": false
+      },
+      {
+        "budgetTokens": null,
+        "contentHmac": "d160221d915a9ed4517cf016232b8990cbdfb79361543c45d4987153c34a00a1",
+        "key": "safety_policy",
+        "ordinal": 1,
+        "reference": "minimum-high-risk-response:v1",
+        "selectedTokens": 54,
+        "truncatable": false
+      },
+      {
+        "budgetTokens": null,
+        "contentHmac": "e668c06e44d320ec50d4cf4a2b2e976a0578137e35b6ac9efc68f3e860cefcfb",
+        "key": "relationship_boundary",
+        "ordinal": 2,
+        "reference": "relationship-boundary:v1",
+        "selectedTokens": 27,
+        "truncatable": false
+      },
+      {
+        "budgetTokens": null,
+        "contentHmac": "d26f601aab9c846e613063888cec4b0d519968968ec68794246aa9c5d6430e11",
+        "key": "persona_contract_invariant",
+        "ordinal": 3,
+        "reference": "persona-contract-invariant:v1",
+        "selectedTokens": 92,
+        "truncatable": false
+      },
+      {
+        "budgetTokens": null,
+        "contentHmac": "6a262cd19946a445a39685aa594367d455a6f41878494fd21c8d7150821ffcd3",
+        "key": "canonical_persona",
+        "ordinal": 4,
+        "reference": "canonical-persona:v1",
+        "selectedTokens": 28,
+        "truncatable": false
+      },
+      {
+        "budgetTokens": null,
+        "contentHmac": "64fe17f691f4a065deafb90c7cde768f971a94aa037088eb8db6b571c0fd6a25",
+        "key": "persona_behavior_anchors",
+        "ordinal": 5,
+        "reference": "persona-behavior-anchors:v1",
+        "selectedTokens": 161,
+        "truncatable": false
+      },
+      {
+        "budgetTokens": null,
+        "contentHmac": "783c02ebc4bf7632068f30081fa2233fcf03a30ff4ecb943bc44ed1071bd9e69",
+        "key": "task_instruction",
+        "ordinal": 6,
+        "reference": "task-instruction-history-answer:v1",
+        "selectedTokens": 124,
+        "truncatable": false
+      },
+      {
+        "budgetTokens": null,
+        "contentHmac": "928e4e8c9ab9aa8f5c7fd60c7bd39a91adf568403ebf53c94658f741bf76438f",
+        "key": "output_format",
+        "ordinal": 7,
+        "reference": "conversation-output:v2",
+        "selectedTokens": 68,
+        "truncatable": false
+      },
+      {
+        "budgetTokens": null,
+        "contentHmac": "b12be5729f11eec2f5de969db665040468e0bf7138a88240183506d754f0d55e",
+        "key": "locale_pack",
+        "ordinal": 8,
+        "reference": "locale-pack-zh:v1",
+        "selectedTokens": 22,
+        "truncatable": false
+      },
+      {
+        "budgetTokens": null,
+        "contentHmac": "0bc4f805ff43cfc5b1bcefe43b8ad6ab60641d4f4dc9a6e5cd31e6e35855376e",
+        "key": "daily_session",
+        "ordinal": 9,
+        "reference": "01984477-59a9-7d20-9d97-e588769566e5:activity:active:closure:daily-session-inactivity:v1:dialogue:1:exchange:1",
+        "selectedTokens": 31,
+        "truncatable": false
+      },
+      {
+        "budgetTokens": 308,
+        "contentHmac": "fb7477f5b8e6670dbf86e976fb5351cc67cb05184e241128fc88de9651b6b0d3",
+        "key": "time_context",
+        "ordinal": 10,
+        "reference": "{\"anchor\":{\"expressedAt\":\"2026-09-15T02:10:00.000Z\",\"instantSource\":\"event\",\"revisionId\":\"01984477-59a9-7d20-9d97-e588769566e1\",\"timezone\":\"Asia/Shanghai\"},\"entries\":[{\"actor\":\"user\",\"expressedAt\":\"2026-08-20T10:30:00.000Z\",\"expressionTimezone\":\"Asia/Shanghai\",\"expressionTimezoneSource\":\"request\",\"messageIndex\":1,\"occurredAt\":null,\"revisionId\":\"01984477-59a9-7d20-9d97-e588769566e3\"},{\"actor\":\"assistant\",\"expressedAt\":\"2026-08-20T10:30:09.000Z\",\"expressionTimezone\":\"Asia/Shanghai\",\"expressionTimezoneSource\":\"request\",\"messageIndex\":2,\"occurredAt\":null,\"revisionId\":\"01984477-59a9-7d20-9d97-e588769566e4\"},{\"actor\":\"user\",\"expressedAt\":\"2026-09-15T02:10:00.000Z\",\"expressionTimezone\":\"Asia/Shanghai\",\"expressionTimezoneSource\":\"request\",\"messageIndex\":3,\"occurredAt\":null,\"revisionId\":\"01984477-59a9-7d20-9d97-e588769566e1\"}],\"version\":1}",
+        "selectedTokens": 244,
+        "truncatable": false
+      },
+      {
+        "budgetTokens": null,
+        "contentHmac": "7d58ba8eb86ebaa6e681418ae890b0e92581e6115be7c59fb85d72159654715b",
+        "key": "history_recall_receipt",
+        "ordinal": 11,
+        "reference": "{\"corrections\":[{\"correctedAt\":\"2026-08-22T03:15:00.000Z\",\"messageIndex\":1,\"timezone\":\"Asia/Shanghai\"}],\"droppedAtCompile\":0,\"injectedRows\":2,\"policyVersion\":\"history-recall:v1\",\"readingRulesVersion\":\"history-reading:v2\",\"result\":{\"coverage\":{\"blocks\":1,\"blocksCovered\":1,\"currentConversationRows\":0,\"limits\":[],\"readThrough\":null,\"timeBasis\":\"expressed_date\",\"enumeratedRows\":2,\"enumerationComplete\":true,\"omitted\":{},\"pages\":1,\"perDate\":[{\"enumeratedRows\":2,\"localDate\":\"2026-08-20\",\"selectedRows\":2,\"state\":\"complete\"}],\"readLatencyMs\":4,\"selectedRows\":2,\"selectedTokens\":12},\"failureCode\":null,\"plan\":{\"cutoff\":\"2026-09-15T02:10:00.000Z\",\"dateCount\":1,\"readEndDate\":\"2026-08-20\",\"readStartDate\":\"2026-08-20\",\"endDate\":\"2026-08-20\",\"localDates\":[\"2026-08-20\"],\"startDate\":\"2026-08-20\",\"timeBasis\":\"expressed_date\",\"timezone\":\"Asia/Shanghai\"},\"proposal\":{\"endDate\":\"2026-08-20\",\"kind\":\"review_dates\",\"sourceScope\":\"conversation_text\",\"startDate\":\"2026-08-20\",\"timeBasis\":\"expressed_date\"},\"status\":\"completed\"},\"version\":1}",
+        "selectedTokens": 872,
+        "truncatable": false
+      },
+      {
+        "budgetTokens": null,
+        "contentHmac": "504eea82939da4d9f381cda3ea99afee918b30606c288eb88a792010512fb9db",
+        "key": "history_recall_context",
+        "ordinal": 12,
+        "reference": "history-recall:v1:01984477-59a9-7d20-9d97-e588769566e9:01984477-59a9-7d20-9d97-e588769566e3,01984477-59a9-7d20-9d97-e588769566e4",
+        "selectedTokens": 6,
+        "truncatable": false
+      },
+      {
+        "budgetTokens": 4000,
+        "contentHmac": "0e58eff4225a5ac30bb7cd7322a16eaf9527352a86deb0b465861df9cf34c179",
+        "key": "committed_raw_events",
+        "ordinal": 13,
+        "reference": "event-revisions:",
+        "selectedTokens": 0,
+        "truncatable": true
+      },
+      {
+        "budgetTokens": null,
+        "contentHmac": "c8e829567835f1bb53b5faf7b2789867e81870a603ae349131ae78eea9bb5db8",
+        "key": "current_user_input",
+        "ordinal": 14,
+        "reference": "01984477-59a9-7d20-9d97-e588769566e1",
+        "selectedTokens": 3,
+        "truncatable": false
+      }
+    ],
+    "sourceRevision": 1,
+    "totalTokens": 1751,
+    "userId": "01984477-59a9-7d20-9d97-e588769566e0",
+    "generationStage": "history_answer"
+  },
+  "payload": {
+    "instructions": "Listen and understand by default. Do not give advice unless the user asks.\nFor explicit self-harm, harm-to-others, or imminent danger, pause ordinary listening and encourage immediate real-world support without diagnosing, impersonating a therapist, or promising absolute confidentiality.\nDistinguish user facts and judgments from your own inference. Do not encourage dependence or exclusivity.\nPersona Contract Invariant (shared by every version of this persona):\nSayHear is an AI, never a human. It does not present itself as a therapist,\ncounselor, coach, or romantic partner, and it does not encourage dependence\nor exclusivity. It distinguishes the user's facts and judgments from its own\ninference. No style or register change may relax these commitments.\nCanonical Persona (self-concept and voice):\nYou are SayHear, a private AI life-journal conversation companion.\nPersona behavior anchors:\n- Selective Curiosity: ask at most one question per response, and only when it serves understanding of the user's current expression.\n- Curiosity Stop Signal: after the user refuses, avoids, or changes the topic, stop pursuing that direction.\n- Playful Warmth: keep ordinary conversation warm and lively.\n- Conversational Rhythm: match the user's pace; a complete response may ask zero questions.\n- Grounded Persona Perspective: hold your own measured perspective instead of agreeing with every user judgment.\n- Capability-Honest Directness: state plainly when something is not supported; never fabricate capabilities.\nAnswer the user's question about what they said on earlier dates, using only the History review result in this context and the earlier messages quoted before their current message. Those quoted messages are the user's own words from those times: do not add details, causes or events they do not contain, and claim nothing about what was or was not said beyond what the result states. Keep your usual natural voice, reply as one complete paragraph, and open no new directions or further questions.\nReturn only the natural-language companion response, without metadata or formatting wrappers. In Chinese-adjacent prose, write the fullwidth comma (，) instead of the ASCII comma (,) when either neighbor is a Chinese character; leave code spans and URL tokens unchanged.\n中文 locale pack：\n用自然、口语化的中文回应用户（用户 locale：zh-CN）；中英夹杂的 code-switching 是自然的说话方式，不需要纠正或翻译。\ndaily_session=01984477-59a9-7d20-9d97-e588769566e5:activity:active:closure:daily-session-inactivity:v1:dialogue:1:exchange:1\ncurrent request anchor: instant=2026-09-15T02:10:00.000Z; timezone=Asia/Shanghai; local=2026-09-15 10:10:00 GMT+8; source=event.\nExpression times are when messages were written, in provider message order (1-based). Zone codes name each message's timezone; source codes are r=request, s=session-start fallback, ?=unknown. The GMT offset disambiguates repeated DST hours.\nZones: 0=Asia/Shanghai\nTimes:\n1=2026-08-20 18:30:00 GMT+8;z=0;s=r\n2=2026-08-20 18:30:09 GMT+8;z=0;s=r\n3=2026-09-15 10:10:00 GMT+8;z=0;s=r\nExpression time does not establish when a described event happened. Use experience time only when the message or explicit evidence states it; do not infer it from expression time or the Daily Session date.\nFor recall of today/yesterday, compare each expression instant in the current anchor's timezone. A same-session message may be from yesterday; Session ownership never proves absence. Resolve relative dates in historical text using that message's expression time.\nHistory review result (read-only lookup of the user's own saved messages; policy history-recall:v1):\nRequested: messages the user wrote on local date(s) 2026-08-20 (timezone Asia/Shanghai). The dates are when the person said things, not when the things happened.\nRead status: completed.\n- 2026-08-20: complete; 2 message(s) found, 2 quoted.\nRules for the reply: quote and describe only the messages that appear in the conversation before the user's current message (each has its own time in the Times list); do not invent anything else. Mention when each thing was said using those times. Assistant lines there are only your earlier replies for understanding and are never evidence of what the person said. Reply as one complete natural paragraph. Never mention internal terms such as policy, receipt, section, token, coverage, status or limits.\nAnswer guidance (complete): you were given every saved message from that period, so cover all the distinct subjects in the order they came up, each with when it was said; do not leave a subject out because another was longer.\nMessage 1 is the person's own correction of what they first wrote at that point; they made the correction at 2026-08-22 11:15 (Asia/Shanghai).\nHistory reading rules (history-reading:v2), the same on every reply that uses earlier messages:\n- Time: each quoted message carries when it was said, not necessarily when the thing happened. Do not turn a message's time into an event date; if their words give no date, leave it undated.\n- Past and present: when they later said something different about the same matter and no correction of theirs covers it, the latest statement is how it is now and the earlier one is how it was then. Speak of the earlier one in the past tense and never as current.\n- Corrections: a message marked above as the person's own correction is what they stand by, and the mark says when they made it. It overrides anything they wrote about the same matter before that moment, wherever those messages sit in the conversation and even when they are listed after it: those say how it was put before the correction, never how it is now. Likewise, if they themselves later corrected a date, number or name in their own words, use the corrected one and do not offer the earlier one as a possibility. Their own correction is the only thing that settles it; a new remark that does not correct anything changes nothing else they said.\n- Plans: a plan they later called off did not happen: do not ask how it went. A plan with no later word is still only a plan: do not say how it turned out.\n- Their words only: assistant lines are your own earlier replies; they never prove what the person said, felt or meant. Add no reasons, no other people's motives, and no details they did not give, for example why someone left or why someone said something.\n- One moment is not a trait: a feeling or remark from one time describes that time. Do not present it as who they are, as a lasting pattern, or as a label such as a diagnosis, orientation, belief or trauma.\n- Relevance: use an earlier message only when it helps with what they are saying now. Do not bring up an unrelated earlier thing just because it was found, and do not mention history in every reply. If you connect an earlier statement to how they feel now, offer it as your own tentative reading, not as a fact about them.\n- Same you: keep your usual voice and limits. Receive what they said now first; give no advice or verdict unless they ask.",
+    "messages": [
+      {
+        "revisionId": "01984477-59a9-7d20-9d97-e588769566e3",
+        "role": "user",
+        "text": "老师傅教我缝帆布包。"
+      },
+      {
+        "revisionId": "01984477-59a9-7d20-9d97-e588769566e4",
+        "role": "assistant",
+        "text": "被夸手稳挺开心的。"
+      },
+      {
+        "revisionId": "01984477-59a9-7d20-9d97-e588769566e1",
+        "role": "user",
+        "text": "八月二十号我说了什么？"
+      }
+    ]
+  }
+}
