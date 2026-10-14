@@ -2,11 +2,16 @@
   "recordedAt": "2026-10-14T01:54:03.000Z",
   "baseCommit": "b7fac60d3111726616c571840f33126d9a4b6e41",
   "evidenceCommit": "6a0528ec9dc84f1a1e717a2312c6a2482e32a5f8",
-  "workingTree": "All runs launched at evidenceCommit with the review-fix edits still uncommitted; each run's doctor.json records the exact sourceStatus. driverSha256 pins the driver revision the evidence came from.",
+  "workingTree": "All runs launched at evidenceCommit with the review-fix edits still uncommitted, except dev-345-cross-date-4 which ran on the clean ca5a09d commit; each run's doctor.json records the exact sourceStatus. driverSha256 pins the driver revision the evidence came from.",
   "driverSha256": {
     "scripts/verify-control.mjs": "535b4e57022a93f8687f3b294039a09dd9cff401b73242669a70fa259515c7c7",
     "scripts/verify-fixture.mjs": "5edd2e7bc719d506aa46c300fde3d82131d0400a5dbb3cc623a498b4f6087807",
     "scripts/verify-browser.mjs": "9fd2ad298019b831f606bd3d9c19f1b184a76463ca158f611755c67c65a120e6"
+  },
+  "mergedMain": {
+    "mergeCommit": "527afb99a9f2e0f2c086e47d3eeb71484a97cc3d",
+    "mainCommit": "acaa502f1558d29dc0de97168c842257644ce30a",
+    "note": "After these runs the branch synced main (#347, the #344 follow-up fix) by merge commit 527afb9. Only .agents/skills/verify/features/conversation.md needed an explicit resolution that keeps both sides; git merge-tree confirms every other file auto-merged identically. The pinned driverSha256 values still describe the revision the runs above used; in the merged tree only scripts/verify-browser.mjs hashes differently (8e968178...). A post-merge smoke of the merged driver passed: dev-345-merge-smoke ran the text journey on the merged commit (2 events, visible reply 406 ms, instance cleaned; artifacts/verify/dev-345-merge-smoke)."
   },
   "host": "macOS, Node 24.18.0, PostgreSQL 17.10, playwright-core 1.61.1 with cached Chrome for Testing build 1200, no locale in the environment",
   "runs": {
@@ -183,9 +188,16 @@
           "passed": false,
           "step": "publishJournal(2026-07-28)",
           "observation": "Day-1 published its own Journal (one published outcome; journal.draft and journal.validate completed). The 24-hour clock advance opened a second Daily Session on 2026-07-28, which quiesced by inactivity_timeout and whose eligibility command was dispatched; its Journal generation then ended as retryable_failed / journal_generation_failed, and postgres.log holds 'deadlock detected' at 2026-10-13 18:47:52.363 PDT. The journey stopped before the per-date read/copy/export/backlink loop, so no passing cross-date evidence exists yet."
+        },
+        {
+          "run": "dev-345-cross-date-4",
+          "profile": "timeline",
+          "passed": false,
+          "step": "publishJournal(2026-07-27)",
+          "observation": "The retry agent re-ran the journey on the clean committed review-fix revision (ca5a09d) in the foreground. The day-1 session quiesced by inactivity_timeout, eligibility created one command, the first scan dispatched three outbox items, and the Journal generation ended as retryable_failed / journal_generation_failed; postgres.log holds 'deadlock detected' at 2026-10-13 19:16:51.254 PDT (the daily_sessions FOR UPDATE waits on an evidence_source_snapshots insert). The failed instance was cleaned with scratchRemoved true."
         }
       ],
-      "outcome": "Both attempts lost the Journal path to the known issue #340 deadlock, not a driver fault. Real-run evidence for cross-date waits for issue #340 to merge, as triaged for issue #345; the journey stays in the driver and feature map.",
+      "outcome": "All three attempts that reached the journey lost the Journal path to the known issue #340 deadlock, not a driver fault. (One further environment retry, dev-345-cross-date-3, never launched a browser: playwright-core expected its own cached Chrome build; dev-345-cross-date-4 launched with SAYHEAR_CHROME pointing at the installed Chrome for Testing.) Real-run evidence for cross-date waits for issue #340 to merge, as triaged for issue #345; the journey stays in the driver and feature map.",
       "issue": "https://github.com/lukemyself-hub/SayHear/issues/340",
       "scratchRemoved": true
     }
@@ -197,7 +209,7 @@
     },
     {
       "journey": "cross-date acceptance evidence",
-      "reason": "two attempts were blocked by the issue #340 deadlock (see blockedRuns); per issue #345 triage it is rerun after that fix"
+      "reason": "three attempts were blocked by the issue #340 deadlock (see blockedRuns); per issue #345 triage it is rerun after that fix"
     },
     {
       "journey": "hosted Journal, Episode and Daily/Weekly generation, including hosted Workflow delivery",

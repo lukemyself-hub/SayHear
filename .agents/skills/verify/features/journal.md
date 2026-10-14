@@ -68,9 +68,10 @@ launches `timeline` or `fault`: both carry the test-only file clock, and
   prose with that date's stored statements, copies, exports and follows
   查看当天聊天, requiring each date's own expression and not the other's. The
   clock file is re-read per request; no session row or generation result is
-  edited. Two 2026-10-13 attempts lost a Journal workflow to the #340 deadlock
-  (`dev-345-cross-date-1` at day-1, `dev-345-cross-date-2` at day-2 after day-1
-  published); real-run evidence for this journey waits for that fix.
+  edited. Three 2026-10-13 attempts lost a Journal workflow to the #340 deadlock
+  (`dev-345-cross-date-1` and `dev-345-cross-date-4` at day-1, `dev-345-cross-date-2`
+  at day-2 after day-1 published); real-run evidence for this journey waits for
+  that fix.
 
 ## Gotchas
 
@@ -85,7 +86,7 @@ launches `timeline` or `fault`: both carry the test-only file clock, and
   transactions deadlock in most runs, and when the Journal path is the victim no
   Journal is published
   ([#340](https://github.com/lukemyself-hub/SayHear/issues/340); 3 of 13 runs).
-  The journey then fails and writes `delivery-unpublished.json`; both 2026-10-13
+  The journey then fails and writes `delivery-unpublished.json`; three 2026-10-13
   `cross-date` attempts failed the same way and wrote
   `cross-date-unpublished-<date>.json`. Confirm with
   `grep "deadlock detected" postgres.log` before suspecting the driver.
