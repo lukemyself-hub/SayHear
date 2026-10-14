@@ -48,6 +48,11 @@ import {
 } from "./daily-release-validation.ts";
 
 export { SignedCompletionStore, recoverCompletion, CompletionMismatch, CompletionUnavailable, COMPLETION_RETRY_POLICY } from "./pr-approval/completion.ts";
+export { collectPullRequestDiff, readPullRequestFileManifest, gitBlobSha } from "./pr-approval/diff.ts";
+export { PR_REVIEW_GATE_POLICY_VERSION, PR_REVIEW_REPORT_VERSION, PR_VALIDATE_WORKFLOW_PATH,
+  SAYHEAR_REPOSITORY_ID, SAYHEAR_REPOSITORY_NAME, evaluatePrReviewGate, parsePrReviewGateInput,
+  requirementDigest, parseIssueClosureExclusions } from "./pr-review-gate.ts";
+export { FIXED_PR_CI_BASELINE, RELEASE_CHECKS } from "./daily-release-validation.ts";
 
 declare const __PR_APPROVAL_BUILD_INFO__: Readonly<{ sourceCommit: string; nodeVersion: string; esbuildVersion: string }>;
 export function controllerBuildIdentity(): Readonly<Record<string, unknown>> {
@@ -2877,11 +2882,21 @@ export async function forEachLinkedIssue(
   action: (number: number) => Promise<void>,
 ): Promise<void> {
   const failures: string[] = [];
+  let retryAfterMs = 0;
   for (const number of [...new Set(issueNumbers)].sort((left, right) => left - right)) {
     try { await action(number); }
-    catch (error) { failures.push(`Issue #${number}: ${error instanceof Error ? error.message : String(error)}`); }
+    catch (error) {
+      failures.push(`Issue #${number}: ${error instanceof Error ? error.message : String(error)}`);
+      if (error instanceof GitHubApiError || error instanceof CompletionUnavailable) {
+        retryAfterMs = Math.max(retryAfterMs, error.retryAfterMs);
+      }
+    }
   }
-  if (failures.length > 0) throw new Error(`Issue updates incomplete: ${failures.join("; ")}`);
+  if (failures.length > 0) {
+    const error = new CompletionUnavailable("completion_issue_updates_incomplete", retryAfterMs);
+    error.message = `Issue updates incomplete: ${failures.join("; ")}`;
+    throw error;
+  }
 }
 
 export async function completeLinkedIssuesAfterMerge(

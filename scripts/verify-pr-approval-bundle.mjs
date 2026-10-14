@@ -23,6 +23,9 @@ await writeFile(configPath, `export default ${JSON.stringify({
   resolve: { alias: {
     "../scripts/pr-approval-controller.ts": bundlePath,
     "../scripts/pr-approval/completion.ts": bundlePath,
+    "../scripts/pr-approval/diff.ts": bundlePath,
+    "../scripts/pr-review-gate.ts": bundlePath,
+    "../scripts/daily-release-validation.ts": bundlePath,
   } },
   test: { include: ["tests/pr-approval-controller.test.ts", "tests/pr-approval-completion.test.ts", "tests/pr-approval-diff.test.ts", "tests/pr-review-gate.test.ts"] },
 })};\n`);

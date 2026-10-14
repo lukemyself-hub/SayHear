@@ -60,6 +60,9 @@ The current main SHA may advance after merge. The pre-merge reviewed base SHA re
 Issue closure and label deletion use the existing per-Issue API operations.
 Closed Issues still lose stale workflow labels. Category labels and concurrent unrelated labels are preserved.
 Partial writes, lost responses, and failed final reads retain `issues_pending` and retry only missing actions.
+Per-Issue aggregation preserves the largest Retry-After across failed targets while attempting every eligible Issue once.
+Durable receipts retain the fixed reason `completion_issue_updates_incomplete`; detailed per-Issue errors remain in the thrown message.
+The composition regression drives `recoverCompletion` through actual Issue label cleanup and proves long Retry-After values defer the next command without short retries.
 No completion comment is sent, so recovery cannot duplicate completion comments.
 
 ## Build, verification, installation, and rollback
@@ -68,6 +71,8 @@ Run `pnpm pr:approval:build` on Apple Silicon macOS with Node 24.18.0 and the fr
 The build manifest records source commit, hashes of every esbuild input, Node and esbuild versions, clang version, bundle hash, runtime hash, and launcher hashes.
 Run `node scripts/verify-pr-approval-bundle.mjs` to execute the same controller, completion, diff, and gate fixtures against the actual bundle.
 The verifier checks the artifact hash and source/capability identity before executing fixtures.
+All controller, completion, diff, review-gate, and release-validation imports in those four suites resolve to the same bundle.
+The controller re-exports the public fixture entrypoints, so the reported bundle test count does not mix source and bundle implementations.
 
 Install only the independently reviewed artifact through the existing administrator-approved protected installation process.
 The destination is `/Library/Application Support/SayHear/PRApproval/controller.mjs`.
