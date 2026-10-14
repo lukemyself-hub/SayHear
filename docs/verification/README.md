@@ -50,7 +50,7 @@ Workflow 运行在本地 runtime，不等于 hosted 验收。
 | `access-oauth` | `oauth`（本地 OAuth app，一次性库） | 已实跑 | 2026-10-13 `oauth-owner-1 / oauth-manual`：真实 Owner 登录、两次 GitHub 回调、Evidence 验证、读取与退出；对应干净的 `0b1b799` | 人在自己的浏览器操作，数据库与日志证明服务端结果；未采集浏览器画面。有头 `oauth` 登录后的代码仍未执行 | [#342](https://github.com/lukemyself-hub/SayHear/issues/342) |
 | `access-refusal` | `oauth-stranger` | 已实跑 | 2026-10-13 `oauth-stranger-1 / oauth-manual`：一次 GitHub 回调、实测 `OAuthCreateAccount`、session 数 0，Owner mapping 数仍为 1；实例已清理 | 服务端数据库与日志证明拒绝；未采集浏览器画面，有头旅程仍未实跑 | [#342](https://github.com/lukemyself-hub/SayHear/issues/342) |
 | `access-signout` | `local`、`live`、`oauth` | 已实跑 | fixture 的 `signout` 旅程：401、session 行删除、回到登录页；真实 Owner 的 `oauth-manual` 确认退出后 session 行删除 | 真实 OAuth 退出的浏览器画面未采集 | — |
-| `access-oauth`（hosted） | `sayhear-g1-acceptance` | 未覆盖 | 历史记录称该环境 Owner 登录可用，本次未复核 | 别名受 Vercel Authentication 保护；需要人登录 Vercel 与 GitHub | #322 相关 |
+| `access-oauth`（hosted） | `sayhear-g1-acceptance` | 已实跑 | 2026-10-14 `hosted-345-1`：Owner 经 Vercel SSO + GitHub 登录建立会话（`auth_sessions` 03:16:02Z）；两次 Evidence step-up 的 GitHub OAuth 往返（`prompt=select_account`，Luke 自选账号），grant 时间戳 05:01:20.571Z 与 05:16:56.370Z | 登录画面未采集，grant 行与后续带会话请求证明服务端结果 | [#345](https://github.com/lukemyself-hub/SayHear/issues/345) |
 | `text-send`、`text-persist`、`history-read` | `local` | 已实跑 | `text` 旅程与 `text-stored.json` | 无 | — |
 | `text-send`、`text-persist`、`context-message-link`（真实 Provider） | `provider`（OpenCode Go） | 已实跑 | `text` 与 `context-trace` 各一次：`opencode-go / deepseek-v4.1-flash`，可见回复 2.6 秒，3118 输入与 102 输出 token，渲染与存储一致，Inspector 显示同一 Provider | 只证明一次回复的传输、呈现与持久化，不涉及质量与连续性 | #321 |
 | `text-keyboard`（Enter、Shift+Enter、IME） | `local` | 已实跑 | 2026-10-13 `dev-345-keyboard-2 / keyboard`：Shift+Enter 只加一个换行且不发请求；CDP `Input.imeSetComposition` 组合期间按 Enter 的 keydown 带 `isComposing:true` 且不发送；一次 Enter 只发一个请求，提交后的正文与存储一致 | 组合输入为浏览器模拟；真实操作系统 IME、候选选择与编辑中人操作仍待人 | [#345](https://github.com/lukemyself-hub/SayHear/issues/345) |
@@ -61,32 +61,44 @@ Workflow 运行在本地 runtime，不等于 hosted 验收。
 | `journal-date`（单日期入口） | `live` | 已实跑 | 同一旅程的日期链接与日期 URL | 单日期无法区分“该日期自己的正文”；跨日期区分见 `cross-date` 行（当前被 #340 阻塞） | [#342](https://github.com/lukemyself-hub/SayHear/issues/342) |
 | `journal-date`（跨日期正文） | `timeline` | 阻塞（#340） | 2026-10-13 三次尝试：`dev-345-cross-date-1` day-1 的 Journal 生成以 `retryable_failed / journal_generation_failed` 结束；`dev-345-cross-date-2` day-1 已发布、24 小时时钟推进后开出 day-2 会话并静默，day-2 的 Journal 同样失败；`dev-345-cross-date-4` 在干净的审阅修订上重跑，day-1 再次以同样结果结束（19:16:51 PDT `deadlock detected`）。三次 `postgres.log` 均有 `deadlock detected` | 旅程已实现且跑通时钟、静默、资格与派发；待 [#340](https://github.com/lukemyself-hub/SayHear/issues/340) 修复后重跑并核对两个日期各自的正文、复制/导出与回链 | [#345](https://github.com/lukemyself-hub/SayHear/issues/345) |
 | `journal-delivery`（真实 Provider） | `provider` | 待授权（且 #341 阻塞） | 第二次调度扫描等待 Owner 行锁 10 秒后返回 500，旅程当时把它判为失败并清理了实例 | 先等 #341 修复再重跑；重跑前确认既有 0.50 美元预算仍有效 | [#341](https://github.com/lukemyself-hub/SayHear/issues/341) |
-| `journal-delivery`（hosted Workflow） | `sayhear-g1-acceptance` | 未覆盖 | `docs/plans/g1-activation.md` 记录过 629e951 的一次 hosted 发布，本次未复核 | 需要先读取该环境当前部署的 commit，再决定是否部署待验版本 | #322 相关 |
+| `journal-delivery`（hosted Workflow） | `sayhear-g1-acceptance` | 已实跑 | 2026-10-14 `hosted-345-1`：合成表达经 admission、outbox、hosted Workflow 与 deepseek 到 04:28:14Z 发布 current Journal；浏览器复制/导出/回链与 15 张截图；Provider 记录 4 次调用；三次恢复扫描后两次全 0（幂等） | 首次发送因站上停在迁移 0067 失败且零提交（补 0068–0070 后重发）；扫描用 `vercel curl` + Bearer `CRON_SECRET` 替身（站上无 cron）；Episode/Daily/Weekly 生成因 G1 off 未跑 | [#345](https://github.com/lukemyself-hub/SayHear/issues/345) |
 | `context-entry` | `local` | 已实跑 | `context` 旅程 | 无 | — |
 | `context-message-link`、`context-lookup` | `local`、`live` | 已实跑 | `context-trace` 旅程 | 注入、排除与血缘分组未断言 | — |
 | `context-source-gates`（拒绝与审计） | `local`、`live` | 已实跑 | 403 `elevated_capability_required` 与一条 `denied` 审计 | 无 | — |
 | `context-source-gates`（验证后允许） | `oauth` | 已实跑 | `oauth-owner-1`：recent `conversation_content:read` grant，先 `denied:elevated_capability_required` 后 `allowed:authorized` 审计 | 数据库与日志证明服务端放行，未采集浏览器响应或画面 | [#342](https://github.com/lukemyself-hub/SayHear/issues/342) |
 | `reflection-entry` | `local` | 已实跑 | `reflection` 旅程 | 无 | — |
 | `reflection-evidence`（验证往返） | `oauth` | 已实跑 | `oauth-owner-1`：第二次 GitHub 回调后出现 recent capability grant | 只证明验证往返的服务端结果；Reflection 摘录展开仍需已生成的 Reflection | [#342](https://github.com/lukemyself-hub/SayHear/issues/342) |
-| `reflection-scope`、`reflection-trace`、Episode 与 Daily / Weekly 生成 | `sayhear-g1-acceptance` | 未覆盖 | 无 | 本地 profile 的 G1 开关关闭；active G1 manifest 是未入库的发布产物，本 checkout 没有 | #251、#322 相关 |
+| `reflection-scope`、`reflection-trace`（hosted） | `sayhear-g1-acceptance` | 已实跑 | 2026-10-14 `hosted-345-1`：在 10-07 历史 Daily Reflection 上打开 trace；Evidence 展开全环——未验证/过期拒绝且无原文 → UI「Verify again」GitHub step-up → 只返回所点摘录；Evidence 展开在 `sensitive_access_audits` 留下三条（allowed/denied/allowed） | 展开针对既有 Reflection；新生成仍需 G1（见下行） | [#345](https://github.com/lukemyself-hub/SayHear/issues/345) |
+| Episode 与 Daily / Weekly 生成（hosted） | `sayhear-g1-acceptance` | 未覆盖 | 本轮扫描在 `switch.episode_build_enabled` / `switch.reflection_enabled` 为 false 下开出 0 条 episode/reflection 命令；Weekly due 状态未评估；G1 关闭时没有触发生成 | G1 开关关闭且站上无 active G1 manifest；本 checkout 没有该发布产物 | #251、#322 相关 |
 
 ## Hosted 验收环境现状
 
-开始 hosted 验收前的授权、参与、步骤与停止条件见
-[hosted-execution-plan.md](hosted-execution-plan.md)（状态：待 Luke 授权）。
+2026-10-14 已按 [hosted-execution-plan.md](hosted-execution-plan.md) 的授权执行第一轮
+hosted 验收；结果、替身、清理回执与剩余缺口见
+[hosted-execution-proof.json](evidence/hosted-execution-proof.json)，完整截图、
+请求与数据库日志留在验收工作树的 `artifacts/verify/hosted-345-1/`（Git 忽略）。
 
-2026-10-12 只读盘点的结果，开始 hosted 验收前需要重读：
+执行后读回的环境事实：
 
-- 隔离 Vercel project `sayhear-g1-acceptance` 存在，别名
-  `sayhear-g1-canary-lukemyself.vercel.app` 指向 2026-10-07 经 CLI 上传的部署，
-  状态 Ready，没有 Git 元数据，所以无法从平台读出它对应的 commit。
-- 别名受 Vercel Authentication 保护，匿名请求被重定向到 Vercel SSO。部署身份
-  接口 `/api/internal/inspection/release-identity` 需要 Owner session 或
-  operator secret。
-- 该 project 的 Preview 环境变量包含独立的 OAuth client、业务库、Purge Marker
-  库、Provider key 与 G1 开关，值全部是不可读的 secret；变量列表中没有 G1
-  release manifest。G1 当前是否开启未知。
-- 本次没有向该环境发出任何带凭据的请求，也没有创建访问绕过链接或部署。
+- 别名 `sayhear-g1-canary-lukemyself.vercel.app` 指向
+  `dpl_9DYrp9ARfSxCNNcKggBu1FEteE5m`（commit `acaa502`，Ready）；回滚目标为
+  `dpl_FZd4FLRPKc9oqxBuYfFKvz9DLxjL`（CRON_SECRET 已过期）与更早的
+  `dpl_9mS8baj7vzNjPrLc8J9RfrLEKVHz`。别名仍受 Vercel Authentication 保护，
+  部署身份接口需要 Owner session 或 operator secret。
+- 站上库此前停在迁移 0067，2026-10-14 03:52:06Z 补齐 0068–0070；执行前用
+  `sha256(JSON.stringify(normalizeDatabaseIdentity(url)))` 校验业务库与 Purge
+  Marker 库连接串哈希（`d9ce28dd…` / `e862afea…`），复跑报迁移已是 current。
+- 站上 `CRON_SECRET` 已轮换并重部署同一 commit；新值只存本地 0600 文件，不写入
+  仓库或文档。
+- G1 状态：`switch.episode_build_enabled` 与 `switch.reflection_enabled` 为
+  false，prompt/manifest 等 G1 版本项为 `unverified`；本轮未发明 pins、未开启
+  G1、未改任何生产配置。
+- Provider 账本：本轮真实付费调用 4 次（`conversation.text`、`evidence.extract`、
+  `journal.draft`、`journal.validate`），在 12 次单轮预算内；fast-path 与
+  consolidation 运行无额外付费尝试记录。
+- 站上无 Vercel cron，GitHub Actions 扫描 workflow 指向生产且域名白名单不含验收
+  站；本轮恢复扫描以 `vercel curl` + Bearer `CRON_SECRET` 触发，作为调度替身
+  如实记录。
 
 ## 交付证据
 
@@ -98,10 +110,14 @@ Workflow 运行在本地 runtime，不等于 hosted 验收。
 - [coverage-completion-proof.json](evidence/coverage-completion-proof.json)：
   2026-10-13 补齐键盘与 IME、长历史分页与滚动、中断与重试、跨日期旅程后的
   实跑摘要，含无回归的 `local` 复跑、`fault` 与 `timeline` profile、被 #340
-  阻塞的跨日期尝试与未执行项及原因。
+  阻塞的跨日期尝试与未执行项及原因；2026-10-14 起含一轮 hosted 验收摘要。
+- [hosted-execution-proof.json](evidence/hosted-execution-proof.json)：2026-10-14
+  在隔离验收站 `sayhear-g1-acceptance` 的 hosted 验收摘要，含部署身份与配置读回、
+  迁移补齐、Journal 生成与发布、重试/幂等、Reflection Evidence step-up 全环、
+  Provider 账本 4/12、替身、清理回执与 G1-off 缺口。
 
-都不是新提交或生产环境的验收结果。完整截图、trace、请求与数据库记录保留
-在执行工作树的 `artifacts/verify/<run-id>/`，该目录被 Git 忽略；每次正式验收需
-重新生成证据。
+本地结果都不是生产环境的验收结果；hosted 结果来自隔离验收站，同样不代表生产。
+完整截图、trace、请求与数据库记录保留在执行工作树的 `artifacts/verify/<run-id>/`，
+该目录被 Git 忽略；每次正式验收需重新生成证据。
 
 后续可用 `/maintain-verification-skill` 检查源代码、功能地图与实际行为是否一致。

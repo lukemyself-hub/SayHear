@@ -172,6 +172,32 @@
       "scratchRemoved": true
     }
   },
+  "hostedExecution": {
+    "recordedAt": "2026-10-14T07:22:00.000Z",
+    "proof": "hosted-execution-proof.json",
+    "environment": "sayhear-g1-acceptance",
+    "deploymentId": "dpl_9DYrp9ARfSxCNNcKggBu1FEteE5m",
+    "commit": "acaa502f1558d29dc0de97168c842257644ce30a",
+    "executed": [
+      "deployment identity and effective runtime configuration read back with the Owner/operator secret; G1 switches and absent manifest recorded as a configuration gap, not enabled",
+      "missing station migrations 0068-0070 applied after connection-string hash verification; the first hosted send had failed on the absent request_timezone column",
+      "hosted Journal delivery from a synthetic message through admission, outbox, the hosted Workflow and deepseek to a published current Journal, with copy, export, backlink and the Inspector-shaped reads in the browser",
+      "recovery scans repeated three times by the agent as the scheduler substitute; the second and third created and dispatched nothing",
+      "sensitive access boundary: journal inspection and Reflection Evidence expansion refused without a recent step-up, then allowed after GitHub OAuth step-up; the three Reflection Evidence expansion outcomes were written to sensitive_access_audits",
+      "four paid Provider calls total, inside the 12-call budget"
+    ],
+    "notExecuted": [
+      "Episode and Daily/Weekly Reflection generation (G1 switches off, no manifest)",
+      "Weekly due status (not evaluated because G1 was off and no Weekly Reflection generation ran)",
+      "hosted Workflow callback redelivery and a real Provider fault",
+      "cross-date evidence, still blocked by issue #340"
+    ],
+    "substitutions": [
+      "recovery scans triggered with vercel curl plus the Bearer CRON_SECRET instead of the GitHub Actions schedule, which targets production and does not include the acceptance alias",
+      "the first evidence step-up replayed the two calls the Inspector button makes; the refreshed step-up used the button itself"
+    ],
+    "cleanup": "no production changes and no public bypass links; the rotated station CRON_SECRET stays in a 0600 local file; the synthetic fixture remains in the disposable station database; screenshots and logs stay in the git-ignored artifacts/verify/hosted-345-1/"
+  },
   "blockedRuns": {
     "cross-date": {
       "attempts": [
@@ -212,8 +238,12 @@
       "reason": "three attempts were blocked by the issue #340 deadlock (see blockedRuns); per issue #345 triage it is rerun after that fix"
     },
     {
-      "journey": "hosted Journal, Episode and Daily/Weekly generation, including hosted Workflow delivery",
-      "reason": "no environment contact before Luke approves docs/verification/hosted-execution-plan.md; the acceptance alias is behind Vercel Authentication, its deployed commit and G1 state are unread, and this checkout holds no active G1 manifest"
+      "journey": "hosted Episode and Daily/Weekly Reflection generation",
+      "reason": "executed on 2026-10-14 except for the G1-gated generation: the station keeps switch.episode_build_enabled and switch.reflection_enabled false and holds no active G1 manifest, so the scans created no episode or reflection commands; recorded as a configuration gap in hosted-execution-proof.json instead of enabling G1"
+    },
+    {
+      "journey": "hosted Workflow callback redelivery and a real Provider fault under acceptance",
+      "reason": "the hosted run repeated recovery scans and retried the send, but every recorded Provider call succeeded on the first try and no callback redelivery was forced"
     }
   ]
 }

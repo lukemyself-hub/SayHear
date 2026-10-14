@@ -1,7 +1,10 @@
 # Hosted 验收执行与授权方案
 
-状态：待 Luke 审阅与授权。**本方案未接触任何 hosted 环境，未产生费用，未创建
-部署或绕过链接。** 授权前只允许本地 profile 的证据。
+状态：**已授权并于 2026-10-14 执行第一轮**。执行结果、替身、清理回执与剩余缺口见
+[evidence/hosted-execution-proof.json](evidence/hosted-execution-proof.json)（文末有执行
+结果表）；完整截图、请求与数据库日志留在验收工作树的
+`artifacts/verify/hosted-345-1/`（Git 忽略）。本轮未改变产品定义、认证、隐私或发布
+门槛，未改动生产配置，未创建公开绕过链接。
 
 对应 Issue：[#345](https://github.com/lukemyself-hub/SayHear/issues/345) 的 hosted
 部分。执行环境为 ADR-0144 定义的隔离验收环境 `sayhear-g1-acceptance`，别名
@@ -89,3 +92,24 @@
 本地 `timeline` / `fault` profile 的 Journal、跨日期、中断重试证据只证明本地
 Next dev 与本地 Workflow runtime 的行为。hosted Workflow dispatch、回调重投、
 真实调度与 hosted Provider 不因本地通过而视为已验证。
+
+## 执行结果（2026-10-14）
+
+授权逐项确认并执行；完整事实、时间线与引文见
+[evidence/hosted-execution-proof.json](evidence/hosted-execution-proof.json)。
+
+| 步骤 | 结果 | 证据与备注 |
+| --- | --- | --- |
+| 1. 部署身份与环境读回 | 完成 | 别名 → `dpl_9DYrp9ARfSxCNNcKggBu1FEteE5m`（commit `acaa502`）；release identity 与 67 项 effective runtime config 读回；两个连接串哈希 `d9ce28dd…` / `e862afea…` 与配置一致 |
+| 1. G1 manifest / pins | 缺口，按停止条件记录 | `switch.episode_build_enabled` 与 `switch.reflection_enabled` 为 false，prompt/manifest 等版本项 `unverified`；未开启 G1、未发明 pins |
+| 2. 生成链路 | 完成 | 03:22Z 首次发送因站上停在迁移 0067 失败且零提交；03:52Z 补齐 0068–0070 后重发成功；04:28:14Z Journal 发布；浏览器复制/导出/回链全通过 |
+| 2. 重试/幂等 | 完成（部分） | 三次恢复扫描后两次全 0（幂等）；未强制回调重投与真实 Provider 故障，已记录 |
+| 2. Episode / Daily / Weekly | 未跑（配置缺口） | G1 off 下扫描开出 0 条 episode/reflection 命令；Weekly due 状态未评估 |
+| 3. Reflection Evidence | 完成 | 未验证/过期拒绝且无原文 → 两次 GitHub step-up（一次经 UI「Verify again」按钮）→ 只返回所点摘录；`sensitive_access_audits` 三条 allowed/denied/allowed |
+| 4. 预算 | 4 / 12 | `conversation.text`、`evidence.extract`、`journal.draft`、`journal.validate` |
+| 替身 | 记录 | 扫描触发用 `vercel curl` + Bearer `CRON_SECRET`（站上无 cron、GitHub Actions 指向生产）；首次 step-up 由脚本复现 UI 的两条调用；浏览器链到可见 Vercel SSO 会话 |
+| 清理回执 | 记录 | 未改生产、未建公开绕过链接；轮换后的 `CRON_SECRET` 只存本地 0600 文件；合成数据留在一次性验收站；证据在 Git 忽略的 `artifacts/` |
+
+后续：G1-off 缺口（Episode / Daily / Weekly 生成）与跨日期证据（
+[#340](https://github.com/lukemyself-hub/SayHear/issues/340)）补齐前，Issue
+[#345](https://github.com/lukemyself-hub/SayHear/issues/345) 保持开放。
