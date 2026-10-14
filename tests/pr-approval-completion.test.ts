@@ -1,6 +1,7 @@
 import { generateKeyPairSync } from "node:crypto";
-import { mkdtemp, readFile, writeFile, symlink, chmod } from "node:fs/promises";
-import { resolve } from "node:path";
+import { mkdtemp, readFile, writeFile, symlink, chmod, realpath } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { describe, it, expect } from "vitest";
 import { SignedCompletionStore, recoverCompletion, CompletionMismatch, CompletionUnavailable, type CompletionRecord, type CompletionStore, type CompletionClock } from "../scripts/pr-approval/completion.ts";
 import { confirmCompletionMerge, githubRetryAfterMs, requestProtectedMerge, controllerBuildIdentity, completeLinkedIssuesAfterMerge, GitHubApiError, type GitHubApi } from "../scripts/pr-approval-controller.ts";
@@ -31,7 +32,7 @@ function virtualClock() {
 }
 const keys = generateKeyPairSync("rsa", { modulusLength: 2048, privateKeyEncoding: { format: "pem", type: "pkcs8" }, publicKeyEncoding: { format: "pem", type: "spki" } });
 async function signedStore() {
-  const directory = await mkdtemp("/private/tmp/sayhear-completion-test-");
+  const directory = await mkdtemp(join(await realpath(tmpdir()), "sayhear-completion-test-"));
   return { directory, store: new SignedCompletionStore(directory, keys.privateKey, keys.publicKey) };
 }
 function apiFor(pull: unknown, reviews: unknown[]): GitHubApi {
@@ -227,7 +228,7 @@ describe("trusted completion readback", () => {
 describe("completion serialization", () => {
   it("refuses a competing controller while preserving the live owner's lock", async () => {
     const { withGlobalLock } = await import("../scripts/pr-approval-controller.ts");
-    const parent = await mkdtemp("/private/tmp/sayhear-completion-lock-");
+    const parent = await mkdtemp(join(await realpath(tmpdir()), "sayhear-completion-lock-"));
     const path = resolve(parent, "lock");
     let release = () => {};
     const hold = new Promise<void>((done) => { release = done; });
@@ -242,7 +243,7 @@ describe("completion serialization", () => {
   });
   it("fails closed when the repository lock directory is a symlink", async () => {
     const { withGlobalLock } = await import("../scripts/pr-approval-controller.ts");
-    const parent = await mkdtemp("/private/tmp/sayhear-completion-lock-");
+    const parent = await mkdtemp(join(await realpath(tmpdir()), "sayhear-completion-lock-"));
     const target = resolve(parent, "target");
     const { mkdir } = await import("node:fs/promises");
     await mkdir(target, { mode: 0o700 });
