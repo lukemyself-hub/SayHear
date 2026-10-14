@@ -102,7 +102,7 @@ export const ONE_A_3B_G1_SCHEMA_EXTENSIONS: readonly OneA3bG1SchemaExtensionPin[
       store: "business" as const,
       name: "0071_journal_workflow_recovery.sql",
       sha256: "86392dc6d5f98b8d50f637eb4c31762a3678b8bfa4cb5ed1ce4071c0dc407b6f",
-      justification: "Adds bounded Journal recovery metadata and owner-scoped Evidence dispatch claims. Existing snapshot-linked attempts backfill only the new ownership columns. No protected relation or private content is rewritten (Issues #340 and #341).",
+      justification: "Adds bounded Journal recovery metadata and owner-scoped Evidence dispatch claims. Existing snapshot-linked attempts populate only the new ownership columns. No protected relation or private content is rewritten (Issues #340 and #341).",
     }),
   ]);
 
