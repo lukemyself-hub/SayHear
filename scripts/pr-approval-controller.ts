@@ -17,6 +17,18 @@ import {
   realpath,
 } from "node:fs/promises";
 import { homedir } from "node:os";
+import {
+  AGENT_IDENTITY,
+  BROWSER_APPROVAL_VERSION,
+  LUKE_IDENTITY,
+  authorizationChannel,
+  latestLukeReview,
+  readBrowserAuthorization,
+  SignedBrowserApprovalStore,
+  type BrowserApprovalStore,
+  type BrowserChallenge,
+  type BrowserReceipt,
+} from "./pr-approval/browser-approval.ts";
 import { SignedCompletionStore, recoverCompletion, CompletionMismatch, CompletionUnavailable, type CompletionStore, type CompletionRecord, type CompletionIdentity } from "./pr-approval/completion.ts";
 import { promisify } from "node:util";
 import { inflateRawSync } from "node:zlib";
@@ -26,12 +38,17 @@ import { pathToFileURL } from "node:url";
 import {
   evaluatePrReviewGate,
   PR_REVIEW_GATE_CHECK_NAME,
+  PR_REVIEW_GATE_LEGACY_POLICY_VERSION as V4_POLICY_VERSION,
+  PR_REVIEW_GATE_PREVIOUS_POLICY_VERSION as V5_POLICY_VERSION,
+  PR_REVIEW_GATE_INSTALLED_POLICY_VERSION as V6_POLICY_VERSION,
   PR_REVIEW_GATE_POLICY_VERSION,
   PR_REVIEW_REPORT_VERSION,
   PR_VALIDATE_WORKFLOW_PATH,
   parsePrReviewGateInput,
   requirementDigest,
   parseIssueClosureExclusions,
+  closingKeywordIssueNumbers,
+  protectedReviewPaths,
   SAYHEAR_REPOSITORY_ID,
   SAYHEAR_REPOSITORY_NAME,
   type PrReviewGateInput,
@@ -42,24 +59,34 @@ import { collectPullRequestDiff, readPullRequestFileManifest, type CollectedPrDi
 import {
   FIXED_PR_CI_BASELINE,
   planDailyReleaseValidation,
+  preMergeDeferralFor,
   DAILY_RELEASE_VALIDATION_REQUEST_VERSION,
   RELEASE_CHECKS,
   type ReleaseImpactKind,
 } from "./daily-release-validation.ts";
 
-export { SignedCompletionStore, recoverCompletion, CompletionMismatch, CompletionUnavailable, COMPLETION_RETRY_POLICY } from "./pr-approval/completion.ts";
+export { SignedCompletionStore, recoverCompletion, parseCompletionRecord, CompletionMismatch, CompletionUnavailable, COMPLETION_RETRY_POLICY } from "./pr-approval/completion.ts";
 export { collectPullRequestDiff, readPullRequestFileManifest, gitBlobSha } from "./pr-approval/diff.ts";
-export { PR_REVIEW_GATE_POLICY_VERSION, PR_REVIEW_REPORT_VERSION, PR_VALIDATE_WORKFLOW_PATH,
+export { PR_REVIEW_GATE_POLICY_VERSION, PR_REVIEW_GATE_LEGACY_POLICY_VERSION, PR_REVIEW_GATE_PREVIOUS_POLICY_VERSION, PR_REVIEW_GATE_INSTALLED_POLICY_VERSION, PR_REVIEW_REPORT_VERSION, PR_VALIDATE_WORKFLOW_PATH,
   SAYHEAR_REPOSITORY_ID, SAYHEAR_REPOSITORY_NAME, evaluatePrReviewGate, parsePrReviewGateInput,
-  requirementDigest, parseIssueClosureExclusions } from "./pr-review-gate.ts";
-export { FIXED_PR_CI_BASELINE, RELEASE_CHECKS } from "./daily-release-validation.ts";
+  requirementDigest, parseIssueClosureExclusions, closingKeywordIssueNumbers, protectedReviewPaths } from "./pr-review-gate.ts";
+export { FIXED_PR_CI_BASELINE, RELEASE_CHECKS, preMergeDeferralFor } from "./daily-release-validation.ts";
+export {
+  BROWSER_APPROVAL_VERSION, AGENT_IDENTITY, LUKE_IDENTITY, authorizationChannel, browserContextDigest,
+  latestLukeReview, matchesActor, parseBrowserContext, parseBrowserReceipt, parseBrowserState,
+  readBrowserAuthorization, SignedBrowserApprovalStore,
+  type BrowserApprovalStore, type BrowserChallenge, type BrowserContext, type BrowserReceipt, type BrowserState,
+} from "./pr-approval/browser-approval.ts";
 
-declare const __PR_APPROVAL_BUILD_INFO__: Readonly<{ sourceCommit: string; nodeVersion: string; esbuildVersion: string }>;
+declare const __PR_APPROVAL_BUILD_INFO__: Readonly<{ sourceCommit: string; sourceDiffSha256: string; nodeVersion: string; esbuildVersion: string }>;
 export function controllerBuildIdentity(): Readonly<Record<string, unknown>> {
   return {
-    ...(typeof __PR_APPROVAL_BUILD_INFO__ === "undefined" ? { sourceCommit: "unbundled" } : __PR_APPROVAL_BUILD_INFO__),
+    ...(typeof __PR_APPROVAL_BUILD_INFO__ === "undefined"
+      ? { sourceCommit: "unbundled", sourceDiffSha256: null }
+      : __PR_APPROVAL_BUILD_INFO__),
     completionVersion: "sayhear-pr-completion:v1", policyVersion: PR_REVIEW_GATE_POLICY_VERSION,
     diffCollectionVersion: "sayhear-pr-diff:v2", baseSyncHandoffVersion: "sayhear-pr-base-sync:v1",
+    browserApprovalVersion: BROWSER_APPROVAL_VERSION,
   };
 }
 
@@ -263,11 +290,54 @@ type ReviewPacket = Readonly<{
   }>;
   impactHints: readonly ReleaseImpactKind[];
   suggestedEvidenceIds: readonly string[];
+  browserApproval: Readonly<{
+    version: string;
+    channel: HumanReviewBinding["channel"];
+    frozenAt: number | null;
+    epoch: string | null;
+    reviewId: number | null;
+  }>;
 }>;
+
+// The three authorization channels are mutually exclusive. An agent-authored PR
+// can only be authorized by Luke's browser review; a root record never applies.
+export type HumanReviewBinding = Readonly<{
+  channel: "browser" | "legacy-root" | "unknown";
+  paths: readonly string[];
+  noRuntimeImpact: boolean;
+  validateWorkflowBlobSha: string | null;
+  receipt: BrowserReceipt | null;
+  challenge: BrowserChallenge | null;
+}>;
+const NO_HUMAN_BINDING: HumanReviewBinding = Object.freeze({
+  channel: "unknown", paths: [], noRuntimeImpact: false, validateWorkflowBlobSha: null, receipt: null, challenge: null,
+});
+
+// v4 requirement digests digested top-level review bodies and states. v5 excludes
+// every review record so that approval text, dismissal, and review state cannot
+// change the requirement the approval is bound to. Inline comments stay included.
+//
+// Only identities that ran against the durable store belong here: a signed
+// completion receipt is read back with the projection its own policy produced.
+// v7 was reviewed on main but never installed, so it never wrote one.
+export type RequirementProjection = "review-inclusive-v4" | "review-exclusive-v5";
+export const RECEIPT_POLICY_VERSIONS: readonly string[] = [
+  PR_REVIEW_GATE_POLICY_VERSION,
+  V6_POLICY_VERSION,
+  V5_POLICY_VERSION,
+  V4_POLICY_VERSION,
+];
+export function requirementProjectionFor(policyVersion: string): RequirementProjection {
+  // Never guess a projection for an unknown policy: guessing the review-inclusive
+  // one would silently accept a digest the policy never produced.
+  if (!RECEIPT_POLICY_VERSIONS.includes(policyVersion)) throw new Error(`Unknown PR review policy version: ${policyVersion}`);
+  return policyVersion === V4_POLICY_VERSION ? "review-inclusive-v4" : "review-exclusive-v5";
+}
 
 type ControllerConfig = Readonly<{
   api: GitHubApi;
   completionStore?: CompletionStore;
+  browserApprovalStore?: BrowserApprovalStore;
   app: GitHubAppConfig;
   policy: TrustedPrReviewPolicy;
   botActorId: number;
@@ -733,10 +803,12 @@ export function isVercelDeploymentStatus(comment: GitHubComment): boolean {
     (comment.body ?? "").startsWith("[vc]: #");
 }
 
-function digestDiscussion(
+export function digestDiscussion(
   comments: readonly GitHubComment[],
-  reviews: readonly GitHubReview[] = [],
+  reviews: readonly GitHubReview[],
+  projection: RequirementProjection,
 ): string {
+  const includedReviews = projection === "review-exclusive-v5" ? [] : reviews;
   const entries = [
     ...comments.map((comment) => ({
       id: comment.id,
@@ -745,7 +817,7 @@ function digestDiscussion(
       createdAt: comment.created_at,
       updatedAt: comment.updated_at,
     })),
-    ...reviews.map((review) => ({
+    ...includedReviews.map((review) => ({
       id: review.id,
       actor: review.user.id,
       body: review.body ?? "",
@@ -992,6 +1064,48 @@ export async function readIssueDependencies(
   }
 }
 
+/**
+ * Issues GitHub would close natively when the PR merges: Development-sidebar
+ * links and body keywords. Returns `null` when the set cannot be read whole.
+ */
+export async function readClosingIssueReferences(
+  api: GitHubApi,
+  pullNumber: number,
+): Promise<number[] | null> {
+  try {
+    const data = await readGraphql<{
+      repository?: {
+        pullRequest?: {
+          closingIssuesReferences?: {
+            nodes?: readonly { number?: number }[];
+            pageInfo?: { hasNextPage?: boolean };
+          };
+        } | null;
+      } | null;
+    }>(
+      api,
+      `query($owner:String!,$name:String!,$number:Int!){
+        repository(owner:$owner,name:$name){
+          pullRequest(number:$number){
+            closingIssuesReferences(first:100){nodes{number} pageInfo{hasNextPage}}
+          }
+        }
+      }`,
+      { owner: "lukemyself-hub", name: "SayHear", number: pullNumber },
+    );
+    const references = data.repository?.pullRequest?.closingIssuesReferences;
+    if (!references?.nodes || references.pageInfo?.hasNextPage !== false) return null;
+    const numbers: number[] = [];
+    for (const node of references.nodes) {
+      if (typeof node.number !== "number" || !Number.isSafeInteger(node.number) || node.number <= 0) return null;
+      numbers.push(node.number);
+    }
+    return numbers;
+  } catch {
+    return null;
+  }
+}
+
 async function readReviewThreadState(
   api: GitHubApi,
   pullNumber: number,
@@ -1200,9 +1314,12 @@ async function createRuntimeControllerConfig(): Promise<ControllerConfig> {
   const config = await createControllerConfig(appConfig, api);
   const privateKey = await readAppPrivateKey();
   const publicKey = createPublicKey(privateKey).export({ type: "spki", format: "pem" }).toString();
-  return { ...config, completionStore: new SignedCompletionStore(
-    resolve(homedir(), "Library/Application Support/SayHear/PRApproval/completions"), privateKey, publicKey,
-  ) };
+  const storeDirectory = resolve(homedir(), "Library/Application Support/SayHear/PRApproval");
+  return {
+    ...config,
+    completionStore: new SignedCompletionStore(resolve(storeDirectory, "completions"), privateKey, publicKey),
+    browserApprovalStore: new SignedBrowserApprovalStore(resolve(storeDirectory, "browser-approvals"), privateKey, publicKey),
+  };
 }
 
 export function parsePauseState(
@@ -1311,6 +1428,8 @@ function currentCheckSummary(
 ): Readonly<{ title: string; summary: string }> {
   const titleByOutcome: Record<PrReviewGateReport["outcome"], string> = {
     merge_candidate: "Review and evidence passed",
+    merge_candidate_with_deferrals:
+      "Review and evidence passed; some checks deferred",
     request_changes: "Changes required",
     awaiting_verification: "Evidence or state is incomplete",
     human_decision: "Human decision required",
@@ -1549,7 +1668,7 @@ export async function collectEvidence(
   capability: PrReviewGateInput["review"]["capability"],
   mergeSha: string | null,
   baseSha: string,
-  humanAuthorization: HumanReviewAuthorization | null = null,
+  humanBinding: HumanReviewBinding = NO_HUMAN_BINDING,
 ): Promise<Readonly<{
   evidence: PrReviewGateInput["evidence"];
   trustedWorkflowBlobSha: string | null;
@@ -1677,7 +1796,7 @@ export async function collectEvidence(
   }
   const trustedWorkflow =
     workflowSourceValid &&
-    isTrustedWorkflowVersion(mainWorkflowSha, mergeWorkflowSha, humanAuthorization?.validateWorkflowBlobSha ?? null);
+    isTrustedWorkflowVersion(mainWorkflowSha, mergeWorkflowSha, humanBinding.validateWorkflowBlobSha);
   const testArtifact = await readVitestReport(
     config.api,
     run.id,
@@ -1707,6 +1826,10 @@ export async function collectEvidence(
       run.conclusion === "success" &&
       (checkId !== "baseline:test" || validReport) &&
       (fixed || targetedPassed);
+    const policy = preMergeDeferralFor(checkId);
+    if (!passed && policy !== null) {
+      return { kind: "deferred-before-merge" as const, checkId, policy };
+    }
     return {
       checkId,
       result: passed
@@ -1735,6 +1858,8 @@ export async function collectEvidence(
 }
 
 type Snapshot = Readonly<{
+  humanBinding: HumanReviewBinding;
+  browserChallenge: BrowserChallenge | null;
   gateInput: Omit<PrReviewGateInput, "review" | "evidence">;
   evidence: PrReviewGateInput["evidence"];
   trustedWorkflowBlobSha: string | null;
@@ -1742,6 +1867,70 @@ type Snapshot = Readonly<{
   workflowConclusion: string | null;
   diff: CollectedPrDiff & Readonly<{ changeDigest: string }>;
 }>;
+
+async function readHeadWorkflowBlob(api: GitHubApi, headSha: string): Promise<string> {
+  const file = await api.request<JsonRecord>(
+    repositoryPath(`/contents/${PR_VALIDATE_WORKFLOW_PATH}?ref=${encodeURIComponent(headSha)}`),
+  );
+  if (typeof file.sha !== "string" || !/^[a-f0-9]{40}$/i.test(file.sha)) {
+    throw new Error("The head candidate Validate workflow blob is unavailable.");
+  }
+  return file.sha.toLowerCase();
+}
+
+export async function readHumanBinding(
+  config: ControllerConfig,
+  input: Readonly<{
+    pullRequest: GitHubPullRequest;
+    number: number;
+    repositoryNodeId: string | null;
+    reviews: readonly GitHubReview[];
+    diffDigest: string;
+    diffComplete: boolean;
+    changedFiles: PrReviewGateInput["pullRequest"]["changedFiles"];
+    requirement: string;
+    headSha: string;
+    freeze: boolean;
+    now?: number;
+  }>,
+): Promise<HumanReviewBinding> {
+  const channel = authorizationChannel(input.pullRequest.user);
+  if (channel === "legacy-root") {
+    const record = matchHumanReviewAuthorization(config.app.humanReviewAuthorizations ?? [], {
+      pullRequestNumber: input.number, diffDigest: input.diffDigest, requirementDigest: input.requirement, diffComplete: input.diffComplete,
+    });
+    return record === null
+      ? { ...NO_HUMAN_BINDING, channel: "legacy-root" }
+      : { channel: "legacy-root", paths: record.paths, noRuntimeImpact: record.noRuntimeImpact === true, validateWorkflowBlobSha: record.validateWorkflowBlobSha, receipt: null, challenge: null };
+  }
+  if (channel === "unknown") return NO_HUMAN_BINDING;
+  if (!config.browserApprovalStore) throw new Error("browser_approval_store_unavailable");
+  if (input.repositoryNodeId === null) throw new Error("browser_repository_identity_unavailable");
+  const context = {
+    repositoryId: SAYHEAR_REPOSITORY_ID, repositoryNodeId: input.repositoryNodeId,
+    pullRequestNumber: input.number, pullRequestNodeId: recordString(input.pullRequest, "node_id"),
+    author: AGENT_IDENTITY,
+    reviewer: LUKE_IDENTITY,
+    headSha: input.headSha, baseSha: input.pullRequest.base.sha.toLowerCase(),
+    diffDigest: input.diffDigest, requirementDigest: input.requirement,
+    protectedPaths: [...protectedReviewPaths(input.changedFiles)],
+    validateWorkflowBlobSha: await readHeadWorkflowBlob(config.api, input.headSha),
+  };
+  const authorization = await readBrowserAuthorization(
+    config.browserApprovalStore, input.number, context, input.reviews, input.freeze, input.now ?? Date.now(),
+  );
+  if (!authorization.receipt) return { channel: "browser", paths: [], noRuntimeImpact: false, validateWorkflowBlobSha: null, receipt: null, challenge: authorization.challenge };
+  // Browser channel keeps noRuntimeImpact false. The approval binds exact paths
+  // and the reviewed workflow blob only; it never classifies product risk.
+  return {
+    channel: "browser",
+    paths: authorization.receipt.challenge.context.protectedPaths,
+    noRuntimeImpact: false,
+    validateWorkflowBlobSha: authorization.receipt.challenge.context.validateWorkflowBlobSha,
+    receipt: authorization.receipt,
+    challenge: authorization.receipt.challenge,
+  };
+}
 
 async function readSnapshot(
   config: ControllerConfig,
@@ -1752,6 +1941,7 @@ async function readSnapshot(
     majorContractChange: false,
     externalMvpRelease: false,
   },
+  options: Readonly<{ freezeBrowserChallenge?: boolean }> = {},
 ): Promise<Snapshot> {
   const [repository, pullRequest, protection, refs, openPullRequests] =
     await Promise.all([
@@ -1788,6 +1978,7 @@ async function readSnapshot(
     reviewComments,
     reviews,
     hasHumanReviewThread,
+    graphClosingIssueNumbers,
   ] = await Promise.all([
     readPullRequestFileManifest(config.api, pullNumber),
     config.api.pages<JsonRecord>(
@@ -1814,6 +2005,7 @@ async function readSnapshot(
       pullNumber,
       `${config.app.slug}[bot]`,
     ),
+    readClosingIssueReferences(config.api, pullNumber),
   ]);
 
   const changedFileRecords = fileManifest.files;
@@ -1877,11 +2069,13 @@ async function readSnapshot(
   const diffComplete = collectedDiff.complete;
   const diffDigest = collectedDiff.digest;
 
+  const requirementProjection = requirementProjectionFor(PR_REVIEW_GATE_POLICY_VERSION);
   const prDiscussionDigest = digestDiscussion(
     [...prComments, ...reviewComments].filter(
       (comment) => comment.user.id !== config.botActorId && !isVercelDeploymentStatus(comment),
     ),
     reviews.filter((review) => review.user.id !== config.botActorId),
+    requirementProjection,
   );
   const currentPullRequests = openPullRequests.filter(
     (candidate) =>
@@ -1896,12 +2090,25 @@ async function readSnapshot(
     title: issue.title,
     body: issue.body ?? "",
     updatedAt: issue.updated_at,
-    discussionDigest: digestDiscussion(comments.filter((comment) => comment.user.id !== config.botActorId)),
+    discussionDigest: digestDiscussion(comments.filter((comment) => comment.user.id !== config.botActorId), [], requirementProjection),
     labels: labelNames(issue),
     blockedBy,
     pause: parsePauseState([...comments, ...prComments], config.ownerActorId, config.botActorId),
   }));
   const issueClosure = parseIssueClosureExclusions(pullRequest.title, pullRequest.body ?? "");
+  // Commit messages close Issues too once they land on main. The commits
+  // endpoint stops at 250 entries, so a full page means the set is unknown.
+  const closingIssueNumbers =
+    graphClosingIssueNumbers === null || commits.length >= 250 ||
+    commits.some((commit) => !isRecord(commit.commit) || typeof commit.commit.message !== "string")
+      ? null
+      : [...new Set([
+          ...graphClosingIssueNumbers,
+          ...commits.flatMap((commit) =>
+            isRecord(commit.commit) && typeof commit.commit.message === "string"
+              ? closingKeywordIssueNumbers(commit.commit.message)
+              : []),
+        ])].sort((left, right) => left - right);
   const normalizedPullRequest: PrReviewGateInput["pullRequest"] = {
     number: pullRequest.number,
     state: pullRequest.state,
@@ -1922,6 +2129,7 @@ async function readSnapshot(
     linkedIssueNumbers: linkedNumbers,
     keepOpenIssueNumbers: issueClosure.keepOpenIssueNumbers,
     issueClosureAmbiguous: issueClosure.ambiguous,
+    closingIssueNumbers,
     changedFiles,
   };
   const normalizedRepository: PrReviewGateInput["repository"] = {
@@ -1931,6 +2139,18 @@ async function readSnapshot(
     defaultBranchSha,
     allowAutoMerge: repository.allow_auto_merge === true,
   };
+  const humanBinding = await readHumanBinding(config, {
+    pullRequest,
+    number: pullNumber,
+    repositoryNodeId: typeof repository.node_id === "string" ? repository.node_id : null,
+    reviews,
+    diffDigest,
+    diffComplete,
+    changedFiles,
+    requirement: requirementDigest(normalizedIssues, normalizedPullRequest),
+    headSha: normalizedPullRequest.headSha,
+    freeze: options.freezeBrowserChallenge === true,
+  });
   const collected = await collectEvidence(
     config,
     pullNumber,
@@ -1940,14 +2160,11 @@ async function readSnapshot(
     capability,
     normalizedPullRequest.mergeSha,
     normalizedPullRequest.baseSha,
-    matchHumanReviewAuthorization(config.app.humanReviewAuthorizations ?? [], {
-      pullRequestNumber: pullNumber,
-      diffDigest,
-      requirementDigest: requirementDigest(normalizedIssues, normalizedPullRequest),
-      diffComplete,
-    }),
+    humanBinding,
   );
   return {
+    humanBinding,
+    browserChallenge: humanBinding.challenge,
     gateInput: {
       repository: normalizedRepository,
       pullRequest: normalizedPullRequest,
@@ -2009,17 +2226,12 @@ function evaluateSnapshot(
   const input = parsePrReviewGateInput(
     createModelReviewInput(config, snapshot, report),
   );
-  const humanAuthorization = matchHumanReviewAuthorization(config.app.humanReviewAuthorizations ?? [], {
-    pullRequestNumber: snapshot.gateInput.pullRequest.number,
-    diffDigest: snapshot.diff.digest,
-    requirementDigest: requirementDigest(snapshot.gateInput.issues, snapshot.gateInput.pullRequest),
-    diffComplete: snapshot.diff.complete,
-  });
   const policy = {
     ...config.policy,
     validateWorkflowBlobSha: snapshot.trustedWorkflowBlobSha,
-    humanApprovedPaths: humanAuthorization?.paths ?? [],
-    humanApprovedNoRuntimeImpact: humanAuthorization?.noRuntimeImpact === true,
+    humanApprovedPaths: snapshot.humanBinding.paths,
+    humanApprovedNoRuntimeImpact: snapshot.humanBinding.noRuntimeImpact,
+    humanApprovalChannel: snapshot.humanBinding.channel,
   };
   return { input, gate: evaluatePrReviewGate(input, policy) };
 }
@@ -2053,6 +2265,13 @@ function reviewPacket(
       conclusion: snapshot.workflowConclusion,
     },
     diff: snapshot.diff,
+    browserApproval: {
+      version: BROWSER_APPROVAL_VERSION,
+      channel: snapshot.humanBinding.channel,
+      frozenAt: snapshot.browserChallenge?.frozenAt ?? null,
+      epoch: snapshot.browserChallenge?.epoch ?? null,
+      reviewId: snapshot.humanBinding.receipt?.reviewId ?? null,
+    },
     reviewContext: {
       reportVersion:
         reportContext?.reportVersion ?? PR_REVIEW_REPORT_VERSION,
@@ -2338,13 +2557,21 @@ function snapshotEvidenceDigest(snapshot: Snapshot): string {
       JSON.stringify(
         [...snapshot.evidence]
           .sort((left, right) => left.checkId.localeCompare(right.checkId))
-          .map((entry) => ({
-            checkId: entry.checkId,
-            result: entry.result,
-            source: entry.source,
-            artifactSha256: entry.artifactSha256,
-            coveredCheckIds: entry.coveredCheckIds,
-          })),
+          .map((entry) =>
+            entry.kind === "deferred-before-merge"
+              ? {
+                  checkId: entry.checkId,
+                  kind: entry.kind,
+                  policy: entry.policy,
+                }
+              : {
+                  checkId: entry.checkId,
+                  result: entry.result,
+                  source: entry.source,
+                  artifactSha256: entry.artifactSha256,
+                  coveredCheckIds: entry.coveredCheckIds,
+                },
+          ),
       ),
     )
     .digest("hex");
@@ -2397,9 +2624,10 @@ async function upsertCheckRun(
         `report=${reportBase64} -->`,
       ].join(" ")
     : "";
-  const evidenceSummary = snapshot.evidence.map(
-    (entry) =>
-      `- \`${entry.checkId}\`: ${entry.result}; run ${entry.source.runId}/${entry.source.runAttempt}; artifact ${entry.artifactSha256 ?? "none"}`,
+  const evidenceSummary = snapshot.evidence.map((entry) =>
+    entry.kind === "deferred-before-merge"
+      ? `- \`${entry.checkId}\`: deferred before merge (${entry.policy.reason}); follow-up at ${entry.policy.followUp.stage}: ${entry.policy.followUp.command}`
+      : `- \`${entry.checkId}\`: ${entry.result}; run ${entry.source.runId}/${entry.source.runAttempt}; artifact ${entry.artifactSha256 ?? "none"}`,
   );
   const payload = {
     name: PR_REVIEW_GATE_CHECK_NAME,
@@ -2407,7 +2635,8 @@ async function upsertCheckRun(
     external_id: externalId,
     status: "completed",
     conclusion:
-      gate.outcome === "merge_candidate"
+      gate.outcome === "merge_candidate" ||
+      gate.outcome === "merge_candidate_with_deferrals"
         ? "success"
         : gate.outcome === "human_decision"
           ? "action_required"
@@ -2577,7 +2806,7 @@ async function readSavedReviewReport(
   const summary = check.output.summary;
   if (typeof summary !== "string") return null;
   const marker = summary.match(
-    /<!-- sayhear-pr-auto-approval-state:v1 pr=(\d+) head=([0-9a-f]{40}) base=([0-9a-f]{40}) requirement=([0-9a-f]{64}) diff=([0-9a-f]{64}) change=([0-9a-f]{64}) evidence=([0-9a-f]{64}) outcome=(merge_candidate|request_changes|awaiting_verification|human_decision) report=([A-Za-z0-9_-]+) -->/i,
+    /<!-- sayhear-pr-auto-approval-state:v1 pr=(\d+) head=([0-9a-f]{40}) base=([0-9a-f]{40}) requirement=([0-9a-f]{64}) diff=([0-9a-f]{64}) change=([0-9a-f]{64}) evidence=([0-9a-f]{64}) outcome=(merge_candidate_with_deferrals|merge_candidate|request_changes|awaiting_verification|human_decision) report=([A-Za-z0-9_-]+) -->/i,
   );
   if (!marker) return null;
   try {
@@ -2617,12 +2846,19 @@ type AppReviewIdentity = Readonly<{
 
 const APP_REVIEW_MARKER = "<!-- sayhear-pr-auto-approval-review:v2";
 
+/**
+ * `approve_deferred` marks an approval whose gate deferred pre-merge checks.
+ * It is still a GitHub APPROVE, but Issue completion accepts only `approve`,
+ * so a deferred merge can never close its Issues through the controller.
+ */
+export type AppReviewOutcome = "approve" | "approve_deferred" | "request_changes";
+
 export function appReviewOutcomeForIdentity(
   body: string | null,
   identity: AppReviewIdentity,
-): "approve" | "request_changes" | null {
+): AppReviewOutcome | null {
   const marker = body?.match(
-    /<!-- sayhear-pr-auto-approval-review:v2 pr=(\d+) head=([0-9a-f]{40}) base=([0-9a-f]{40}) requirement=([0-9a-f]{64}) outcome=(approve|request_changes) -->/i,
+    /<!-- sayhear-pr-auto-approval-review:v2 pr=(\d+) head=([0-9a-f]{40}) base=([0-9a-f]{40}) requirement=([0-9a-f]{64}) outcome=(approve_deferred|approve|request_changes) -->/i,
   );
   if (
     !marker ||
@@ -2633,7 +2869,7 @@ export function appReviewOutcomeForIdentity(
   ) {
     return null;
   }
-  return marker[5]!.toLowerCase() as "approve" | "request_changes";
+  return marker[5]!.toLowerCase() as AppReviewOutcome;
 }
 
 async function findExistingAppReview(
@@ -2659,13 +2895,18 @@ async function findExistingAppReview(
 async function submitPullRequestReview(
   config: ControllerConfig,
   report: ModelReviewReport,
+  deferred: PrReviewGateReport["deferredEvidence"],
 ): Promise<GitHubReview> {
   const existing = await findExistingAppReview(
     config,
     report,
   );
-  const desired =
-    report.decision === "request_changes" ? "request_changes" : "approve";
+  const desired: AppReviewOutcome =
+    report.decision === "request_changes"
+      ? "request_changes"
+      : deferred.length > 0
+        ? "approve_deferred"
+        : "approve";
   if (existing) {
     if (appReviewOutcomeForIdentity(existing.body, report) !== desired) {
       throw new Error(
@@ -2690,6 +2931,18 @@ async function submitPullRequestReview(
           ),
         ]
       : ["", "No blocking findings."]),
+    ...(deferred.length > 0
+      ? [
+          "",
+          "Not run before merge:",
+          ...deferred.map(
+            (entry) =>
+              `- \`${entry.checkId}\`: ${entry.reason}; follow-up at ${entry.followUp.stage}: \`${entry.followUp.command}\``,
+          ),
+          "",
+          "The linked Issues stay open until these checks run.",
+        ]
+      : []),
     "",
     reviewMarker,
   ].join("\n");
@@ -3025,21 +3278,61 @@ export async function requestProtectedMerge(
   if (result.merged !== true) throw new Error("GitHub did not confirm the protected merge.");
 }
 
+function mergeMethodFor(repository: JsonRecord): "MERGE" | "SQUASH" | "REBASE" {
+  return repository.allow_merge_commit === true ? "MERGE"
+    : repository.allow_squash_merge === true ? "SQUASH"
+      : repository.allow_rebase_merge === true ? "REBASE" : "MERGE";
+}
+
+// The browser channel is the authorization channel for every agent-authored PR,
+// but only a PR that touches a protected path actually needs Luke's approval. An
+// ordinary agent PR merges on the pinned head with no human binding at all.
+export function browserAuthorizationRequired(
+  binding: HumanReviewBinding,
+  changedFiles: PrReviewGateInput["pullRequest"]["changedFiles"],
+): boolean {
+  return binding.channel === "browser" && protectedReviewPaths(changedFiles).length > 0;
+}
+
+// Which merge mechanism the bound human channel allows. The browser channel never
+// arms GitHub's deferred auto-merge: once the App approval is published, a later
+// dismissal of Luke's review leaves the App review alone in the branch-protection
+// slot, so the browser channel either issues one pinned merge now or waits.
+export function mergeActionFor(
+  binding: HumanReviewBinding,
+  pullRequest: JsonRecord,
+): "arm-auto-merge" | "merge-now" | "wait" {
+  if (binding.channel !== "browser") return "arm-auto-merge";
+  return pullRequest.mergeable === true && pullRequest.mergeable_state === "clean" ? "merge-now" : "wait";
+}
+
+// The endpoint that performs an approved merge. The two channels are not
+// interchangeable even when both would merge immediately: only `arm-auto-merge`
+// may leave a deferred intent behind, and the browser channel must never do so.
+export async function applyMergeAction(
+  config: ControllerConfig,
+  report: Readonly<{ pullRequestNumber: number; headSha: string }>,
+  repository: JsonRecord,
+  pullRequest: GitHubPullRequest,
+  action: "arm-auto-merge" | "merge-now",
+): Promise<void> {
+  if (action === "arm-auto-merge") {
+    await requestPullRequestAutoMerge(config, report, repository, pullRequest);
+    return;
+  }
+  await requestProtectedMerge(config.api, report.pullRequestNumber, report.headSha, mergeMethodFor(repository), false);
+}
+
 async function requestPullRequestAutoMerge(
   config: ControllerConfig,
-  report: ModelReviewReport,
+  report: Readonly<{ pullRequestNumber: number; headSha: string }>,
   repository: JsonRecord,
   pullRequest: GitHubPullRequest,
 ): Promise<void> {
   if (isRecord(pullRequest.auto_merge)) return;
   const pullRequestNodeId = recordString(pullRequest, "node_id");
-  const mergeMethod = repository.allow_merge_commit === true
-    ? "MERGE"
-    : repository.allow_squash_merge === true
-      ? "SQUASH"
-      : repository.allow_rebase_merge === true
-        ? "REBASE"
-        : null;
+  const mergeMethod = repository.allow_merge_commit === true || repository.allow_squash_merge === true || repository.allow_rebase_merge === true
+    ? mergeMethodFor(repository) : null;
   if (mergeMethod === null) {
     throw new Error("No enabled GitHub auto-merge method is available.");
   }
@@ -3255,6 +3548,31 @@ async function readMergedEventCommitSha(api: GitHubApi, pullRequestNumber: numbe
   return null;
 }
 
+// Luke's review can be dismissed after the merge or between scans. Both the
+// post-merge Issue completion and any repeated merge request re-read the live
+// human approval so a revocation is never carried into a later action.
+function assertLiveBrowserApproval(reviews: readonly GitHubReview[], identity: CompletionIdentity): void {
+  let latest;
+  try { latest = latestLukeReview(reviews); }
+  catch { throw new CompletionMismatch("human_review_metadata_invalid"); }
+  if (!latest || latest.id !== identity.humanReviewId || latest.state !== "APPROVED" || latest.headSha !== identity.headSha) {
+    throw new CompletionMismatch("human_review_revoked");
+  }
+}
+
+// The browser channel arms no deferred auto-merge, so a lost merge response must
+// be recovered by re-issuing the pinned merge itself. The live human approval is
+// re-read first: a dismissal since the record was written must never be carried
+// into a new merge request.
+export async function reissuePinnedBrowserMerge(api: GitHubApi, identity: CompletionIdentity): Promise<void> {
+  assertLiveBrowserApproval(
+    await api.pages<GitHubReview>(repositoryPath(`/pulls/${identity.pullRequestNumber}/reviews`)),
+    identity,
+  );
+  await requestProtectedMerge(api, identity.pullRequestNumber, identity.headSha,
+    mergeMethodFor(await readRepositoryMergeSettings(api)), false);
+}
+
 export async function confirmCompletionMerge(api: GitHubApi, identity: CompletionIdentity): Promise<string | null> {
   let raw: unknown;
   try { raw = await api.request<unknown>(repositoryPath(`/pulls/${identity.pullRequestNumber}`)); }
@@ -3295,10 +3613,15 @@ export async function confirmCompletionMerge(api: GitHubApi, identity: Completio
     reviews.some((candidate) => candidate.id > identity.reviewId && candidate.user.id === identity.botActorId && candidate.commit_id.toLowerCase() === identity.headSha && candidate.state === "CHANGES_REQUESTED")) {
     throw new CompletionMismatch("reviewer_mismatch");
   }
+  if (identity.humanChannel === "browser") assertLiveBrowserApproval(reviews, identity);
   return mergeSha;
 }
 
-export async function verifyCompletionRequirements(api: GitHubApi, identity: CompletionIdentity): Promise<void> {
+export async function verifyCompletionRequirements(
+  api: GitHubApi,
+  identity: CompletionIdentity,
+  projection: RequirementProjection = requirementProjectionFor(identity.policyVersion),
+): Promise<void> {
   const pull = await api.request<GitHubPullRequest>(repositoryPath(`/pulls/${identity.pullRequestNumber}`));
   const issues = await resolveLinkedIssues(api, pull);
   const [comments, reviewComments, reviews] = await Promise.all([
@@ -3308,11 +3631,12 @@ export async function verifyCompletionRequirements(api: GitHubApi, identity: Com
   ]);
   const requirements = await Promise.all(issues.map(async (issue) => ({
     number: issue.number, title: issue.title, body: issue.body ?? "", updatedAt: issue.updated_at,
-    discussionDigest: digestDiscussion((await api.pages<GitHubComment>(repositoryPath(`/issues/${issue.number}/comments`))).filter((comment) => comment.user.id !== identity.botActorId)),
+    discussionDigest: digestDiscussion((await api.pages<GitHubComment>(repositoryPath(`/issues/${issue.number}/comments`))).filter((comment) => comment.user.id !== identity.botActorId), [], projection),
   })));
   const content = requirementDigest(requirements, { number: pull.number, title: pull.title, body: pull.body ?? "", updatedAt: pull.updated_at, discussionDigest: digestDiscussion(
     [...comments, ...reviewComments].filter((comment) => comment.user.id !== identity.botActorId && !isVercelDeploymentStatus(comment)),
     reviews.filter((review) => review.user.id !== identity.botActorId),
+    projection,
   ) });
   if (content !== identity.requirementDigest) throw new CompletionMismatch("requirement_content_mismatch");
 }
@@ -3322,7 +3646,11 @@ async function recoverControllerCompletion(config: ControllerConfig, receipt: Co
   return recoverCompletion(config.completionStore, receipt, {
     confirmMerge: async (identity) => {
       if (identity.repositoryId !== SAYHEAR_REPOSITORY_ID || identity.baseRepositoryId !== SAYHEAR_REPOSITORY_ID || identity.baseRef !== "main" ||
-        identity.botActorId !== config.botActorId || identity.appId !== config.app.appId || identity.policyVersion !== PR_REVIEW_GATE_POLICY_VERSION) throw new CompletionMismatch("trusted_identity_mismatch");
+        identity.botActorId !== config.botActorId || identity.appId !== config.app.appId ||
+        !RECEIPT_POLICY_VERSIONS.includes(identity.policyVersion)) throw new CompletionMismatch("trusted_identity_mismatch");
+      const confirmed = await confirmCompletionMerge(config.api, identity);
+      if (confirmed !== null || identity.humanChannel !== "browser") return confirmed;
+      await reissuePinnedBrowserMerge(config.api, identity);
       return confirmCompletionMerge(config.api, identity);
     },
     completeIssues: async (identity) => {
@@ -3342,6 +3670,66 @@ async function retryPendingIssueCompletions(config: ControllerConfig, prepareOnl
       phase: recovered.phase, attempts: recovered.attempts, nextRetryAt: recovered.nextRetryAt, reason: recovered.reason, mergeSha: recovered.mergeSha });
   }
   return results;
+}
+
+export async function requestDeferredMerge(
+  config: ControllerConfig,
+  report: ModelReviewReport,
+  gate: Pick<PrReviewGateReport, "outcome" | "deferredEvidence">,
+  repository: JsonRecord,
+  pullRequest: GitHubPullRequest,
+): Promise<Readonly<{ outcome: string; message: string }>> {
+  if (authorizationChannel(pullRequest.user) !== "legacy-root") {
+    return {
+      outcome: "human_decision",
+      message: "Deferred pre-merge checks require the legacy root channel; the current PR author cannot use deferred auto-merge.",
+    };
+  }
+  await requestPullRequestAutoMerge(config, report, repository, pullRequest);
+  const readback = await config.api.request<GitHubPullRequest>(
+    repositoryPath(`/pulls/${report.pullRequestNumber}`),
+  );
+  if (
+    !isRecord(readback.auto_merge) &&
+    (readback.merged !== true || readback.state !== "closed" ||
+      readback.head.sha.toLowerCase() !== report.headSha.toLowerCase() ||
+      readback.base.ref !== "main")
+  ) {
+    throw new Error("GitHub did not retain the requested auto-merge state.");
+  }
+  return {
+    outcome: gate.outcome,
+    message: [
+      isRecord(readback.auto_merge)
+        ? `GitHub auto-merge is enabled for PR #${report.pullRequestNumber}.`
+        : `PR #${report.pullRequestNumber} merged while the controller read back its state.`,
+      `${gate.deferredEvidence.length} pre-merge check(s) are deferred and run at acceptance; the Issues stay open until they do.`,
+    ].join(" "),
+  };
+}
+
+// The browser channel's only outstanding input is Luke's live approval on the
+// current head. That is a wait, not a handoff: handing the Issue back to an
+// implementation agent would let it push a new head and void the challenge the
+// PR is already waiting on. Every other `human_decision` cause still hands off.
+export function isBrowserApprovalWait(gate: PrReviewGateReport): boolean {
+  return gate.outcome === "human_decision" &&
+    gate.reasons.some((reason) => reason.code === "browser_human_approval_required");
+}
+
+// `reportReviewResult` re-reads live state and can throw on an untrusted review
+// history, an unreadable head workflow blob, or a refused App approval. One PR
+// must never abort the rest of the scan: it is reported as blocked instead, and
+// the other PRs and their Issue handoffs still run.
+async function reportReviewOutcome(
+  config: ControllerConfig,
+  report: ModelReviewReport,
+): Promise<Readonly<{ outcome: string; message: string }>> {
+  try {
+    return await reportReviewResult(config, report);
+  } catch (error) {
+    return { outcome: "blocked", message: error instanceof Error ? error.message : String(error) };
+  }
 }
 
 async function reportReviewResult(
@@ -3374,7 +3762,7 @@ async function reportReviewResult(
   await upsertCheckRun(config, snapshot, report, gate);
 
   if (gate.outcome === "request_changes") {
-    const review = await submitPullRequestReview(config, report);
+    const review = await submitPullRequestReview(config, report, []);
     await recordReviewHandoff(config, snapshot, report, gate, review);
     return {
       outcome: gate.outcome,
@@ -3389,6 +3777,19 @@ async function reportReviewResult(
     };
   }
 
+  // An agent-authored PR whose only outstanding input is Luke's bound browser
+  // approval is a wait, not a handoff. A handoff would clear `ongoing`, set
+  // `ready-for-agent`, let an implementation agent claim the Issue and push a new
+  // head, which voids the frozen challenge this PR is already waiting on. The gate
+  // still reports human_decision so the check run asks Luke to act (action_required).
+  if (isBrowserApprovalWait(gate)) {
+    return {
+      outcome: "awaiting_verification",
+      message:
+        `PR #${report.pullRequestNumber} is agent-authored and touches a protected path; a live browser approval from @lukemyself-hub on the current head is required before any merge. The Issue handoff was left unchanged.`,
+    };
+  }
+
   if (gate.outcome === "awaiting_verification" || gate.outcome === "human_decision") {
     await postNonBlockingOutcome(config, snapshot, report, gate);
     return {
@@ -3397,7 +3798,11 @@ async function reportReviewResult(
     };
   }
 
-  const approval = await submitPullRequestReview(config, report);
+  const approval = await submitPullRequestReview(
+    config,
+    report,
+    gate.deferredEvidence,
+  );
   if (
     approval.state !== "APPROVED" ||
     approval.user.id !== config.botActorId ||
@@ -3412,11 +3817,12 @@ async function reportReviewResult(
     report.capability,
   );
   const { gate: freshGate } = evaluateSnapshot(config, freshSnapshot, report);
-  if (freshGate.outcome !== "merge_candidate") {
+  if (freshGate.outcome !== gate.outcome) {
     await upsertCheckRun(config, freshSnapshot, report, freshGate);
     await postNonBlockingOutcome(config, freshSnapshot, report, {
       ...freshGate,
       outcome: "human_decision",
+      deferredEvidence: [],
       reasons: [
         {
           code: "review_state_changed",
@@ -3442,6 +3848,7 @@ async function reportReviewResult(
     const staleGate: PrReviewGateReport = {
       ...freshGate,
       outcome: "awaiting_verification",
+      deferredEvidence: [],
       reasons: [
         {
           code: "head_or_base_changed_before_auto_merge",
@@ -3457,9 +3864,34 @@ async function reportReviewResult(
       message: `Auto-merge was not enabled for PR #${report.pullRequestNumber} because its head or base changed.`,
     };
   }
+  if (freshGate.outcome === "merge_candidate_with_deferrals") {
+    return requestDeferredMerge(config, report, freshGate, latestRepository, latestPullRequest);
+  }
   if (!config.completionStore) throw new Error("Trusted completion store unavailable.");
   const baseRepository = latestPullRequest.base.repo;
   if (!isRecord(baseRepository) || baseRepository.id !== SAYHEAR_REPOSITORY_ID) throw new Error("The target base repository is unavailable.");
+  const browserReceipt = freshSnapshot.humanBinding.receipt;
+  if (browserAuthorizationRequired(freshSnapshot.humanBinding, freshSnapshot.gateInput.pullRequest.changedFiles) &&
+      browserReceipt === null) {
+    // Fail closed without throwing: an agent-authored PR whose browser approval
+    // is missing or no longer live must wait here, never merge and never break
+    // the rest of the scan.
+    return {
+      outcome: "awaiting_verification",
+      message: `PR #${report.pullRequestNumber} is agent-authored; a live browser approval on the current head is required before any merge.`,
+    };
+  }
+  const mergeAction = mergeActionFor(freshSnapshot.humanBinding, latestPullRequest);
+  if (mergeAction === "wait") {
+    // Nothing is armed and no durable intent is written while the PR is not
+    // cleanly mergeable. A saved intent would only be confirmed later, which
+    // would strand an approved merge; the saved review report lets the next
+    // scan retry the pinned merge once the state is clean.
+    return {
+      outcome: "awaiting_verification",
+      message: `PR #${report.pullRequestNumber} is approved but not cleanly mergeable; the pinned merge waits for a clean state.`,
+    };
+  }
   const receipt: CompletionRecord = {
     version: 1, phase: "merge_unconfirmed", attempts: 0, nextRetryAt: 0, reason: null, mergeSha: null,
     identity: {
@@ -3469,18 +3901,24 @@ async function reportReviewResult(
       baseRepositoryId: SAYHEAR_REPOSITORY_ID, baseRef: "main", botActorId: config.botActorId,
       reviewId: approval.id, appId: config.app.appId, policyVersion: PR_REVIEW_GATE_POLICY_VERSION,
       issueNumbers: freshSnapshot.gateInput.issues.filter((issue) => !freshSnapshot.gateInput.pullRequest.keepOpenIssueNumbers.includes(issue.number)).map((issue) => issue.number),
+      humanChannel: browserReceipt === null ? "app" : "browser",
+      humanReviewId: browserReceipt?.reviewId ?? approval.id,
+      epoch: browserReceipt?.challenge.epoch ?? null,
     },
   };
   if (await config.completionStore.read(report.pullRequestNumber)) throw new Error("An existing completion intent must be reconciled before any new merge request.");
   await config.completionStore.save(receipt);
-  try { await requestPullRequestAutoMerge(config, report, latestRepository, latestPullRequest); }
+  try {
+    await applyMergeAction(config, report, latestRepository, latestPullRequest, mergeAction);
+  }
   catch { /* The durable intent owns recovery even when the response is lost. */ }
   const completed = await recoverControllerCompletion(config, receipt);
+  const mergeSha = completed.mergeSha === null ? "" : `; merged=${completed.mergeSha}`;
   return {
     outcome: completed.phase === "complete" ? "merge_candidate" : "awaiting_verification",
     message: completed.phase === "complete"
       ? `PR #${report.pullRequestNumber} merged and Issue completion was verified.`
-      : `PR #${report.pullRequestNumber} completion remains ${completed.phase}; ${completed.reason ?? "pending confirmation"}.`,
+      : `PR #${report.pullRequestNumber} completion remains ${completed.phase}; ${completed.reason ?? "pending confirmation"}${mergeSha}.`,
   };
 }
 
@@ -3638,7 +4076,7 @@ async function scanPullRequests(
 
     let snapshot: Snapshot;
     try {
-      snapshot = await readSnapshot(config, pullRequest.number);
+      snapshot = await readSnapshot(config, pullRequest.number, [], undefined, { freezeBrowserChallenge: prepareOnly });
     } catch (error) {
       results.push({
         pullRequest: pullRequest.number,
@@ -3681,7 +4119,7 @@ async function scanPullRequests(
         });
         continue;
       }
-      const result = await reportReviewResult(config, saved.report);
+      const result = await reportReviewOutcome(config, saved.report);
       results.push({
         pullRequest: pullRequest.number,
         status:
@@ -3756,7 +4194,7 @@ async function scanPullRequests(
         continue;
       }
       const held = controllerReviewReport(snapshot, "human_decision");
-      const result = await reportReviewResult(config, held);
+      const result = await reportReviewOutcome(config, held);
       results.push({
         pullRequest: pullRequest.number,
         status: "held_for_human",
@@ -3783,7 +4221,7 @@ async function scanPullRequests(
         snapshot,
         "awaiting_verification",
       );
-      const result = await reportReviewResult(config, incomplete);
+      const result = await reportReviewOutcome(config, incomplete);
       results.push({
         pullRequest: pullRequest.number,
         status: "incomplete_diff",
@@ -3967,6 +4405,7 @@ async function statusReport(
     reportVersion: PR_REVIEW_REPORT_VERSION,
     diffCollectionVersion: "sayhear-pr-diff:v2",
     baseSyncHandoffVersion: "sayhear-pr-base-sync:v1",
+    browserApprovalVersion: BROWSER_APPROVAL_VERSION,
     reviewApp: {
       appId: config.app.appId,
       slug: config.app.slug,

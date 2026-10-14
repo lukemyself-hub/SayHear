@@ -102,6 +102,15 @@ export type ReleaseCheckImpact =
   | "capability"
   | "stage";
 
+export type PreMergeImpossibleReason =
+  | "requires-deployed-effective-configuration"
+  | "requires-paid-live-provider-calls";
+
+export type PreMergeDeferralPolicy = Readonly<{
+  reason: PreMergeImpossibleReason;
+  followUp: Readonly<{ stage: ReleaseStage; command: string }>;
+}>;
+
 export type ReleaseCheck = Readonly<{
   id: string;
   title: string;
@@ -113,6 +122,8 @@ export type ReleaseCheck = Readonly<{
   providerCalls: boolean;
   modelCalls: boolean;
   evidenceLocation?: string;
+  /** Present only on checks that structurally cannot run before merge. */
+  preMergeDeferral?: PreMergeDeferralPolicy;
 }>;
 
 const FULL_ACCEPTANCE_ID = "capability:full-acceptance";
@@ -271,6 +282,10 @@ export const RELEASE_CHECKS: readonly ReleaseCheck[] = [
     providerCalls: false,
     modelCalls: false,
     evidenceLocation: "effective-runtime-config report",
+    preMergeDeferral: {
+      reason: "requires-deployed-effective-configuration",
+      followUp: { stage: "acceptance", command: "pnpm release:config:compare" },
+    },
   },
   {
     id: "permission:isolation",
@@ -311,7 +326,7 @@ export const RELEASE_CHECKS: readonly ReleaseCheck[] = [
   },
   {
     id: "migration:upgrade-compatibility",
-    title: "Migration old-schema upgrade compatibility",
+    title: "Migration upgrade path equals fresh install",
     command:
       "pnpm exec vitest run tests/ci/migration-upgrade-compatibility.test.ts",
     kind: "behavior",
@@ -319,7 +334,7 @@ export const RELEASE_CHECKS: readonly ReleaseCheck[] = [
     fullProducer: false,
     providerCalls: false,
     modelCalls: false,
-    evidenceLocation: "tests/ci/migration-upgrade-compatibility.test.ts",
+    evidenceLocation: "artifacts/vitest-report.json",
   },
   {
     id: "provider:effective-config-diff",
@@ -331,6 +346,10 @@ export const RELEASE_CHECKS: readonly ReleaseCheck[] = [
     providerCalls: false,
     modelCalls: false,
     evidenceLocation: "effective-runtime-config report",
+    preMergeDeferral: {
+      reason: "requires-deployed-effective-configuration",
+      followUp: { stage: "acceptance", command: "pnpm release:config:compare" },
+    },
   },
   {
     id: "provider:affected-role-calls",
@@ -342,6 +361,13 @@ export const RELEASE_CHECKS: readonly ReleaseCheck[] = [
     providerCalls: true,
     modelCalls: true,
     evidenceLocation: "captured role-call evidence",
+    preMergeDeferral: {
+      reason: "requires-paid-live-provider-calls",
+      followUp: {
+        stage: "acceptance",
+        command: "pnpm exec tsx scripts/capture-g1-role-provider-calls.ts",
+      },
+    },
   },
   {
     id: "provider:privacy-checks",
@@ -379,6 +405,16 @@ export const RELEASE_CHECKS: readonly ReleaseCheck[] = [
 ];
 
 const CHECK_BY_ID = new Map(RELEASE_CHECKS.map((check) => [check.id, check]));
+
+/**
+ * The single owner of "this check cannot run before merge". Callers get the
+ * static registry policy or `null`; a check with no policy is never deferrable.
+ */
+export function preMergeDeferralFor(
+  checkId: string,
+): PreMergeDeferralPolicy | null {
+  return CHECK_BY_ID.get(checkId)?.preMergeDeferral ?? null;
+}
 
 const IMPACT_CHECK_IDS: Readonly<Record<ReleaseImpactKind, readonly string[]>> =
   {
@@ -436,7 +472,7 @@ const CHECK_RATIONALE: Readonly<Record<string, string>> = {
   "purge:full-restore-drill":
     "A purge coverage change needs the full relevant Purge/restore drill, not only the baseline inventory check.",
   "migration:upgrade-compatibility":
-    "A changed migration needs a disposable-database drill applying the base migrations before the head extensions, checking existing-data compatibility and comparing the upgraded schema with a fresh head install.",
+    "A changed migration needs a disposable-database upgrade drill: the base tree's migrations are applied first, the head tree's registered extensions on top, existing data must stay compatible, and the upgraded schema must equal a fresh head install.",
   "provider:effective-config-diff":
     "Reads the deployed effective Provider configuration and compares it with the acceptance baseline through the shared #278 gate.",
   "provider:affected-role-calls":
@@ -604,9 +640,14 @@ function isSha256(value: unknown): value is string {
  * declaration is authoritative for what the operator says changed; hints only
  * add checks so a boundary change cannot be missed by a narrow declaration.
  */
-// These tools do not configure the deployed runtime. Explicit impact
-// declarations still select their checks, and mixed/unknown paths stay guarded.
-const EVALUATION_TOOL_PATHS: ReadonlySet<string> = new Set([
+// Paths that cannot configure the deployed runtime: the offline evaluation
+// tooling and the PR approval apparatus. A change confined to them still gets
+// the full review, but a behavior impact declaration is meaningless, so the
+// planner treats the change as located instead of unknown. Explicit impact
+// declarations still select their checks, and any path outside this set stays
+// guarded.
+const NON_RUNTIME_TOOL_PATHS: ReadonlySet<string> = new Set([
+  // Offline evaluation tooling.
   "eval/continuation-acceptance-1a3b/pins.json",
   "eval/continuation-acceptance-1a3b/role-provider-provisioning.ts",
   "eval/continuation-acceptance-1a3b/run-synthetic-candidate-capture.ts",
@@ -617,6 +658,42 @@ const EVALUATION_TOOL_PATHS: ReadonlySet<string> = new Set([
   "scripts/capture-g1-role-provider-calls.ts",
   "tests/f3-role-provider-provisioning.test.ts",
   "tests/g1-capture-provider-adapters.test.ts",
+  // PR approval apparatus: the controller, gate, planner, build, verifier,
+  // their tests, their fixtures, and their documentation.
+  "docs/agents/pr-auto-approval.md",
+  "docs/plans/pr-approval-browser-channel.md",
+  "docs/plans/pr-approval-large-diff.md",
+  "docs/plans/pr-approval-multiple-issues.md",
+  "docs/plans/pr-approval-recoverable-completion.md",
+  "docs/plans/pr-approval-stale-base-handoff.md",
+  "scripts/build-pr-approval-controller.mjs",
+  "scripts/daily-release-validation.ts",
+  "scripts/pr-approval-controller.ts",
+  "scripts/pr-approval-launcher.c",
+  "scripts/pr-approval/browser-approval.ts",
+  "scripts/pr-approval/completion.ts",
+  "scripts/pr-approval/diff.ts",
+  "scripts/pr-approval/signed-store.ts",
+  "scripts/pr-review-gate.ts",
+  "scripts/verify-pr-approval-bundle.mjs",
+  "tests/daily-release-validation.test.ts",
+  "tests/fixtures/daily-release-validation/baseline.json",
+  "tests/fixtures/daily-release-validation/candidate.json",
+  "tests/fixtures/daily-release-validation/requests/boundary-missed.json",
+  "tests/fixtures/daily-release-validation/requests/new-capability.json",
+  "tests/fixtures/daily-release-validation/requests/owner-permission.json",
+  "tests/fixtures/daily-release-validation/requests/prompt-budget.json",
+  "tests/fixtures/daily-release-validation/requests/provider-migration.json",
+  "tests/fixtures/daily-release-validation/requests/purge-coverage.json",
+  "tests/fixtures/daily-release-validation/requests/reflection-journal.json",
+  "tests/fixtures/daily-release-validation/requests/server-business.json",
+  "tests/fixtures/daily-release-validation/requests/ui.json",
+  "tests/fixtures/daily-release-validation/requests/unknown.json",
+  "tests/pr-approval-browser-approval.test.ts",
+  "tests/pr-approval-completion.test.ts",
+  "tests/pr-approval-controller.test.ts",
+  "tests/pr-approval-diff.test.ts",
+  "tests/pr-review-gate.test.ts",
 ]);
 
 export function classifyReleaseImpact(
@@ -627,7 +704,7 @@ export function classifyReleaseImpact(
   const hintedUnique: ReleaseImpactKind[] = [];
   for (const path of changedPaths) {
     for (const [pattern, impact] of PATH_IMPACT_HINTS) {
-      if (impact === "provider-migration" && EVALUATION_TOOL_PATHS.has(path)) {
+      if (impact === "provider-migration" && NON_RUNTIME_TOOL_PATHS.has(path)) {
         continue;
       }
       if (pattern.test(path) && !hintedUnique.includes(impact)) {
@@ -644,7 +721,7 @@ export function classifyReleaseImpact(
     hinted: hintedUnique,
     effective,
     located: effective.length > 0 ||
-      (changedPaths.length > 0 && changedPaths.every((path) => EVALUATION_TOOL_PATHS.has(path))),
+      (changedPaths.length > 0 && changedPaths.every((path) => NON_RUNTIME_TOOL_PATHS.has(path))),
   };
 }
 
