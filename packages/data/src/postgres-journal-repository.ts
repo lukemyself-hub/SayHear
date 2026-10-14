@@ -30,12 +30,13 @@ export class PostgresJournalRepository implements JournalRepository {
           item.extraction_policy_version,
           revision.canonical_text, revision.locale
         FROM evidence_source_snapshots snapshot
-        INNER JOIN evidence_model_run_attempts frozen_run ON frozen_run.evidence_source_snapshot_id = snapshot.evidence_source_snapshot_id AND frozen_run.status = 'completed'
+        LEFT JOIN evidence_model_run_attempts frozen_run ON frozen_run.evidence_source_snapshot_id = snapshot.evidence_source_snapshot_id AND frozen_run.status = 'completed'
         LEFT JOIN evidence_items item ON item.user_id = snapshot.user_id AND (item.evidence_item_id = ANY(frozen_run.frozen_evidence_item_ids) OR (frozen_run.frozen_evidence_item_ids IS NULL AND item.evidence_source_snapshot_id = snapshot.evidence_source_snapshot_id))
         LEFT JOIN conversation_event_revisions revision ON revision.conversation_event_revision_id = item.source_revision_id
         INNER JOIN app_users owner ON owner.user_id = snapshot.user_id
         WHERE snapshot.daily_session_id = $1 AND snapshot.source_revision = $2
           AND owner.status = 'active' AND owner.data_epoch = $3
+          AND (frozen_run.evidence_model_run_attempt_id IS NOT NULL OR EXISTS (SELECT 1 FROM journal_versions version WHERE version.evidence_source_snapshot_id = snapshot.evidence_source_snapshot_id AND version.user_id = snapshot.user_id AND version.status = 'published'))
           AND item.extraction_policy_version = $4
           AND (item.evidence_item_id IS NULL OR (item.status = 'active' AND revision.content_purged_at IS NULL))
         ORDER BY item.created_at`, [input.dailySessionId, input.sourceRevision, input.expectedDataEpoch, input.extractionPolicyVersion]);
