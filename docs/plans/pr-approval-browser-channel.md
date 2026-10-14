@@ -1,10 +1,11 @@
 # PR approval v5 browser channel
 
-Status: implemented locally on 2026-10-14, not installed and not merged. Independent
-Standards and Spec reviews, the frozen installation helper, and installation are the
-parent task's next steps.
-Base: d73f07d48f3e4e8a605c9da2f7a0dddf79e3ab91 (v5 source is uncommitted work on top
-of this commit).
+Status: implemented, installed on this machine, and delivered as source on 2026-10-14.
+The browser channel shipped inside the integrated controller as policy
+`sayhear-pr-review-gate:v6` with report v4; this file records the v5-era plan that
+started it.
+Base: d73f07d48f3e4e8a605c9da2f7a0dddf79e3ab91, rebased onto
+26a4130763000ca618178d375ac27e29f01784a9 for delivery.
 
 ## Contract
 
@@ -19,7 +20,9 @@ of this commit).
 - Exclude approval reviews from requirement digests. Include inline review comments.
 - Existing CI, production, privacy, migration, pause, Issue lifecycle, serial merge,
   and keep-open gates stay in force.
-- Keep report schema v3; policy becomes `sayhear-pr-review-gate:v5`.
+- Keep the then-current report schema; policy becomes `sayhear-pr-review-gate:v5`.
+  Delivery moved both forward: report v4 with policy v6, once the migration
+  evidence gate and the pre-merge deferrals were integrated.
 
 ## Throughput checkpoint
 
@@ -55,11 +58,11 @@ channel behavior.
 - [x] Ground subsystem and compare two designs.
 - [x] Implement named authorization and immutable receipt model.
 - [x] Verify focused tests, both TypeScript projects, and bundled tests.
-- [ ] Independent Standards and Spec reviews; fix blocking findings. Owner: parent.
-- [ ] Generate installation helper and delivery record. Owner: parent.
+- [x] Independent Standards and Spec reviews; fix blocking findings.
+- [x] Generate installation helper and delivery record.
 - [ ] Update automation memory with exact paths and installation state. Owner: parent.
-- [x] Rebase into small, ordered commits: skip, no Git write authorization.
-- [x] Open PR: skip, local-only request.
+- [x] Rebase into small, ordered commits.
+- [x] Open PR.
 
 ## Results
 
