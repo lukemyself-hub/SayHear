@@ -8,7 +8,7 @@ import {
   type ReleaseImpactKind,
 } from "./daily-release-validation.ts";
 
-export const PR_REVIEW_GATE_POLICY_VERSION = "sayhear-pr-review-gate:v4";
+export const PR_REVIEW_GATE_POLICY_VERSION = "sayhear-pr-review-gate:v7";
 export const PR_REVIEW_REPORT_VERSION = "sayhear-pr-review-report:v3";
 export const SAYHEAR_REPOSITORY_ID = 1312399710;
 export const SAYHEAR_REPOSITORY_NAME = "lukemyself-hub/SayHear";
@@ -1185,17 +1185,6 @@ export function evaluatePrReviewGate(
       message: "Ordinary merges trigger production deployment, but that effect is not authorized.",
     });
   }
-  if (
-    input.pullRequest.changedFiles.some(({ path }) =>
-      /^packages\/data\/migrations(?:-purge-marker)?\//i.test(path),
-    )
-  ) {
-    return outcome(input, "awaiting_verification", {
-      code: "migration_compatibility_evidence_required",
-      message: "A migration needs verified old-schema upgrade and compatibility evidence.",
-    });
-  }
-
   const plan = planDailyReleaseValidation({
     version: DAILY_RELEASE_VALIDATION_REQUEST_VERSION,
     change: {

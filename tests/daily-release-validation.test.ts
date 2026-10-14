@@ -130,7 +130,43 @@ describe("per-impact check selection", () => {
     );
     expect(purge).toBeDefined();
     expect(purge?.source).toBe("path-hint");
+    expect(selectedIds(plan)).toContain("migration:upgrade-compatibility");
     expect(plan.fullAcceptance.required).toBe(false);
+  });
+
+  it.each(["migrations", "migrations-purge-marker"])(
+    "requires upgrade compatibility and retains Purge evidence for %s",
+    (directory) => {
+      const plan = planDailyReleaseValidation(
+        request({
+          declaredImpacts: ["ui"],
+          changedPaths: [`packages/data/${directory}/0099_add_column.sql`],
+        }),
+      );
+      const migration = plan.targeted.find(
+        (entry) => entry.check.id === "migration:upgrade-compatibility",
+      );
+
+      expect(migration?.source).toBe("path-hint");
+      expect(migration?.check.command).toBe(
+        "pnpm exec vitest run tests/ci/migration-upgrade-compatibility.test.ts",
+      );
+      expect(migration?.check.providerCalls).toBe(false);
+      expect(migration?.check.modelCalls).toBe(false);
+      expect(selectedIds(plan)).toContain("purge:full-restore-drill");
+      expect(plan.producerInvocations).toEqual([]);
+    },
+  );
+
+  it("does not require an upgrade drill for unrelated server behavior", () => {
+    const plan = planDailyReleaseValidation(
+      request({
+        declaredImpacts: ["server-business"],
+        changedPaths: ["packages/application/src/server/fix.ts"],
+      }),
+    );
+
+    expect(selectedIds(plan)).not.toContain("migration:upgrade-compatibility");
   });
 
   it("classifies path hints without granting capability acceptance", () => {

@@ -1,9 +1,10 @@
-import { generateKeyPairSync, verify } from "node:crypto";
+import { createHash, generateKeyPairSync, verify } from "node:crypto";
 
 import { describe, expect, it } from "vitest";
 
 import {
   appReviewOutcomeForIdentity,
+  collectEvidence,
   completeIssueAfterApproval,
   completeLinkedIssuesAfterMerge,
   forEachLinkedIssue,
@@ -35,6 +36,7 @@ import {
 import {
   PR_REVIEW_GATE_POLICY_VERSION,
   PR_REVIEW_REPORT_VERSION,
+  PR_VALIDATE_WORKFLOW_PATH,
   SAYHEAR_REPOSITORY_ID,
   requirementDigest,
   type PrReviewGateInput,
@@ -111,6 +113,7 @@ class StubApi implements GitHubApi {
       options?: StubRequestOptions,
     ) => unknown = () => ({}),
     private readonly pageValues: (path: string) => unknown[] = () => [],
+    private readonly archiveBytes: () => Uint8Array = () => new Uint8Array(),
   ) {}
 
   async request<T>(
@@ -125,9 +128,243 @@ class StubApi implements GitHubApi {
   }
 
   async bytes(): Promise<Uint8Array> {
-    return new Uint8Array();
+    return this.archiveBytes();
   }
 }
+
+describe("migration evidence collection", () => {
+  const migrationCheckId = "migration:upgrade-compatibility";
+  const migrationTestPath = "tests/ci/migration-upgrade-compatibility.test.ts";
+  const runId = 555;
+  const workflowBlobSha = "f".repeat(40);
+  const capability = {
+    newCapabilityEnabled: false,
+    majorContractChange: false,
+    externalMvpRelease: false,
+  };
+  const changedFiles = [{
+    path: "packages/data/migrations/0099_add_column.sql",
+    status: "added",
+  }] satisfies PrReviewGateInput["pullRequest"]["changedFiles"];
+  const pullRequest = {
+    number: 321,
+    state: "open",
+    draft: false,
+    title: "Deliver #42",
+    body: "Fixes #42",
+    updated_at: "2026-10-14T00:00:00Z",
+    head: { sha: HEAD_SHA, repo: { id: SAYHEAR_REPOSITORY_ID } },
+    base: { ref: "main", sha: BASE_SHA },
+    user: { id: 101 },
+    merge_commit_sha: MERGE_SHA,
+    changed_files: 1,
+  } satisfies Parameters<typeof collectEvidence>[2];
+
+  function storedZipEntry(name: string, content: Uint8Array): Uint8Array {
+    const nameBytes = Buffer.from(name, "utf8");
+    const local = Buffer.alloc(30 + nameBytes.length);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(20, 4);
+    local.writeUInt32LE(content.byteLength, 18);
+    local.writeUInt32LE(content.byteLength, 22);
+    local.writeUInt16LE(nameBytes.length, 26);
+    nameBytes.copy(local, 30);
+    const central = Buffer.alloc(46 + nameBytes.length);
+    central.writeUInt32LE(0x02014b50, 0);
+    central.writeUInt16LE(20, 4);
+    central.writeUInt16LE(20, 6);
+    central.writeUInt32LE(content.byteLength, 20);
+    central.writeUInt32LE(content.byteLength, 24);
+    central.writeUInt16LE(nameBytes.length, 28);
+    nameBytes.copy(central, 46);
+    const end = Buffer.alloc(22);
+    end.writeUInt32LE(0x06054b50, 0);
+    end.writeUInt16LE(1, 8);
+    end.writeUInt16LE(1, 10);
+    end.writeUInt32LE(central.length, 12);
+    end.writeUInt32LE(local.length + content.byteLength, 16);
+    return Buffer.concat([local, Buffer.from(content), central, end]);
+  }
+
+  function collector(options: {
+    migrationResult?: Readonly<{
+      name: string;
+      status: string;
+      assertionResults?: readonly Readonly<{ status: string }>[];
+    }> | null;
+    missingRun?: boolean;
+    missingArtifact?: boolean;
+    expiredArtifact?: boolean;
+    emptyReport?: boolean;
+    badDigest?: boolean;
+    runBaseSha?: string;
+    mergeWorkflowBlobSha?: string;
+  } = {}) {
+    const migrationResult = options.migrationResult === undefined
+      ? {
+          name: `/workspace/SayHear/${migrationTestPath}`,
+          status: "passed",
+          assertionResults: [{ status: "passed" }],
+        }
+      : options.migrationResult;
+    const reportBytes = Buffer.from(JSON.stringify({
+      success: true,
+      testResults: options.emptyReport ? [] : [
+        ...[
+          "tests/system/g1-purge-restore-drill.system.test.ts",
+          "tests/system/owner-full-purge.system.test.ts",
+        ].map((path) => ({
+          name: `/workspace/SayHear/${path}`,
+          status: "passed",
+          assertionResults: [{ status: "passed" }],
+        })),
+        ...(migrationResult ? [migrationResult] : []),
+      ],
+    }));
+    const archive = storedZipEntry("vitest-report.json", reportBytes);
+    const validateCheck = {
+      id: 9001,
+      name: "validate",
+      app: { id: ACTIONS_APP_ID },
+      head_sha: HEAD_SHA,
+      details_url: `https://github.com/lukemyself-hub/SayHear/actions/runs/${runId}`,
+      status: "completed",
+      conclusion: "success",
+    };
+    const api = new StubApi((path) => {
+      if (path.includes("/check-runs")) {
+        return { check_runs: options.missingRun ? [] : [validateCheck] };
+      }
+      if (path.endsWith(`/actions/runs/${runId}`)) {
+        return {
+          id: runId,
+          event: "pull_request",
+          head_sha: HEAD_SHA,
+          path: PR_VALIDATE_WORKFLOW_PATH,
+          pull_requests: [{
+            number: 321,
+            head: { sha: HEAD_SHA },
+            base: { sha: options.runBaseSha ?? BASE_SHA },
+          }],
+          status: "completed",
+          conclusion: "success",
+          run_attempt: 1,
+        };
+      }
+      if (path.includes("/contents/")) {
+        return {
+          sha: path.endsWith(`ref=${MERGE_SHA}`)
+            ? options.mergeWorkflowBlobSha ?? workflowBlobSha
+            : workflowBlobSha,
+        };
+      }
+      if (path.includes("/artifacts")) {
+        return {
+          artifacts: options.missingArtifact ? [] : [{
+            id: 77,
+            name: "vitest-report-321",
+            expired: options.expiredArtifact ?? false,
+            digest: `sha256:${options.badDigest
+              ? "0".repeat(64)
+              : createHash("sha256").update(archive).digest("hex")}`,
+          }],
+        };
+      }
+      throw new Error(`Unexpected collector request ${path}`);
+    }, () => [], () => archive);
+    const config = {
+      api,
+      app: {
+        appId: 98765,
+        installationId: 1,
+        slug: "sayhear-pr-review-gate",
+        productionMergeAuthorized: false,
+        ordinaryMergeTriggersProduction: false,
+      },
+      policy: {
+        repositoryId: SAYHEAR_REPOSITORY_ID,
+        repositoryName: "lukemyself-hub/SayHear",
+        defaultBranch: "main",
+        policyVersion: PR_REVIEW_GATE_POLICY_VERSION,
+        reviewAppId: 98765,
+        actionsAppId: ACTIONS_APP_ID,
+        validateWorkflowBlobSha: workflowBlobSha,
+      },
+      botActorId: REVIEW_BOT_ACTOR_ID,
+      ownerActorId: 101,
+    } satisfies Parameters<typeof collectEvidence>[0];
+    return {
+      reportDigest: createHash("sha256").update(reportBytes).digest("hex"),
+      collect: () => collectEvidence(
+        config, 321, pullRequest, changedFiles, [], capability, MERGE_SHA, BASE_SHA,
+      ),
+    };
+  }
+
+  it("collects digest-bound migration evidence from passed assertions in a trusted report", async () => {
+    const fixture = collector();
+    const collected = await fixture.collect();
+
+    expect(collected.evidence.find((entry) => entry.checkId === migrationCheckId))
+      .toEqual({
+        checkId: migrationCheckId,
+        result: "passed",
+        source: expect.objectContaining({
+          runId, runAttempt: 1, headSha: HEAD_SHA, baseSha: BASE_SHA, mergeSha: MERGE_SHA,
+          workflowBlobSha,
+        }),
+        artifactSha256: fixture.reportDigest,
+        coveredCheckIds: [migrationCheckId],
+      });
+    expect(collected.evidence.every((entry) => entry.result === "passed")).toBe(true);
+  });
+
+  it.each([
+    ["missing test", null],
+    ["wrong test path", { name: "tests/other.test.ts", status: "passed", assertionResults: [{ status: "passed" }] }],
+    ["failed suite", { name: migrationTestPath, status: "failed", assertionResults: [{ status: "failed" }] }],
+    ["skipped assertion", { name: migrationTestPath, status: "passed", assertionResults: [{ status: "pending" }] }],
+    ["empty assertions", { name: migrationTestPath, status: "passed", assertionResults: [] }],
+    ["omitted assertions", { name: migrationTestPath, status: "passed" }],
+  ] satisfies readonly (readonly [string, NonNullable<Parameters<typeof collector>[0]>["migrationResult"]])[])(
+    "keeps %s migration evidence blocked",
+    async (_case, migrationResult) => {
+      const collected = await collector({ migrationResult }).collect();
+
+      expect(collected.evidence.find((entry) => entry.checkId === migrationCheckId))
+        .toMatchObject({ result: "failed", artifactSha256: null, coveredCheckIds: [] });
+    },
+  );
+
+  it.each([
+    { missingArtifact: true },
+    { expiredArtifact: true },
+    { badDigest: true },
+    { runBaseSha: "9".repeat(40) },
+    { mergeWorkflowBlobSha: "9".repeat(40) },
+  ])("rejects unavailable or untrusted migration evidence %j", async (options) => {
+    const collected = await collector(options).collect();
+
+    expect(collected.evidence.find((entry) => entry.checkId === migrationCheckId)?.result)
+      .toBe("failed");
+  });
+
+  it("keeps the migration requirement present when no current workflow run exists", async () => {
+    const collected = await collector({ missingRun: true }).collect();
+
+    expect(collected.evidence.find((entry) => entry.checkId === migrationCheckId))
+      .toMatchObject({ result: "skipped", artifactSha256: null, coveredCheckIds: [] });
+  });
+
+  it("rejects an empty test report for both baseline and migration evidence", async () => {
+    const collected = await collector({ emptyReport: true }).collect();
+
+    expect(collected.evidence.find((entry) => entry.checkId === "baseline:test")?.result)
+      .toBe("failed");
+    expect(collected.evidence.find((entry) => entry.checkId === migrationCheckId))
+      .toMatchObject({ result: "failed", artifactSha256: null, coveredCheckIds: [] });
+  });
+});
 
 describe("PR approval controller", () => {
   it.each(["queued", "in_progress", "missing", "unknown"] as const)(

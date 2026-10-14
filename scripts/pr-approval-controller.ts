@@ -783,6 +783,7 @@ function isTestResultPassed(value: unknown): boolean {
   if (!isRecord(value) || value.status !== "passed") return false;
   return (
     Array.isArray(value.assertionResults) &&
+    value.assertionResults.length > 0 &&
     value.assertionResults.every(
       (assertion) => isRecord(assertion) && assertion.status === "passed",
     )
@@ -793,7 +794,8 @@ function reportHasNoSkips(value: unknown): value is JsonRecord & {
   success: boolean;
   testResults: readonly JsonRecord[];
 } {
-  if (!isRecord(value) || value.success !== true || !Array.isArray(value.testResults)) {
+  if (!isRecord(value) || value.success !== true ||
+    !Array.isArray(value.testResults) || value.testResults.length === 0) {
     return false;
   }
   return value.testResults.every(isTestResultPassed);
@@ -1538,7 +1540,7 @@ async function readVitestReport(
   }
 }
 
-async function collectEvidence(
+export async function collectEvidence(
   config: ControllerConfig,
   pullNumber: number,
   pullRequest: GitHubPullRequest,

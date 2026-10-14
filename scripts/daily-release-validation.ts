@@ -310,6 +310,18 @@ export const RELEASE_CHECKS: readonly ReleaseCheck[] = [
     evidenceLocation: "tests/system/g1-purge-restore-drill.system.test.ts",
   },
   {
+    id: "migration:upgrade-compatibility",
+    title: "Migration old-schema upgrade compatibility",
+    command:
+      "pnpm exec vitest run tests/ci/migration-upgrade-compatibility.test.ts",
+    kind: "behavior",
+    impact: "purge-coverage",
+    fullProducer: false,
+    providerCalls: false,
+    modelCalls: false,
+    evidenceLocation: "tests/ci/migration-upgrade-compatibility.test.ts",
+  },
+  {
     id: "provider:effective-config-diff",
     title: "Deployed Provider configuration diff",
     command: "pnpm release:config:compare",
@@ -423,6 +435,8 @@ const CHECK_RATIONALE: Readonly<Record<string, string>> = {
     "Verifies the admission race around the affected permission or deletion path.",
   "purge:full-restore-drill":
     "A purge coverage change needs the full relevant Purge/restore drill, not only the baseline inventory check.",
+  "migration:upgrade-compatibility":
+    "A changed migration needs a disposable-database drill applying the base migrations before the head extensions, checking existing-data compatibility and comparing the upgraded schema with a fresh head install.",
   "provider:effective-config-diff":
     "Reads the deployed effective Provider configuration and compares it with the acceptance baseline through the shared #278 gate.",
   "provider:affected-role-calls":
@@ -440,10 +454,12 @@ const CHECK_RATIONALE: Readonly<Record<string, string>> = {
 export const PORTAL_UI_PATH: RegExp =
   /^apps\/web\/app\/(?!api\/).*\.(?:tsx|css|scss)$/i;
 
+const MIGRATION_PATH_RULE = /^packages\/data\/migrations(?:-purge-marker)?\//i;
+
 /** Path hints only add targeted checks; they never trigger full acceptance. */
 const PATH_IMPACT_HINTS: readonly (readonly [RegExp, ReleaseImpactKind])[] = [
   [PORTAL_UI_PATH, "ui"],
-  [/packages\/data\/migrations(-purge-marker)?\//i, "purge-coverage"],
+  [MIGRATION_PATH_RULE, "purge-coverage"],
   [/purge/i, "purge-coverage"],
   [/opencode|deepseek|provider|packages\/ai\/src\//i, "provider-migration"],
   [/prompt|budget|token/i, "prompt-budget"],
@@ -453,6 +469,13 @@ const PATH_IMPACT_HINTS: readonly (readonly [RegExp, ReleaseImpactKind])[] = [
     /apps\/web\/src\/(server|runtime|startup)|packages\/application\/src\//i,
     "server-business",
   ],
+];
+
+const PATH_CHECK_HINTS: readonly Readonly<{
+  pattern: RegExp;
+  checkId: string;
+}>[] = [
+  { pattern: MIGRATION_PATH_RULE, checkId: "migration:upgrade-compatibility" },
 ];
 
 export type ReleaseValidationImpact = Readonly<{
@@ -787,6 +810,21 @@ export function planDailyReleaseValidation(
       if (withIdentity.disposition === "reused") reused.push(withIdentity);
       else targeted.push(withIdentity);
     }
+  }
+
+  for (const { pattern, checkId } of PATH_CHECK_HINTS) {
+    if (selectedIds.has(checkId)) continue;
+    if (!request.change.changedPaths.some((path) => pattern.test(path))) continue;
+    const check = CHECK_BY_ID.get(checkId);
+    if (!check) throw new Error(`Unknown path-hint check ${checkId}`);
+    const entry = select(
+      check,
+      "path-hint",
+      CHECK_RATIONALE[checkId] ?? "Required by the changed migration path.",
+    );
+    selectedIds.add(checkId);
+    if (entry.disposition === "reused") reused.push(entry);
+    else targeted.push(entry);
   }
 
   for (const id of STAGE_CHECK_IDS[releaseStage]) {
