@@ -1,0 +1,1073 @@
+{
+  "schemaVersion": "continuity-cost-ledger:v1",
+  "capUsdMicros": 10000000,
+  "pauseAtSpentUsdMicros": 9000000,
+  "pauseHistory": [
+    {
+      "movedOn": "2026-10-12",
+      "from": 5000000,
+      "to": 9000000,
+      "reason": "The 5 USD pause point was passed during the presentation benchmark and reported to Luke with the running total (6.955 USD). On 2026-10-12 Luke, knowing that total, asked for one more real-model run: 「接下来可以做一次未见样本的质量验收，确认当前的质量结论」. The pause point is moved, not removed, so that a further stop stands before the 10 USD cap."
+    }
+  ],
+  "model": {
+    "provider": "opencode-go",
+    "model": "deepseek-v4.1-flash",
+    "inputUsdMicrosPerMillionTokens": 300000,
+    "outputUsdMicrosPerMillionTokens": 1200000,
+    "priceBasis": {
+      "retrievedOn": "2026-10-11",
+      "sources": [
+        "https://opencode.ai/docs/go/ (page dated Oct 11, 2026): DeepSeek V4.1 Flash, Peak, per 1M tokens: input $0.30, output $1.20, cached read $0.006; Off-Peak: $0.15 / $0.60 / $0.003",
+        "https://api-docs.deepseek.com/quick_start/pricing: deepseek-flash (DeepSeek-V4.1-Flash), Peak: input cache miss $0.30, output $1.20; Off-peak: $0.15 / $0.60"
+      ],
+      "rule": "Conservative upper bound: the higher (Peak) rate of both price lists, every input token treated as a cache miss, completion tokens as reported by the Provider (reasoning tokens are part of them). The two lists agree, so the higher of the two is the same figure.",
+      "subscription": "OpenCode Go is a subscription (Go $10/month) whose usage is metered against these per-token prices. Whether a call consumes plan allowance or new cash is not visible to this tool; the budget gate counts every call at the list price above regardless. Plan allowance consumed and new cash are therefore not separable here: actual new cash is at most the figure recorded and may be zero."
+    }
+  },
+  "preconditions": [
+    {
+      "id": "issue-307-online-acceptance",
+      "description": "The #307 time-input fix is deployed to production and its online acceptance is recorded as complete (ADR-0152, 2026-10-09 addendum). Set to verified only with a link to that record.",
+      "status": "owner-waived",
+      "evidence": null,
+      "decision": {
+        "by": "Luke",
+        "date": "2026-10-11",
+        "statement": "Relayed to the T08 agent by the coordinating agent as Luke's words: \"#307 的遗留问题,应当在 T01–T07 开发期间解决了(包括耗时问题和回忆历史消息等),因此 T08 可以正常启动\" and \"授权 T08 调用 OpenCode Go 跑真实 DeepSeek V4.1 Flash 模型\". This is a decision to proceed. It is not a record that the #307 online acceptance was completed: #307 was closed with its online acceptance not passed."
+      }
+    }
+  ],
+  "entries": [
+    {
+      "date": "2026-10-09",
+      "ticket": "#307",
+      "runId": "eval/conversation-time-307",
+      "requests": 1,
+      "inputTokens": 2131,
+      "outputTokens": 564,
+      "costUsdMicros": 1317,
+      "note": "One real DeepSeek V4.1 Flash request recorded in eval/conversation-time-307/README.md. The Provider reported no monetary cost. Upper bound assigned on 2026-10-11 (T08 #321) at the conservative rate above: 2,131 x $0.30/M + 564 x $1.20/M = $0.0013161, rounded up."
+    },
+    {
+      "costUsdMicros": 5422,
+      "date": "2026-10-12",
+      "inputTokens": 5068,
+      "note": "S01 (development, fixture 2d0e724ded65) real-model run; conservative peak, uncached list price",
+      "outputTokens": 3251,
+      "requests": 2,
+      "runId": "run-e69cb26f-1f50-4fa6-a6a8-32c9b9840aee",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 45029,
+      "date": "2026-10-12",
+      "inputTokens": 10635,
+      "note": "H01 (final, fixture d40c53fd2347) real-model run; conservative peak, uncached list price — 2 requests with unknown usage charged at the planning bound",
+      "outputTokens": 2865,
+      "requests": 4,
+      "runId": "run-78fa9f41-dfb0-4ee1-a160-295618a27eef",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 17017,
+      "date": "2026-10-12",
+      "inputTokens": 26469,
+      "note": "H02 (final, fixture c0d1d7a67fbf) real-model run; conservative peak, uncached list price",
+      "outputTokens": 7563,
+      "requests": 7,
+      "runId": "run-21814c86-83da-430d-b1a4-62a37008ef56",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 71127,
+      "date": "2026-10-12",
+      "inputTokens": 7276,
+      "note": "H03 (final, fixture 5527ee501bbd) real-model run; conservative peak, uncached list price — 3 requests with unknown usage charged at the planning bound",
+      "outputTokens": 9453,
+      "requests": 6,
+      "runId": "run-7b32a888-71c4-4c8b-8683-719084ad4ab5",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 8657,
+      "date": "2026-10-12",
+      "inputTokens": 8300,
+      "note": "H04 (final, fixture c021cf10a819) real-model run; conservative peak, uncached list price",
+      "outputTokens": 5139,
+      "requests": 3,
+      "runId": "run-1c818101-cbd7-4114-9deb-c3346f1f58c5",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 38277,
+      "date": "2026-10-12",
+      "inputTokens": 15274,
+      "note": "H05 (final, fixture edf3388e4382) real-model run; conservative peak, uncached list price — 1 request with unknown usage charged at the planning bound",
+      "outputTokens": 12079,
+      "requests": 7,
+      "runId": "run-c06db437-984b-43ab-9b75-b0c5726b0f77",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 13263,
+      "date": "2026-10-12",
+      "inputTokens": 16422,
+      "note": "H06 (final, fixture e0316f07627d) real-model run; conservative peak, uncached list price",
+      "outputTokens": 6947,
+      "requests": 5,
+      "runId": "run-a7793c3a-d301-474e-b3ca-4d34574a970f",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 9473,
+      "date": "2026-10-12",
+      "inputTokens": 13962,
+      "note": "H07 (final, fixture ba315566baf0) real-model run; conservative peak, uncached list price",
+      "outputTokens": 4403,
+      "requests": 4,
+      "runId": "run-d93f8ab4-379e-478c-b315-cc1e909d09f8",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 4288,
+      "date": "2026-10-12",
+      "inputTokens": 4835,
+      "note": "H08 (final, fixture 7fcf619a07d4) real-model run; conservative peak, uncached list price",
+      "outputTokens": 2364,
+      "requests": 2,
+      "runId": "run-20ddc851-463f-4ff7-91e3-f55e29b87a8e",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 20921,
+      "date": "2026-10-12",
+      "inputTokens": 23292,
+      "note": "H09 (final, fixture a208c4a9fe53) real-model run; conservative peak, uncached list price",
+      "outputTokens": 11611,
+      "requests": 7,
+      "runId": "run-69a76cef-b02f-42e7-a1c7-71cbb2540556",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 49984,
+      "date": "2026-10-12",
+      "inputTokens": 15065,
+      "note": "H10 (final, fixture 64409e2d99d6) real-model run; conservative peak, uncached list price — 2 requests with unknown usage charged at the planning bound",
+      "outputTokens": 5887,
+      "requests": 6,
+      "runId": "run-d79d2fd2-011d-4cb3-bd91-59da9e329169",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 16765,
+      "date": "2026-10-12",
+      "inputTokens": 20733,
+      "note": "H11 (final, fixture a9172e11797d) real-model run; conservative peak, uncached list price",
+      "outputTokens": 8787,
+      "requests": 6,
+      "runId": "run-1067892c-063f-41c9-b84c-a7f6aeec618c",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 34178,
+      "date": "2026-10-12",
+      "inputTokens": 6457,
+      "note": "H12 (final, fixture 3eee929a3ae0) real-model run; conservative peak, uncached list price — 1 request with unknown usage charged at the planning bound",
+      "outputTokens": 10867,
+      "requests": 6,
+      "runId": "run-a5c8f7cb-2457-4cab-a021-553feb2b139c",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 25516,
+      "date": "2026-10-12",
+      "inputTokens": 9895,
+      "note": "HL1 (final, fixture 5bd7013d8eb5) real-model run; conservative peak, uncached list price — 1 request with unknown usage charged at the planning bound",
+      "outputTokens": 2789,
+      "requests": 4,
+      "runId": "run-ca01c5f3-9899-487e-b242-c7b4db8f26c1",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 46914,
+      "date": "2026-10-12",
+      "inputTokens": 10633,
+      "note": "H01 (final, fixture d40c53fd2347) real-model run; conservative peak, uncached list price — 2 requests with unknown usage charged at the planning bound",
+      "outputTokens": 4436,
+      "requests": 4,
+      "runId": "run-c8da7556-7b84-42fb-a9cb-1e5e6dc2ff72",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 15723,
+      "date": "2026-10-12",
+      "inputTokens": 17626,
+      "note": "H05 (final, fixture edf3388e4382) real-model run; conservative peak, uncached list price",
+      "outputTokens": 8696,
+      "requests": 7,
+      "runId": "run-7e6058cb-4417-49bb-b510-31e5c0f474fb",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 50550,
+      "date": "2026-10-12",
+      "inputTokens": 15127,
+      "note": "H10 (final, fixture 64409e2d99d6) real-model run; conservative peak, uncached list price — 2 requests with unknown usage charged at the planning bound",
+      "outputTokens": 6343,
+      "requests": 6,
+      "runId": "run-b1c16bce-b8a6-4192-a604-34192472713c",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 32683,
+      "date": "2026-10-12",
+      "inputTokens": 6457,
+      "note": "H12 (final, fixture 3eee929a3ae0) real-model run; conservative peak, uncached list price — 1 request with unknown usage charged at the planning bound",
+      "outputTokens": 9621,
+      "requests": 6,
+      "runId": "run-cf6eaf8c-f3f8-4399-b4a0-9b2b596b6de6",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 33190,
+      "date": "2026-10-12",
+      "inputTokens": 20848,
+      "note": "H01 (final, fixture d40c53fd2347) real-model run; conservative peak, uncached list price — 1 request with unknown usage charged at the planning bound",
+      "outputTokens": 6446,
+      "requests": 4,
+      "runId": "run-95dbeb7e-925b-4be4-9371-9b9e35df24dd",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 11168,
+      "date": "2026-10-12",
+      "inputTokens": 14924,
+      "note": "H05 (final, fixture edf3388e4382) real-model run; conservative peak, uncached list price",
+      "outputTokens": 5575,
+      "requests": 5,
+      "runId": "run-4d40102d-7edf-43fd-8bac-33d15134856d",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 33588,
+      "date": "2026-10-12",
+      "inputTokens": 22810,
+      "note": "H10 (final, fixture 64409e2d99d6) real-model run; conservative peak, uncached list price — 1 request with unknown usage charged at the planning bound",
+      "outputTokens": 6287,
+      "requests": 7,
+      "runId": "run-d6713ee7-8bf4-4a3f-ab97-59769cd1751e",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 31587,
+      "date": "2026-10-12",
+      "inputTokens": 6453,
+      "note": "H12 (final, fixture 3eee929a3ae0) real-model run; conservative peak, uncached list price — 1 request with unknown usage charged at the planning bound",
+      "outputTokens": 8709,
+      "requests": 6,
+      "runId": "run-0c449b7a-cd9b-4437-a7d2-e0592b58b7b2",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 4143,
+      "date": "2026-10-12",
+      "inputTokens": 5075,
+      "note": "S01 (development, fixture 2d0e724ded65) real-model run; conservative peak, uncached list price",
+      "outputTokens": 2183,
+      "requests": 2,
+      "runId": "run-d10003fb-90ae-40dd-b8f3-b8162c9f86db",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 25216,
+      "date": "2026-10-12",
+      "inputTokens": 7609,
+      "note": "S02 (development, fixture dfcf5111f616) real-model run; conservative peak, uncached list price — 1 request with unknown usage charged at the planning bound",
+      "outputTokens": 3111,
+      "requests": 4,
+      "runId": "run-997deb4b-4183-46b9-9c93-c1b8dcecc89a",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 8459,
+      "date": "2026-10-12",
+      "inputTokens": 7972,
+      "note": "S03 (development, fixture 2de842a38dc3) real-model run; conservative peak, uncached list price",
+      "outputTokens": 5056,
+      "requests": 3,
+      "runId": "run-5d9f76d8-d65a-4bbf-a4eb-bab99dc68b36",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 8733,
+      "date": "2026-10-12",
+      "inputTokens": 7874,
+      "note": "C13 (development, fixture 9fa275dc3dc8) real-model run; conservative peak, uncached list price",
+      "outputTokens": 5309,
+      "requests": 3,
+      "runId": "run-a040769a-f575-4fd7-b156-60560c01a4b5",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 22156,
+      "date": "2026-10-12",
+      "inputTokens": 4904,
+      "note": "C16 (development, fixture 20d91f265b91) real-model run; conservative peak, uncached list price — 1 request with unknown usage charged at the planning bound",
+      "outputTokens": 1237,
+      "requests": 3,
+      "runId": "run-2af93e5b-e4c4-49b7-9fc7-019000276ee4",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 2745,
+      "date": "2026-10-12",
+      "inputTokens": 3923,
+      "note": "H04 (final, fixture c021cf10a819) real-model run; conservative peak, uncached list price",
+      "outputTokens": 1306,
+      "requests": 2,
+      "runId": "run-87d96299-341c-408d-ae52-51518755fffd",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 7530,
+      "date": "2026-10-12",
+      "inputTokens": 11440,
+      "note": "H11 (final, fixture a9172e11797d) real-model run; conservative peak, uncached list price",
+      "outputTokens": 3415,
+      "requests": 4,
+      "runId": "run-5706ea02-23c2-4646-b4c8-1c99a04140a4",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 45098,
+      "date": "2026-10-12",
+      "inputTokens": 10670,
+      "note": "H01 (final, fixture d40c53fd2347) real-model run; conservative peak, uncached list price — 2 requests with unknown usage charged at the planning bound",
+      "outputTokens": 2914,
+      "requests": 4,
+      "runId": "run-fcdaded8-b8aa-4ba7-94e6-3983a88286de",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 16500,
+      "date": "2026-10-12",
+      "inputTokens": 26497,
+      "note": "H02 (final, fixture c0d1d7a67fbf) real-model run; conservative peak, uncached list price",
+      "outputTokens": 7125,
+      "requests": 7,
+      "runId": "run-43b4133a-8c63-4580-9191-25e7f5b1bbec",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 3967,
+      "date": "2026-10-12",
+      "inputTokens": 5053,
+      "note": "H04 (final, fixture c021cf10a819) real-model run; conservative peak, uncached list price",
+      "outputTokens": 2042,
+      "requests": 2,
+      "runId": "run-98df0b73-aad8-42f1-a7f0-b2a00a782802",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 20434,
+      "date": "2026-10-12",
+      "inputTokens": 25611,
+      "note": "H09 (final, fixture a208c4a9fe53) real-model run; conservative peak, uncached list price",
+      "outputTokens": 10625,
+      "requests": 8,
+      "runId": "run-5bbc962c-738e-4e36-b8d7-6bb1f4500474",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 31385,
+      "date": "2026-10-12",
+      "inputTokens": 6454,
+      "note": "H12 (final, fixture 3eee929a3ae0) real-model run; conservative peak, uncached list price — 1 request with unknown usage charged at the planning bound",
+      "outputTokens": 8540,
+      "requests": 6,
+      "runId": "run-8efabcb8-e441-47e0-ae9a-a9b7b4afd224",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 18066,
+      "date": "2026-10-12",
+      "inputTokens": 23661,
+      "note": "H07 (final, fixture ba315566baf0) real-model run; conservative peak, uncached list price",
+      "outputTokens": 9139,
+      "requests": 7,
+      "runId": "run-61d87b79-1c08-4530-9fb6-873b7d7b281f",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 13335,
+      "date": "2026-10-12",
+      "inputTokens": 23861,
+      "note": "H11 (final, fixture a9172e11797d) real-model run; conservative peak, uncached list price",
+      "outputTokens": 5147,
+      "requests": 7,
+      "runId": "run-4ba0017f-7265-4b4b-bc9d-fe54cc068e8c",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 4388,
+      "date": "2026-10-12",
+      "inputTokens": 11315,
+      "note": "presentation-bench round smoke: layouts V3,V2 x fixtures H02-said (correction a, rules full, repeat 1); direct Provider calls, design benchmark, not acceptance; conservative peak, uncached list price; per-call detail in presentation-bench/results/smoke/calls.jsonl",
+      "outputTokens": 827,
+      "requests": 3,
+      "runId": "presentation-bench-smoke-af4ca8c3",
+      "ticket": "#301-presentation"
+    },
+    {
+      "costUsdMicros": 529601,
+      "date": "2026-10-12",
+      "inputTokens": 755868,
+      "note": "presentation-bench round r1: layouts V0,V1,V2,V3,V4 x fixtures H01-recap,H02-said,H04-ask,H06-role,H07-party,H07-september,H11-older,H12-work (correction a,b, rules full, repeat 3); direct Provider calls, design benchmark, not acceptance; conservative peak, uncached list price; per-call detail in presentation-bench/results/r1/calls.jsonl",
+      "outputTokens": 252311,
+      "requests": 159,
+      "runId": "presentation-bench-r1-1be22f0b",
+      "ticket": "#301-presentation"
+    },
+    {
+      "costUsdMicros": 81608,
+      "date": "2026-10-12",
+      "inputTokens": 101819,
+      "note": "presentation-bench round r2: layouts V5 x fixtures H12-work,H07-september,H07-party,H11-older,H04-ask,H06-role,H01-recap,H02-said (correction a, rules full, repeat 3); direct Provider calls, design benchmark, not acceptance; conservative peak, uncached list price; per-call detail in presentation-bench/results/r2/calls.jsonl",
+      "outputTokens": 42542,
+      "requests": 24,
+      "runId": "presentation-bench-r2-4777a376",
+      "ticket": "#301-presentation"
+    },
+    {
+      "costUsdMicros": 233488,
+      "date": "2026-10-12",
+      "inputTokens": 445419,
+      "note": "presentation-bench round r2: layouts V5,V3,V2 x fixtures H12-work,H07-september,H07-party,H11-older,H04-ask,H06-role,H01-recap,H02-said (correction a, rules lean, repeat 3); direct Provider calls, design benchmark, not acceptance; conservative peak, uncached list price; per-call detail in presentation-bench/results/r2/calls.jsonl",
+      "outputTokens": 83181,
+      "requests": 96,
+      "runId": "presentation-bench-r2-5eca04ef",
+      "ticket": "#301-presentation"
+    },
+    {
+      "costUsdMicros": 423487,
+      "date": "2026-10-12",
+      "inputTokens": 583642,
+      "note": "presentation-bench round r3-serial: layouts V0,V1,V2,V3 x fixtures H01-recap,H02-said,H04-ask,H06-role,H07-party,H07-september,H11-older,H12-work (correction a, rules full, repeat 3); direct Provider calls, design benchmark, not acceptance; conservative peak, uncached list price; per-call detail in presentation-bench/results/r3-serial/calls.jsonl",
+      "outputTokens": 206949,
+      "requests": 120,
+      "runId": "presentation-bench-r3-serial-200a4020",
+      "ticket": "#301-presentation"
+    },
+    {
+      "costUsdMicros": 46074,
+      "date": "2026-10-12",
+      "inputTokens": 10740,
+      "note": "H01 (final, fixture d40c53fd2347) real-model run; conservative peak, uncached list price — 2 requests with unknown usage charged at the planning bound",
+      "outputTokens": 3710,
+      "requests": 4,
+      "runId": "run-59a85783-90d4-47e3-b52e-087adc535aae",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 37018,
+      "date": "2026-10-12",
+      "inputTokens": 25464,
+      "note": "H02 (final, fixture c0d1d7a67fbf) real-model run; conservative peak, uncached list price — 1 request with unknown usage charged at the planning bound",
+      "outputTokens": 8482,
+      "requests": 8,
+      "runId": "run-0c8b8536-ca97-4ce3-8b84-a6a8993e004d",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 13387,
+      "date": "2026-10-12",
+      "inputTokens": 18433,
+      "note": "H03 (final, fixture 5527ee501bbd) real-model run; conservative peak, uncached list price",
+      "outputTokens": 6547,
+      "requests": 5,
+      "runId": "run-bd2a7fc2-a874-4946-ad83-80c36f931a0c",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 5571,
+      "date": "2026-10-12",
+      "inputTokens": 8530,
+      "note": "H04 (final, fixture c021cf10a819) real-model run; conservative peak, uncached list price",
+      "outputTokens": 2510,
+      "requests": 3,
+      "runId": "run-12aa77c7-b36d-4274-be03-55b5b4776a47",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 16399,
+      "date": "2026-10-12",
+      "inputTokens": 19158,
+      "note": "H05 (final, fixture edf3388e4382) real-model run; conservative peak, uncached list price",
+      "outputTokens": 8876,
+      "requests": 7,
+      "runId": "run-15c73fcf-750f-4280-8b13-48aa77275a19",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 12030,
+      "date": "2026-10-12",
+      "inputTokens": 16785,
+      "note": "H06 (final, fixture e0316f07627d) real-model run; conservative peak, uncached list price",
+      "outputTokens": 5828,
+      "requests": 5,
+      "runId": "run-05336e20-ebcb-4e80-a89a-1c3f016ad69c",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 12411,
+      "date": "2026-10-12",
+      "inputTokens": 24802,
+      "note": "H07 (final, fixture ba315566baf0) real-model run; conservative peak, uncached list price",
+      "outputTokens": 4142,
+      "requests": 7,
+      "runId": "run-fb0fd451-a332-447f-a3e9-bfb4f6f6a992",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 7884,
+      "date": "2026-10-12",
+      "inputTokens": 8176,
+      "note": "H08 (final, fixture 7fcf619a07d4) real-model run; conservative peak, uncached list price",
+      "outputTokens": 4526,
+      "requests": 3,
+      "runId": "run-a95d14b2-d864-40ea-b790-131cef742a86",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 31940,
+      "date": "2026-10-12",
+      "inputTokens": 18820,
+      "note": "H09 (final, fixture a208c4a9fe53) real-model run; conservative peak, uncached list price — 1 request with unknown usage charged at the planning bound",
+      "outputTokens": 5911,
+      "requests": 7,
+      "runId": "run-60174e52-b78a-4aa0-a149-1c30dd1a2d55",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 68381,
+      "date": "2026-10-12",
+      "inputTokens": 10415,
+      "note": "H10 (final, fixture 64409e2d99d6) real-model run; conservative peak, uncached list price — 3 requests with unknown usage charged at the planning bound",
+      "outputTokens": 6380,
+      "requests": 6,
+      "runId": "run-fb48d167-ee20-4724-b0af-5fc2d34797d0",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 11747,
+      "date": "2026-10-12",
+      "inputTokens": 24598,
+      "note": "H11 (final, fixture a9172e11797d) real-model run; conservative peak, uncached list price",
+      "outputTokens": 3639,
+      "requests": 7,
+      "runId": "run-17d6056d-8bf5-4de9-ad42-d2a0d5d1d99b",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 14796,
+      "date": "2026-10-12",
+      "inputTokens": 10134,
+      "note": "H12 (final, fixture 3eee929a3ae0) real-model run; conservative peak, uncached list price",
+      "outputTokens": 9796,
+      "requests": 6,
+      "runId": "run-f9f863a4-a31c-4a4c-8a48-f635b5357303",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 32664,
+      "date": "2026-10-12",
+      "inputTokens": 14840,
+      "note": "HL1 (final, fixture 5bd7013d8eb5) real-model run; conservative peak, uncached list price — 1 request with unknown usage charged at the planning bound",
+      "outputTokens": 7510,
+      "requests": 5,
+      "runId": "run-a0a3e0f0-88a0-4a27-9837-6e91b56d1f47",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 31261,
+      "date": "2026-10-12",
+      "inputTokens": 9666,
+      "note": "H12 (final, fixture 3eee929a3ae0) real-model run; conservative peak, uncached list price — 1 request with unknown usage charged at the planning bound",
+      "outputTokens": 7634,
+      "requests": 6,
+      "runId": "run-76991bb2-b64e-458b-a949-edcc7711c160",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 13262,
+      "date": "2026-10-12",
+      "inputTokens": 24366,
+      "note": "H07 (final, fixture ba315566baf0) real-model run; conservative peak, uncached list price",
+      "outputTokens": 4960,
+      "requests": 7,
+      "runId": "run-7b9b1119-f743-4593-9137-517f832aacf2",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 36825,
+      "date": "2026-10-12",
+      "inputTokens": 15586,
+      "note": "H05 (final, fixture edf3388e4382) real-model run; conservative peak, uncached list price — 1 request with unknown usage charged at the planning bound",
+      "outputTokens": 10791,
+      "requests": 7,
+      "runId": "run-65155592-4391-48e3-bc19-3837b7ec19be",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 52228,
+      "date": "2026-10-12",
+      "inputTokens": 21065,
+      "note": "H01 (final, fixture d40c53fd2347) real-model run; conservative peak, uncached list price — 2 requests with unknown usage charged at the planning bound",
+      "outputTokens": 6257,
+      "requests": 5,
+      "runId": "run-80ff19d5-5d38-4192-9b3d-a15a92ae57bf",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 17109,
+      "date": "2026-10-12",
+      "inputTokens": 10144,
+      "note": "H12 (final, fixture 3eee929a3ae0) real-model run; conservative peak, uncached list price",
+      "outputTokens": 11721,
+      "requests": 6,
+      "runId": "run-d2fb805a-b4be-4887-a0f6-73dd180e8ece",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 15181,
+      "date": "2026-10-12",
+      "inputTokens": 24521,
+      "note": "H07 (final, fixture ba315566baf0) real-model run; conservative peak, uncached list price",
+      "outputTokens": 6520,
+      "requests": 7,
+      "runId": "run-75c34207-2cde-4913-b892-de2356f46c59",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 17907,
+      "date": "2026-10-12",
+      "inputTokens": 21513,
+      "note": "H05 (final, fixture edf3388e4382) real-model run; conservative peak, uncached list price",
+      "outputTokens": 9544,
+      "requests": 8,
+      "runId": "run-f5c30fc0-d3ff-4960-80a6-039f0585e94a",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 36815,
+      "date": "2026-10-12",
+      "inputTokens": 32954,
+      "note": "H01 (final, fixture d40c53fd2347) real-model run; conservative peak, uncached list price — 1 request with unknown usage charged at the planning bound",
+      "outputTokens": 6440,
+      "requests": 5,
+      "runId": "run-70bba8ae-a9f4-4471-b2fc-e0eb276f963d",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 437976,
+      "date": "2026-10-12",
+      "inputTokens": 772047,
+      "note": "presentation-bench Decision benchmark round d1: variants v4,v5 x 12 fixture(s), repeat 6; direct Provider calls, design benchmark, not acceptance; conservative peak, uncached list price; per-call detail in presentation-bench/results/d1/decision-calls.jsonl",
+      "outputTokens": 171922,
+      "requests": 144,
+      "runId": "decision-bench-d1-73de57b1",
+      "ticket": "#301-presentation"
+    },
+    {
+      "costUsdMicros": 242566,
+      "date": "2026-10-12",
+      "inputTokens": 392844,
+      "note": "presentation-bench Decision benchmark round d2: variants v5s x 12 fixture(s), repeat 6; direct Provider calls, design benchmark, not acceptance; conservative peak, uncached list price; per-call detail in presentation-bench/results/d2/decision-calls.jsonl",
+      "outputTokens": 103899,
+      "requests": 72,
+      "runId": "decision-bench-d2-29fccd1f",
+      "ticket": "#301-presentation"
+    },
+    {
+      "costUsdMicros": 544550,
+      "date": "2026-10-12",
+      "inputTokens": 1026596,
+      "note": "presentation-bench Decision benchmark round t1: variants v5,v5@T1,v5@T2,v5@T3 x 12 fixture(s), repeat 4; direct Provider calls, design benchmark, not acceptance; conservative peak, uncached list price; per-call detail in presentation-bench/results/t1/decision-calls.jsonl",
+      "outputTokens": 197071,
+      "requests": 192,
+      "runId": "decision-bench-t1-d9a8131a",
+      "ticket": "#301-presentation"
+    },
+    {
+      "costUsdMicros": 192734,
+      "date": "2026-10-12",
+      "inputTokens": 387745,
+      "note": "presentation-bench Decision benchmark round t2: variants v5@T4 x 12 fixture(s), repeat 6; direct Provider calls, design benchmark, not acceptance; conservative peak, uncached list price; per-call detail in presentation-bench/results/t2/decision-calls.jsonl",
+      "outputTokens": 63646,
+      "requests": 72,
+      "runId": "decision-bench-t2-edff9223",
+      "ticket": "#301-presentation"
+    },
+    {
+      "costUsdMicros": 60377,
+      "date": "2026-10-12",
+      "inputTokens": 128355,
+      "note": "presentation-bench Decision benchmark round t2: variants v5@T2 x 12 fixture(s), repeat 2; direct Provider calls, design benchmark, not acceptance; conservative peak, uncached list price; per-call detail in presentation-bench/results/t2/decision-calls.jsonl",
+      "outputTokens": 18218,
+      "requests": 24,
+      "runId": "decision-bench-t2-09f5891e",
+      "ticket": "#301-presentation"
+    },
+    {
+      "costUsdMicros": 189486,
+      "date": "2026-10-12",
+      "inputTokens": 382990,
+      "note": "presentation-bench Decision benchmark round t3: variants v5@T5 x 12 fixture(s), repeat 6; direct Provider calls, design benchmark, not acceptance; conservative peak, uncached list price; per-call detail in presentation-bench/results/t3/decision-calls.jsonl",
+      "outputTokens": 62131,
+      "requests": 72,
+      "runId": "decision-bench-t3-c938dfb7",
+      "ticket": "#301-presentation"
+    },
+    {
+      "costUsdMicros": 190078,
+      "date": "2026-10-12",
+      "inputTokens": 388152,
+      "note": "presentation-bench Decision benchmark round t4: variants v6@T5 x 12 fixture(s), repeat 6; direct Provider calls, design benchmark, not acceptance; conservative peak, uncached list price; per-call detail in presentation-bench/results/t4/decision-calls.jsonl",
+      "outputTokens": 61329,
+      "requests": 72,
+      "runId": "decision-bench-t4-29192859",
+      "ticket": "#301-presentation"
+    },
+    {
+      "costUsdMicros": 95804,
+      "date": "2026-10-12",
+      "inputTokens": 181399,
+      "note": "presentation-bench Decision benchmark round t5: variants v6a@T5 x 5 fixture(s), repeat 6; direct Provider calls, design benchmark, not acceptance; conservative peak, uncached list price; per-call detail in presentation-bench/results/t5/decision-calls.jsonl",
+      "outputTokens": 34476,
+      "requests": 30,
+      "runId": "decision-bench-t5-4e26b3de",
+      "ticket": "#301-presentation"
+    },
+    {
+      "costUsdMicros": 50228,
+      "date": "2026-10-12",
+      "inputTokens": 10536,
+      "note": "H01 (final, fixture d40c53fd2347) real-model run; conservative peak, uncached list price — 2 requests with unknown usage charged at the planning bound",
+      "outputTokens": 7222,
+      "requests": 4,
+      "runId": "run-76ea5bae-1ea7-4cdc-bb32-791bb01a1a60",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 14289,
+      "date": "2026-10-12",
+      "inputTokens": 23840,
+      "note": "H02 (final, fixture c0d1d7a67fbf) real-model run; conservative peak, uncached list price",
+      "outputTokens": 5947,
+      "requests": 6,
+      "runId": "run-deb1dcae-5f1e-445f-812e-55a7612dd2a7",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 16636,
+      "date": "2026-10-12",
+      "inputTokens": 18123,
+      "note": "H03 (final, fixture 5527ee501bbd) real-model run; conservative peak, uncached list price",
+      "outputTokens": 9332,
+      "requests": 5,
+      "runId": "run-81c81b89-5f00-4148-a69a-7431edcb8e7f",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 5092,
+      "date": "2026-10-12",
+      "inputTokens": 8496,
+      "note": "H04 (final, fixture c021cf10a819) real-model run; conservative peak, uncached list price",
+      "outputTokens": 2119,
+      "requests": 3,
+      "runId": "run-dbccd252-f79f-4252-8dd9-bc0def88d7f6",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 18759,
+      "date": "2026-10-12",
+      "inputTokens": 21318,
+      "note": "H05 (final, fixture edf3388e4382) real-model run; conservative peak, uncached list price",
+      "outputTokens": 10303,
+      "requests": 8,
+      "runId": "run-07a95df7-2f57-41b1-a513-71e29510e4f2",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 27888,
+      "date": "2026-10-12",
+      "inputTokens": 8548,
+      "note": "H06 (final, fixture e0316f07627d) real-model run; conservative peak, uncached list price — 1 request with unknown usage charged at the planning bound",
+      "outputTokens": 5103,
+      "requests": 4,
+      "runId": "run-664ee0f1-0b87-4c6b-b35f-f11d128df27b",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 12468,
+      "date": "2026-10-12",
+      "inputTokens": 24595,
+      "note": "H07 (final, fixture ba315566baf0) real-model run; conservative peak, uncached list price",
+      "outputTokens": 4241,
+      "requests": 7,
+      "runId": "run-c3fe3e59-8911-4ed5-97c4-4a73bff8d35a",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 4488,
+      "date": "2026-10-12",
+      "inputTokens": 4983,
+      "note": "H08 (final, fixture 7fcf619a07d4) real-model run; conservative peak, uncached list price",
+      "outputTokens": 2494,
+      "requests": 2,
+      "runId": "run-908a7647-4c10-4c29-a36f-1f0b2c574cac",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 16814,
+      "date": "2026-10-12",
+      "inputTokens": 23833,
+      "note": "H09 (final, fixture a208c4a9fe53) real-model run; conservative peak, uncached list price",
+      "outputTokens": 8053,
+      "requests": 7,
+      "runId": "run-0e75bbe8-7d60-4995-b113-d77d93316a91",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 48617,
+      "date": "2026-10-12",
+      "inputTokens": 15236,
+      "note": "H10 (final, fixture 64409e2d99d6) real-model run; conservative peak, uncached list price — 2 requests with unknown usage charged at the planning bound",
+      "outputTokens": 4705,
+      "requests": 6,
+      "runId": "run-f491e675-fdaa-4b52-a930-f0d7fbce6a37",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 12416,
+      "date": "2026-10-12",
+      "inputTokens": 24480,
+      "note": "H11 (final, fixture a9172e11797d) real-model run; conservative peak, uncached list price",
+      "outputTokens": 4226,
+      "requests": 7,
+      "runId": "run-8f11dbda-5e39-48a5-9ce6-fb4cacfe7446",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 12257,
+      "date": "2026-10-12",
+      "inputTokens": 10132,
+      "note": "H12 (final, fixture 3eee929a3ae0) real-model run; conservative peak, uncached list price",
+      "outputTokens": 7681,
+      "requests": 6,
+      "runId": "run-f34ae932-2b32-4b48-9fbd-01251965c1da",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 25580,
+      "date": "2026-10-12",
+      "inputTokens": 10098,
+      "note": "HL1 (final, fixture 5bd7013d8eb5) real-model run; conservative peak, uncached list price — 1 request with unknown usage charged at the planning bound",
+      "outputTokens": 2792,
+      "requests": 4,
+      "runId": "run-83ce44c4-2fb5-496c-ad09-8644c9a9fa3b",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 43387,
+      "date": "2026-10-12",
+      "inputTokens": 88646,
+      "note": "presentation-bench Decision benchmark round t6: variants v6a x 2 fixture(s), repeat 6; direct Provider calls, design benchmark, not acceptance; conservative peak, uncached list price; per-call detail in presentation-bench/results/t6/decision-calls.jsonl",
+      "outputTokens": 13990,
+      "requests": 12,
+      "runId": "decision-bench-t6-c426d88b",
+      "ticket": "#301-presentation"
+    },
+    {
+      "costUsdMicros": 602096,
+      "date": "2026-10-12",
+      "inputTokens": 1420144,
+      "note": "presentation-bench Decision benchmark round e1: variants v6a@T5,v6a@T5@low,v6a@T5@off x 14 fixture(s), repeat 6; direct Provider calls, design benchmark, not acceptance; conservative peak, uncached list price; per-call detail in presentation-bench/results/e1/decision-calls.jsonl",
+      "outputTokens": 146618,
+      "requests": 252,
+      "runId": "decision-bench-e1-49cc91c9",
+      "ticket": "#301-presentation"
+    },
+    {
+      "costUsdMicros": 440346,
+      "date": "2026-10-12",
+      "inputTokens": 962066,
+      "note": "presentation-bench Decision benchmark round e2: variants v6a@T5@@n1,v6a@T5@low@n1 x 14 fixture(s), repeat 6; direct Provider calls, design benchmark, not acceptance; conservative peak, uncached list price; per-call detail in presentation-bench/results/e2/decision-calls.jsonl",
+      "outputTokens": 126374,
+      "requests": 168,
+      "runId": "decision-bench-e2-94ddd03b",
+      "ticket": "#301-presentation"
+    },
+    {
+      "costUsdMicros": 244994,
+      "date": "2026-10-12",
+      "inputTokens": 482561,
+      "note": "presentation-bench Decision benchmark round e3: variants v6a@T5@@n2 x 14 fixture(s), repeat 6; direct Provider calls, design benchmark, not acceptance; conservative peak, uncached list price; per-call detail in presentation-bench/results/e3/decision-calls.jsonl",
+      "outputTokens": 83491,
+      "requests": 84,
+      "runId": "decision-bench-e3-a0947d4c",
+      "ticket": "#301-presentation"
+    },
+    {
+      "costUsdMicros": 243408,
+      "date": "2026-10-12",
+      "inputTokens": 474213,
+      "note": "presentation-bench Decision benchmark round e4: variants v6a@T5@medium x 14 fixture(s), repeat 6; direct Provider calls, design benchmark, not acceptance; conservative peak, uncached list price; per-call detail in presentation-bench/results/e4/decision-calls.jsonl",
+      "outputTokens": 84258,
+      "requests": 84,
+      "runId": "decision-bench-e4-78b8404c",
+      "ticket": "#301-presentation"
+    },
+    {
+      "costUsdMicros": 513853,
+      "date": "2026-10-12",
+      "inputTokens": 439158,
+      "note": "presentation-bench Decision benchmark round e4: variants v6a@T5@high,v6a@T5@max x 14 fixture(s), repeat 3; direct Provider calls, design benchmark, not acceptance; conservative peak, uncached list price; per-call detail in presentation-bench/results/e4/decision-calls.jsonl",
+      "outputTokens": 318396,
+      "requests": 62,
+      "runId": "decision-bench-e4-a5ee09dd",
+      "ticket": "#301-presentation"
+    },
+    {
+      "costUsdMicros": 14401,
+      "date": "2026-10-12",
+      "inputTokens": 22449,
+      "note": "U01 (final, fixture 9c37d0c49580) real-model run; conservative peak, uncached list price",
+      "outputTokens": 6388,
+      "requests": 4,
+      "runId": "run-dbbbd471-4fa2-4a32-9487-10287173bb04",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 15178,
+      "date": "2026-10-12",
+      "inputTokens": 24273,
+      "note": "U02 (final, fixture ce1a8a38e8c1) real-model run; conservative peak, uncached list price",
+      "outputTokens": 6580,
+      "requests": 6,
+      "runId": "run-415b55b5-9ffd-4043-b46a-42ea11872c06",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 20381,
+      "date": "2026-10-12",
+      "inputTokens": 23332,
+      "note": "U03 (final, fixture 90e6c334ed39) real-model run; conservative peak, uncached list price",
+      "outputTokens": 11151,
+      "requests": 6,
+      "runId": "run-a3db9622-6cd5-458d-87c6-c9411326bdf1",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 5032,
+      "date": "2026-10-12",
+      "inputTokens": 8559,
+      "note": "U04 (final, fixture ea5479ce52e0) real-model run; conservative peak, uncached list price",
+      "outputTokens": 2053,
+      "requests": 3,
+      "runId": "run-ef1c9c89-4993-4305-93f4-b7a785782863",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 6103,
+      "date": "2026-10-12",
+      "inputTokens": 9989,
+      "note": "U05 (final, fixture 6c4e73753d5b) real-model run; conservative peak, uncached list price",
+      "outputTokens": 2588,
+      "requests": 3,
+      "runId": "run-ab7268ee-7217-4517-a327-f30d569bb72c",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 13927,
+      "date": "2026-10-12",
+      "inputTokens": 17057,
+      "note": "U06 (final, fixture 155e93f47161) real-model run; conservative peak, uncached list price",
+      "outputTokens": 7341,
+      "requests": 5,
+      "runId": "run-279a410d-cfbf-413f-9913-59b60637a96e",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 15382,
+      "date": "2026-10-12",
+      "inputTokens": 25183,
+      "note": "U07 (final, fixture cead19fac49b) real-model run; conservative peak, uncached list price",
+      "outputTokens": 6522,
+      "requests": 7,
+      "runId": "run-65c6be52-699f-413b-b419-471ab9ae0d69",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 3695,
+      "date": "2026-10-12",
+      "inputTokens": 5022,
+      "note": "U08 (final, fixture 167f19ae58e4) real-model run; conservative peak, uncached list price",
+      "outputTokens": 1823,
+      "requests": 2,
+      "runId": "run-8b948aaa-692e-4d17-aca6-bcdc8e0471fc",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 17292,
+      "date": "2026-10-12",
+      "inputTokens": 25526,
+      "note": "U09 (final, fixture 5f2dcdf88f09) real-model run; conservative peak, uncached list price",
+      "outputTokens": 8028,
+      "requests": 8,
+      "runId": "run-35ab7112-314c-4e76-8f8f-8989b39dd098",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 47707,
+      "date": "2026-10-12",
+      "inputTokens": 15231,
+      "note": "U10 (final, fixture 55d15a7b1e6f) real-model run; conservative peak, uncached list price — 2 requests with unknown usage charged at the planning bound",
+      "outputTokens": 3948,
+      "requests": 6,
+      "runId": "run-7cacff81-eff9-433b-85d3-6901cdb759c4",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 11960,
+      "date": "2026-10-12",
+      "inputTokens": 24474,
+      "note": "U11 (final, fixture b8f72baa62de) real-model run; conservative peak, uncached list price",
+      "outputTokens": 3848,
+      "requests": 7,
+      "runId": "run-599bf0e2-0c3b-42b8-b277-69a32a8fb997",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 15868,
+      "date": "2026-10-12",
+      "inputTokens": 10148,
+      "note": "U12 (final, fixture 04a45e101a39) real-model run; conservative peak, uncached list price",
+      "outputTokens": 10686,
+      "requests": 7,
+      "runId": "run-813ecd20-b465-4bd4-a04e-2dd5c0f91c44",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 25970,
+      "date": "2026-10-12",
+      "inputTokens": 10180,
+      "note": "UL1 (final, fixture 45e68e98538d) real-model run; conservative peak, uncached list price — 1 request with unknown usage charged at the planning bound",
+      "outputTokens": 3096,
+      "requests": 4,
+      "runId": "run-2b86ec25-f73b-460a-b81d-46dc61233daa",
+      "ticket": "#321"
+    }
+  ]
+}

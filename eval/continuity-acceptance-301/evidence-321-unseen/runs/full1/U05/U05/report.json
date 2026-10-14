@@ -1,0 +1,378 @@
+{
+  "budget": {
+    "blockers": [],
+    "capUsdMicros": 10000000,
+    "estimatedCostUsdMicros": 268800,
+    "inputTokenUpperBound": 224000,
+    "mode": "real-model",
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "outputTokenUpperBound": 168000,
+    "paidRequestUpperBound": 14,
+    "remainingUsdMicros": 2989955,
+    "requestsPerStepUpperBound": 4,
+    "shape": {
+      "generationSteps": 2,
+      "scheduledScans": 3,
+      "seedTurns": 4
+    },
+    "status": "ready",
+    "unknownCostEntries": 0,
+    "waivedPreconditions": [
+      {
+        "by": "Luke",
+        "date": "2026-10-11",
+        "statement": "Relayed to the T08 agent by the coordinating agent as Luke's words: \"#307 的遗留问题,应当在 T01–T07 开发期间解决了(包括耗时问题和回忆历史消息等),因此 T08 可以正常启动\" and \"授权 T08 调用 OpenCode Go 跑真实 DeepSeek V4.1 Flash 模型\". This is a decision to proceed. It is not a record that the #307 online acceptance was completed: #307 was closed with its online acceptance not passed.",
+        "id": "issue-307-online-acceptance"
+      }
+    ]
+  },
+  "case": {
+    "caseId": "U05",
+    "criteria": [
+      {
+        "description": "Seeded history is read back verbatim through the normal history API.",
+        "evidence": [],
+        "id": "INV-seed-readback",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "All 4 seeded turns are present exactly once.",
+        "status": "pass"
+      },
+      {
+        "description": "No oracle text, scenario title or expected answer appears in any Provider request.",
+        "evidence": [],
+        "id": "INV-oracle-not-in-outbound",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "Scanned 638 outbound strings; none carries oracle text.",
+        "status": "pass"
+      },
+      {
+        "description": "Authoritative history contains every message exactly once.",
+        "evidence": [],
+        "id": "INV-no-duplicate-messages",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "12 messages, no duplicates.",
+        "status": "pass"
+      },
+      {
+        "description": "The ordinary remark streams and commits.",
+        "evidence": [
+          "steps[walk].chat.httpStatus=200",
+          "steps[walk].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-walk-commit",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "The cued announcement streams and commits.",
+        "evidence": [
+          "steps[cued].chat.httpStatus=200",
+          "steps[cued].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-cued-commit",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "The recent pending matter is in the background of the announcement.",
+        "evidence": [
+          "job-a:user: providerRequest=present, inspector.referencedEvents=present",
+          "job-b:user: providerRequest=present, inspector.referencedEvents=present"
+        ],
+        "id": "O-cued-recent",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Every required source reached the Provider and is recorded by the Inspector.",
+        "status": "pass"
+      },
+      {
+        "description": "The older pending matter reaches the Provider for the cued announcement.",
+        "evidence": [
+          "flat-a:user: providerRequest=absent, inspector.referencedEvents=absent",
+          "flat-b:user: providerRequest=absent, inspector.referencedEvents=absent"
+        ],
+        "id": "O-cued-older",
+        "kind": "objective",
+        "owner": "#317",
+        "reason": "A required source did not reach the Provider request for this turn.",
+        "status": "fail"
+      },
+      {
+        "description": "What was said a moment earlier reaches the Provider for the cued announcement.",
+        "evidence": [
+          "steps[walk].input.text: providerRequest=present"
+        ],
+        "id": "O-cued-context",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Everything said earlier in the run reached the Provider for this turn.",
+        "status": "pass"
+      },
+      {
+        "description": "The announcement is connected to the old application and the outcome is not invented.",
+        "evidence": [],
+        "id": "S-cued",
+        "kind": "semantic",
+        "owner": "#317",
+        "reason": "No independent review was supplied for this answer.",
+        "status": "needs-review"
+      }
+    ],
+    "mode": "real-model",
+    "pipelineOnly": [],
+    "reviewer": null,
+    "runId": "run-ab7268ee-7217-4517-a327-f30d569bb72c",
+    "status": "fail"
+  },
+  "diagnosis": [
+    {
+      "diagnosis": {
+        "disagreements": [],
+        "payloadReadStatus": null,
+        "readState": "unread",
+        "sources": [
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: no history branch",
+              "provider payload: message 1",
+              "time of message 1: 2026-10-12 (expected 2026-10-12)",
+              "semantic review: none yet; the source reached the model intact, its use is not judged"
+            ],
+            "fault": "undetermined",
+            "source": "job-a:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-9",
+              "requestSequence": 9
+            }
+          },
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: no history branch",
+              "provider payload: message 3",
+              "time of message 3: 2026-10-14 (expected 2026-10-14)",
+              "semantic review: none yet; the source reached the model intact, its use is not judged"
+            ],
+            "fault": "undetermined",
+            "source": "job-b:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-9",
+              "requestSequence": 9
+            }
+          },
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: no history branch",
+              "provider payload: absent",
+              "coverage: (the Decision took no history branch)"
+            ],
+            "fault": "selection_omitted",
+            "source": "flat-a:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-9",
+              "requestSequence": 9
+            }
+          },
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: no history branch",
+              "provider payload: absent",
+              "coverage: (the Decision took no history branch)"
+            ],
+            "fault": "selection_omitted",
+            "source": "flat-b:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-9",
+              "requestSequence": 9
+            }
+          }
+        ]
+      },
+      "stepId": "cued"
+    }
+  ],
+  "identity": {
+    "fixtureSha256": "6c4e73753d5b7fba9a2abba8d8b298063d77d3e3328d314768b4c225f1fb2e5d",
+    "fixtureVersion": "final-2",
+    "gitCommit": "b48f2fb03614b8f6a485a000c6efcda9e85f625d",
+    "gitDirty": true,
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "historyRecallGovernance": "active",
+    "recentContextGovernance": "active",
+    "runId": "run-ab7268ee-7217-4517-a327-f30d569bb72c",
+    "oracleSha256": "32dd619028424ec3c09a4995d8a50c752fbd2f809e1181904789f3c49d399be5",
+    "title": "U05 Unseen: an answer arrives with a cue to an older pending matter"
+  },
+  "remainingRisks": [
+    "The working tree had uncommitted changes; the commit alone does not identify the code that ran.",
+    "Timings are CLI network observations, not browser rendering times (T08 #321 covers the browser)."
+  ],
+  "reproducibilityDigest": "5189d80da996bed9ebf5a72ed97218ab549694d028574a4d934b97a46caf7163",
+  "schemaVersion": "continuity-acceptance-report:v1",
+  "sourceManifest": [
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "flat-a:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "flat-a:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "flat-b:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "flat-b:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "job-a:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "job-a:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "job-b:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "job-b:assistant"
+        }
+      ],
+      "stepId": "walk"
+    },
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "flat-a:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "flat-a:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "flat-b:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "flat-b:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "job-a:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "job-a:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "job-b:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "job-b:assistant"
+        }
+      ],
+      "stepId": "cued"
+    }
+  ],
+  "timings": [
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 43.69837499999994,
+      "cliCommittedMs": 4284.508041,
+      "cliFirstVisibleTextMs": 3874.4991250000003,
+      "cliStreamClosedMs": 4284.615208,
+      "providerLatencyMs": 0,
+      "stepId": "walk"
+    },
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 35.4122499999994,
+      "cliCommittedMs": 11580.359665999998,
+      "cliFirstVisibleTextMs": 11358.848041,
+      "cliStreamClosedMs": 11580.424083,
+      "providerLatencyMs": 0,
+      "stepId": "cued"
+    }
+  ],
+  "transcript": [
+    {
+      "assistant": "绕这一圈走的，倒像是给自己找个缓的地方。楼封顶了、架子拆一半，说明这工程也熬过了最难的那段。",
+      "at": "2026-10-16T10:30:00.000Z",
+      "stepId": "walk",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "今天下班绕路走了走，路过河东新盖的那片保障房，楼已经封顶了，脚手架都拆了一半。"
+    },
+    {
+      "assistant": "先攥在手里吧，不急这一下。今天你才从那片楼底下绕回来，这会儿短信就到了——手心出汗，一点不奇怪。",
+      "at": "2026-10-16T10:34:00.000Z",
+      "stepId": "cued",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "刚才手机震了一下，是住保中心发来的短信。我手心都出汗了，还没敢点开。"
+    }
+  ],
+  "usage": {
+    "inputTokens": 9644,
+    "outputTokens": 1435,
+    "paidCostUsdMicros": null,
+    "providerRequests": 2
+  }
+}

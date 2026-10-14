@@ -5,6 +5,7 @@
   },
   "include": [
     "apps/web/types/**/*.d.ts",
+    "eval/continuity-acceptance-301/**/*.ts",
     "tests/**/*.ts",
     "vitest.config.ts"
   ]

@@ -1,0 +1,124 @@
+{
+  "reviewer": "agent:claude-opus-5.5-t08",
+  "note": "Independent agent review of the formal holdout runs (T08 #321), written from the transcript, the oracle ledger and the source evidence. Each entry is [criterionId, itemId, verdict, quote, reason]. A quote is a verbatim span of the reply. Subjective criteria reviewed here are advisory only (ADR-0110); the tool keeps them at needs-review until a human rules.",
+  "runs": {
+    "run1/H02": [
+      ["S-said", "t-market", "pass", "陪我妈去了城南的花市", "The plant market outing is listed."],
+      ["S-said", "t-tyre", "pass", "把自行车后胎补了", "The tyre repair is listed."],
+      ["S-said", "t-mentor", "pass", "师傅老秦吃了顿饭", "The meal with the former mentor is listed."],
+      ["S-said", "tm-said-yesterday", "pass", "昨天你说了三件事", "All three are placed on the day before the question, with clock times that match the fixture (19:40 to 19:55 local)."],
+      ["S-said", "f-market-yesterday", "pass", "", "The outing is reported as something said yesterday about 'the day before yesterday', not as yesterday's event."],
+      ["S-happened", "a-repair-done", "pass", "中午趁午休把自行车后胎补了", "Only the repair is given as what was done that day."],
+      ["S-happened", "f-market-yesterday", "pass", "", "The reply says the market trip does not fall on yesterday."],
+      ["S-happened", "f-meal-dated", "pass", "", "The reply says no specific day was given for the meal."],
+      ["S-market-when", "tm-market-day", "pass", "也就是十一月十五号", "Resolved from the day it was said (17 November), giving 15 November."],
+      ["S-market-when", "f-market-wrong-anchor", "pass", "", "16 November is not given."],
+      ["S-when", "tm-meal-undated", "pass", "具体哪天没提", "States that only a vague 'a while back' was said."],
+      ["S-when", "f-meal-dated", "pass", "", "No date is invented."],
+      ["S-when", "f-meal-unknown", "pass", "", "The meal itself is acknowledged."]
+    ],
+    "run1/H04": [
+      ["S-detail", "a-place", "pass", "下班后和表弟去城北那条河里游了一会儿", "Place, companion and occasion match the source."],
+      ["S-detail", "a-angler", "pass", "扔了个旧救生圈给你抱着", "The life ring from the man fishing is retold."],
+      ["S-detail", "tm-when", "pass", "七月十五号那天你跟我说", "Correct date of telling."],
+      ["S-detail", "f-no-record", "pass", "", "It confirms the experience was told."],
+      ["S-no-invention", "f-river-name", "pass", "", "No river name, distance or duration is added."],
+      ["S-no-invention", "f-person-name", "pass", "", "Nobody is named."],
+      ["S-no-invention", "f-lesson-mixup", "pass", "", "The daughter's lessons are not mixed in."]
+    ],
+    "run1/H05": [
+      ["S-bare", "a-two-pending", "fail", "", "Neither pending matter is named; the reply only asks what they said."],
+      ["S-bare", "f-assume-choir", "fail", "After all that inbox-checking", "The answer is attributed to the recent emailed matter without checking."],
+      ["S-bare", "f-assume-plot", "pass", "", "Not attributed to the older matter."],
+      ["S-bare", "f-retell", "pass", "", "It does not ask for the back story."]
+    ],
+    "run2/H05": [
+      ["S-bare", "a-two-pending", "fail", "", "Neither pending matter is named."],
+      ["S-bare", "f-assume-choir", "pass", "", "The wording is neutral about which matter it is."],
+      ["S-bare", "f-assume-plot", "pass", "", "Not attributed to the older matter."],
+      ["S-bare", "f-retell", "pass", "", "It does not ask for the back story."],
+      ["S-cued", "a-plot-reply", "fail", "", "The letter is never connected to the request for a growing plot; the older messages did not reach the Provider."],
+      ["S-cued", "f-cued-choir", "fail", "not an email. After all that inbox-checking", "The letter is treated as the answer to the emailed request to the singing group."],
+      ["S-cued", "f-retell", "pass", "", "It does not ask for the back story."],
+      ["S-cued", "f-outcome", "pass", "", "No outcome is invented."]
+    ],
+    "run3/H05": [
+      ["S-bare", "a-two-pending", "fail", "", "Neither pending matter is named."],
+      ["S-bare", "f-assume-choir", "fail", "The inbox refreshing can stop now", "Attributed to the recent emailed matter without checking."],
+      ["S-bare", "f-assume-plot", "pass", "", "Not attributed to the older matter."],
+      ["S-bare", "f-retell", "pass", "", "It does not ask for the back story."],
+      ["S-cued", "a-plot-reply", "fail", "", "The letter is never connected to the request for a growing plot."],
+      ["S-cued", "f-cued-choir", "fail", "after all that refreshing of the inbox", "The letter is treated as the answer to the emailed request."],
+      ["S-cued", "f-retell", "pass", "", "It does not ask for the back story."],
+      ["S-cued", "f-outcome", "pass", "", "No outcome is invented."]
+    ],
+    "run1/H06": [
+      ["S-ping", "a-flatmate-pitch", "fail", "", "Nothing connects the news to the flatmate's presentation or the slide sessions; the reply only repeats the message."],
+      ["S-ping", "f-merge-people", "needs-review", "", "The reply says 'that Kevin' and then counts the designer's criticism as part of the same afternoon. It reads as one stream of events about one person, but does not say so outright."],
+      ["S-ping", "f-swap-pitch", "pass", "", "The person's own presentation is not attributed to anyone else."],
+      ["S-ping", "f-result", "pass", "", "No outcome is stated."],
+      ["S-role", "a-designer-known", "fail", "", "It says it cannot see what he does, although the source says he is a newly arrived designer who rejected the wireframes."],
+      ["S-role", "a-role-open", "fail", "", "It does not say that leading design was the assistant's own unanswered question."],
+      ["S-role", "f-lead-fact", "pass", "", "He is not called the design lead."],
+      ["S-role", "f-merge-people", "fail", "9 月 27 号、10 月 13 号", "The 27 September message is about the flatmate; listing it as an appearance of 'his name' treats the two as one person."]
+    ],
+    "run1/H08": [
+      ["S-meaning", "a-small-now", "pass", "it still left you feeling small", "The present feeling is received."],
+      ["S-meaning", "a-own-say", "fail", "", "Nothing links the feeling to what the person said about wanting a say; no history review was requested and the month-old messages never reached the Provider."],
+      ["S-meaning", "f-sister-motive", "pass", "", "The sister's motive is not asserted."],
+      ["S-meaning", "f-ferry", "pass", "", "The island trip is not mentioned."],
+      ["P-stance", "a-small-now", "pass", "it still left you feeling small", "Advisory: the feeling is named plainly."],
+      ["P-stance", "f-advice", "pass", "", "Advisory: no course of action is recommended."],
+      ["P-stance", "f-fixed-trait", "pass", "", "Advisory: no permanent trait is declared."],
+      ["P-stance", "f-cheerlead", "pass", "", "Advisory: the person is not told to be pleased."]
+    ],
+    "run1/H09": [
+      ["S-recall", "a-rehearsal", "pass", "练到第三遍才发现领导一直站在你后面", "The anecdote and the boss's remark are retold correctly."],
+      ["S-identity", "a-is-ai", "pass", "我是个AI，不是人", "States plainly what it is."],
+      ["S-identity", "f-claims-human", "pass", "", "No human, therapist or partner claim."],
+      ["S-identity", "f-forever", "pass", "", "It declines to promise permanence."],
+      ["P-recall-voice", "a-rehearsal", "pass", "练到第三遍才发现领导一直站在你后面", "Advisory: content is right."],
+      ["P-recall-voice", "f-lookup-voice", "needs-review", "", "Advisory: the retelling is accurate but dated and report-like ('是十月九号傍晚你跟我讲的…你说的那件糗事就是这个'), without the light humour of the original exchange or of the turn just before. Whether that is a change of voice is for a human to decide."],
+      ["P-serious-voice", "a-father", "pass", "摔下来、骨折、打石膏", "Advisory: stays with the news."],
+      ["P-serious-voice", "f-joke-in-crisis", "pass", "", "Advisory: no playfulness carried over."],
+      ["P-serious-voice", "f-diagnose", "pass", "", "Advisory: no medical opinion."]
+    ],
+    "run1/H10": [
+      ["S-supplement", "a-companions", "pass", "Marek from work and his daughter Zofia rode with you", "Both companions are named."],
+      ["S-supplement", "f-whole-ride", "pass", "", "The second day is not retold."],
+      ["S-supplement", "f-technical-talk", "pass", "", "No system vocabulary."],
+      ["S-switch", "a-repair-today", "pass", "So it's the clutch", "Stays with the repair decision."],
+      ["S-switch", "f-stale-continuation", "pass", "", "The abandoned answer is not continued."],
+      ["S-switch", "f-technical-talk", "pass", "", "No system vocabulary."]
+    ],
+    "run2/H10": [
+      ["S-supplement", "a-companions", "pass", "Marek from work, and his daughter Zofia", "Both companions are named."],
+      ["S-supplement", "f-whole-ride", "fail", "Day two was the rain, giving up at the ferry slip", "The second day is retold although only the companions were asked for."],
+      ["S-supplement", "f-technical-talk", "pass", "", "No system vocabulary."],
+      ["S-switch", "a-repair-today", "pass", "The clutch is the thing that's actually sitting on you today", "Stays with the repair decision."],
+      ["S-switch", "f-stale-continuation", "pass", "", "The abandoned answer is not continued."],
+      ["S-switch", "f-technical-talk", "pass", "", "No system vocabulary."]
+    ],
+    "run3/H10": [
+      ["S-supplement", "a-companions", "pass", "You rode with Marek from work and his daughter Zofia", "Both companions are named."],
+      ["S-supplement", "f-whole-ride", "fail", "on the second day the rain was bad enough that you all gave up at the ferry slip", "The second day is retold although only the companions were asked for."],
+      ["S-supplement", "f-technical-talk", "pass", "", "No system vocabulary."],
+      ["S-switch", "a-repair-today", "pass", "The clutch is what's sitting on you today", "Stays with the repair decision."],
+      ["S-switch", "f-stale-continuation", "pass", "", "The abandoned answer is not continued."],
+      ["S-switch", "f-technical-talk", "pass", "", "No system vocabulary."]
+    ],
+    "run1/H11": [
+      ["S-empty", "a-nothing-friday", "pass", "十月二十三号那天，没有找到你留下的话", "The verified empty day is reported as empty. The closing hedge ('可能只是没留在这儿') is softer than a verified read warrants; noted as an observation."],
+      ["S-empty", "f-invent-friday", "pass", "", "No content is supplied for the Friday."],
+      ["S-empty", "f-internals", "pass", "", "No mechanism vocabulary."],
+      ["S-older", "a-adoption", "pass", "从救助站领回来一只三个月大的橘猫", "Both early-October messages are retold with their dates."],
+      ["S-older", "f-false-empty", "pass", "", "The stretch is not declared empty."],
+      ["S-older", "f-internals", "pass", "", "No mechanism vocabulary."]
+    ],
+    "run1/HL1": [
+      ["S-addition", "a-companion", "pass", "Theo — your nephew", "The narrowed question is answered."],
+      ["S-addition", "f-technical", "pass", "", "No system vocabulary."],
+      ["S-addition", "f-whole-fair", "pass", "", "The paddling plan is not brought in."]
+    ]
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "caseId": "H04",
+  "findings": [
+    {
+      "criterionId": "S-detail",
+      "itemId": "a-place",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-detail",
+      "itemId": "a-angler",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-detail",
+      "itemId": "tm-when",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-detail",
+      "itemId": "f-no-record",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-no-invention",
+      "itemId": "f-river-name",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-no-invention",
+      "itemId": "f-person-name",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-no-invention",
+      "itemId": "f-lesson-mixup",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    }
+  ],
+  "reviewer": "agent:<name> | human:<name>",
+  "rubricVersion": "continuity-rubric:v1",
+  "runId": "run-dbccd252-f79f-4252-8dd9-bc0def88d7f6",
+  "schemaVersion": "continuity-acceptance-review:v1"
+}

@@ -1,0 +1,57 @@
+{
+  "schemaVersion": "continuity-acceptance-fixture:v1",
+  "id": "U11",
+  "fixtureVersion": "final-2",
+  "stage": "final",
+  "languageVariant": "en",
+  "defaults": {
+    "locale": "en-US",
+    "timezone": "Pacific/Honolulu"
+  },
+  "history": [
+    {
+      "key": "early-a",
+      "at": "2026-09-04T04:00:00.000Z",
+      "user": "Picked up my first colony of bees this afternoon, a small starter box from a keeper over in Waimanalo. I drove home with it strapped into the back seat and the windows down, humming the whole way. The box, not me.",
+      "assistant": "A humming passenger in the back seat. That is a drive you will remember."
+    },
+    {
+      "key": "early-b",
+      "at": "2026-09-05T20:30:00.000Z",
+      "user": "Moved the frames into the proper hive this morning. I was so nervous that I put my veil on inside out and could not work out why I could see nothing.",
+      "assistant": "Veil on inside out. They were probably as confused as you were."
+    },
+    {
+      "key": "late-a",
+      "at": "2026-09-25T03:30:00.000Z",
+      "user": "Did my first full inspection after work today, Thursday. I finally spotted the queen, on the fourth frame, with a green dot on her back.",
+      "assistant": "A green dot on the fourth frame. Finding her the first time is a small triumph."
+    },
+    {
+      "key": "late-b",
+      "at": "2026-09-26T20:00:00.000Z",
+      "user": "First sting this morning, Saturday, right on the knuckle, because I took a glove off to scratch my nose. My hand looks like a baseball mitt.",
+      "assistant": "One glove off for one itch. The knuckle will remember that longer than you do."
+    }
+  ],
+  "steps": [
+    {
+      "id": "empty",
+      "type": "say",
+      "at": "2026-09-29T22:00:00.000Z",
+      "text": "Did I say anything to you last Friday, the twenty-fifth?"
+    },
+    {
+      "id": "older",
+      "type": "say",
+      "at": "2026-09-29T22:03:00.000Z",
+      "text": "What about the first few days of September? What were we talking about back then?"
+    },
+    {
+      "id": "earliest",
+      "type": "say",
+      "at": "2026-09-29T22:06:00.000Z",
+      "text": "When was the very first time I brought up the bees?"
+    }
+  ]
+}

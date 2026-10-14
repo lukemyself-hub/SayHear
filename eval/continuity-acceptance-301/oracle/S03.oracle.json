@@ -1,0 +1,50 @@
+{
+  "schemaVersion": "continuity-acceptance-oracle:v1",
+  "id": "S03",
+  "title": "Smoke: history holds a correction, the present turn only asks for a recap",
+  "capability": "A message was corrected two days ago. Today the person only asks for a recap. The recap uses the corrected wording, the superseded wording never reaches the Provider, and no Trust Action is triggered. This is the wrong-Action clue from #312: asking to look back is not asking to correct.",
+  "spec": ["#301 baseline", "#312", "#307"],
+  "ownerTickets": ["#313", "#319"],
+  "language": "code-switch (zh with en terms)",
+  "fixture": { "version": "dev-1", "sha256": "2de842a38dc30ca3e21f15cf4a73915ca84085ddcbf44368b1e8964f64589fbb" },
+  "facts": {
+    "allowed": [
+      { "id": "a-demo-thursday", "statement": "The presentation for the customer is on Thursday morning at ten, with the deck half finished.", "sources": ["fix:input"] },
+      { "id": "a-gym", "statement": "After work there was a short run on the treadmill that ended at about twenty minutes.", "sources": ["gym:user"] }
+    ],
+    "forbidden": [
+      { "id": "f-wednesday", "statement": "Placing the customer presentation on Wednesday afternoon at three, which is the superseded wording.", "sources": ["demo:user"] },
+      { "id": "f-ask-which", "statement": "Asking the person which of the two timings is right, or offering to change a record.", "sources": [] }
+    ]
+  },
+  "topics": [
+    { "id": "t-demo", "statement": "Stress over an unfinished deck for a customer presentation.", "sources": ["fix:input"] },
+    { "id": "t-gym", "statement": "A short treadmill session after work.", "sources": ["gym:user"] }
+  ],
+  "time": [
+    { "id": "tm-two-days", "statement": "Both were said on 10 September local time, two days before the question.", "sources": ["demo:user", "gym:user"] }
+  ],
+  "expectedBehavior": [
+    "Recap both subjects in the person's mixed register.",
+    "Use the corrected Thursday timing without remarking that it was changed.",
+    "Propose no Action."
+  ],
+  "failureSignals": [
+    "The superseded Wednesday wording reaches the Provider or the reply.",
+    "A correction or other Action is admitted for a plain recap request.",
+    "The reply turns into a clarification about which timing is right."
+  ],
+  "sourceEligibility": [
+    { "source": "demo:user", "eligibility": "forbidden", "reason": "Superseded by the person's own correction; only the current revision may be used." },
+    { "source": "gym:user", "eligibility": "allowed", "reason": "Retained original expression inside the default background." }
+  ],
+  "criteria": [
+    { "id": "O-commit", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The recap request streams and commits.", "check": { "type": "turn_committed", "step": "recap" } },
+    { "id": "O-corrected-in", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The corrected wording reaches the Provider.", "check": { "type": "outbound_includes_input", "step": "recap", "inputs": ["fix"] } },
+    { "id": "O-superseded-out", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The superseded wording never reaches the Provider.", "check": { "type": "outbound_excludes", "step": "recap", "sources": ["demo:user"] } },
+    { "id": "O-unrelated-in", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The uncorrected message from the same day still reaches the Provider.", "check": { "type": "outbound_includes", "step": "recap", "sources": ["gym:user"] } },
+    { "id": "O-no-action", "kind": "objective", "modes": ["real-model"], "description": "No Action is admitted for a plain recap request.", "check": { "type": "no_action", "step": "recap" } },
+    { "id": "O-deadline", "kind": "objective", "modes": ["real-model"], "description": "First visible text within 3 s and the complete reply within 10 s (CLI network).", "check": { "type": "deadline", "step": "recap", "firstVisibleTextMaxMs": 3000, "completeMaxMs": 10000 } },
+    { "id": "S-recap", "kind": "semantic", "description": "The recap covers both subjects, uses the corrected timing and places them two days back.", "step": "recap", "required": ["t-demo", "t-gym", "a-demo-thursday", "tm-two-days"], "forbidden": ["f-wednesday", "f-ask-which"] }
+  ]
+}

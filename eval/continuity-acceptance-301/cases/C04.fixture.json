@@ -1,0 +1,43 @@
+{
+  "schemaVersion": "continuity-acceptance-fixture:v1",
+  "id": "C04",
+  "fixtureVersion": "dev-2",
+  "stage": "development",
+  "languageVariant": "zh",
+  "defaults": { "locale": "zh-CN", "timezone": "Asia/Shanghai" },
+  "history": [
+    {
+      "key": "piano",
+      "at": "2026-06-13T08:40:00.000Z",
+      "user": "下午路过小区活动室，里面那台旧立式钢琴没人用，我就坐下弹了二十来分钟。好几年没碰了，左手老是跟不上，有个小男孩趴在琴边看，还帮我按住了翘起来的谱夹。",
+      "assistant": "隔了好几年又坐回琴前，手跟不上大概也在意料之中。"
+    },
+    {
+      "key": "piano-after",
+      "at": "2026-06-13T08:46:00.000Z",
+      "user": "弹完手指有点酸，不过出来的时候心情挺轻的。",
+      "assistant": "酸归酸，听起来这二十分钟是值得的。"
+    },
+    {
+      "key": "speech-a",
+      "at": "2026-09-12T12:15:00.000Z",
+      "user": "下周三要在部门例会上讲十分钟，稿子改到第三版了，开头那段还是觉得太硬。",
+      "assistant": "第三版了还卡在开头，看来你对这十分钟挺上心。"
+    },
+    {
+      "key": "speech-b",
+      "at": "2026-09-14T13:30:00.000Z",
+      "user": "今天对着镜子把演讲从头到尾练了两遍，第二遍超时了一分多钟，手也一直不知道往哪放。",
+      "assistant": "两遍下来至少知道哪儿会超时了。"
+    }
+  ],
+  "steps": [
+    {
+      "id": "ask",
+      "type": "say",
+      "at": "2026-09-15T02:10:00.000Z",
+      "text": "我之前是不是跟你说过有一回去弹琴？当时是什么情况来着，我有点记不清了。",
+      "historyReview": { "searchTerms": ["弹琴", "钢琴", "弹钢琴"] }
+    }
+  ]
+}

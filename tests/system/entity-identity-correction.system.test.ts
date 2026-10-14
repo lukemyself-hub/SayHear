@@ -599,6 +599,7 @@ async function truncateBusinessSchema() {
       internal_diagnostic_access_grants,
       provider_egress_consents,
       provider_egress_dispositions,
+      history_recall_results,
       compiled_context_revision_refs,
       compiled_contexts,
       model_run_attempts,

@@ -1,0 +1,25 @@
+{
+  "schemaVersion": "continuity-acceptance-fixture:v1",
+  "id": "H03",
+  "fixtureVersion": "final-1",
+  "stage": "final",
+  "languageVariant": "en",
+  "defaults": { "locale": "en-GB", "timezone": "Europe/London" },
+  "history": [
+    { "key": "landing", "at": "2026-10-20T16:20:00.000Z", "timezone": "Asia/Singapore", "user": "Landed at Changi at last. My suitcase came off the belt with a wheel missing and I am too wrung out to queue at the desk about it.", "assistant": "A long haul and a three-wheeled suitcase. The desk can wait until you have slept." },
+    { "key": "legacy", "at": "2026-10-22T19:00:00.000Z", "legacyMissingTimezone": true, "user": "Back in my own flat. The basil on the windowsill has collapsed completely but the spider plant looks smug.", "assistant": "One casualty and one survivor. The spider plant always wins." },
+    { "key": "n1", "at": "2026-10-24T22:45:00.000Z", "user": "The last of the guests from Dad's seventieth have just gone. I have washed something like forty glasses and I am sitting in the kitchen next to an empty cake stand.", "assistant": "Forty glasses and a bare cake stand. That is the sign of a good party." },
+    { "key": "n2", "at": "2026-10-24T23:10:00.000Z", "user": "Gone twelve now. My brother Callum stayed behind with the end of the port and we have dragged two chairs out onto the patio.", "assistant": "Port on the patio after everyone has left sounds like the best part of the evening." },
+    { "key": "n3", "at": "2026-10-24T23:35:00.000Z", "user": "He has just told me he is taking the job in Aberdeen in the new year. I was not ready for how much that would sting.", "assistant": "News like that can be said very lightly and still land heavily." },
+    { "key": "n4", "at": "2026-10-25T00:00:00.000Z", "user": "He has gone up to bed. I am stacking the folding chairs in the hall, slowly, one at a time.", "assistant": "Slowly sounds right. No one is timing you." },
+    { "key": "n5", "at": "2026-10-25T00:25:00.000Z", "user": "Found one last sausage roll under a sheet of foil and ate it cold, standing over the bin.", "assistant": "The final sausage roll belongs to whoever does the clearing up." },
+    { "key": "n6", "at": "2026-10-25T00:50:00.000Z", "user": "Still up. I keep wondering who is going to do Sunday lunch with Dad once Callum has moved.", "assistant": "That is a hard gap to picture filled by anyone else." },
+    { "key": "n7", "at": "2026-10-25T01:15:00.000Z", "user": "Oh, the clocks have just gone back. The cooker says quarter past one all over again, so I have been handed this hour twice.", "assistant": "A second go at the same hour. Use it however you like." },
+    { "key": "n8", "at": "2026-10-25T01:40:00.000Z", "user": "Right, that is me. Lights off.", "assistant": "Good night." }
+  ],
+  "steps": [
+    { "id": "night", "type": "say", "at": "2026-10-26T12:00:00.000Z", "text": "What did I tell you on Saturday night before midnight, and what came once it was past midnight?" },
+    { "id": "order", "type": "say", "at": "2026-10-26T12:02:00.000Z", "text": "Which did I mention first, the last sausage roll or the clocks going back?" },
+    { "id": "trip", "type": "say", "at": "2026-10-26T12:04:00.000Z", "text": "And what day did my flight get in on that trip?" }
+  ]
+}

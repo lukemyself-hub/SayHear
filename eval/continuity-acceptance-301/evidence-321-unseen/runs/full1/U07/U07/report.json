@@ -1,0 +1,617 @@
+{
+  "budget": {
+    "blockers": [],
+    "capUsdMicros": 10000000,
+    "estimatedCostUsdMicros": 422400,
+    "inputTokenUpperBound": 352000,
+    "mode": "real-model",
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "outputTokenUpperBound": 264000,
+    "paidRequestUpperBound": 22,
+    "remainingUsdMicros": 2969925,
+    "requestsPerStepUpperBound": 4,
+    "shape": {
+      "generationSteps": 3,
+      "scheduledScans": 5,
+      "seedTurns": 6
+    },
+    "status": "ready",
+    "unknownCostEntries": 0,
+    "waivedPreconditions": [
+      {
+        "by": "Luke",
+        "date": "2026-10-11",
+        "statement": "Relayed to the T08 agent by the coordinating agent as Luke's words: \"#307 的遗留问题,应当在 T01–T07 开发期间解决了(包括耗时问题和回忆历史消息等),因此 T08 可以正常启动\" and \"授权 T08 调用 OpenCode Go 跑真实 DeepSeek V4.1 Flash 模型\". This is a decision to proceed. It is not a record that the #307 online acceptance was completed: #307 was closed with its online acceptance not passed.",
+        "id": "issue-307-online-acceptance"
+      }
+    ]
+  },
+  "case": {
+    "caseId": "U07",
+    "criteria": [
+      {
+        "description": "Seeded history is read back verbatim through the normal history API.",
+        "evidence": [],
+        "id": "INV-seed-readback",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "All 6 seeded turns are present exactly once.",
+        "status": "pass"
+      },
+      {
+        "description": "No oracle text, scenario title or expected answer appears in any Provider request.",
+        "evidence": [],
+        "id": "INV-oracle-not-in-outbound",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "Scanned 957 outbound strings; none carries oracle text.",
+        "status": "pass"
+      },
+      {
+        "description": "Authoritative history contains every message exactly once.",
+        "evidence": [],
+        "id": "INV-no-duplicate-messages",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "18 messages, no duplicates.",
+        "status": "pass"
+      },
+      {
+        "description": "The first question streams and commits.",
+        "evidence": [
+          "steps[where].chat.httpStatus=200",
+          "steps[where].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-commit",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "The second question streams and commits.",
+        "evidence": [
+          "steps[drinks].chat.httpStatus=200",
+          "steps[drinks].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-commit-drinks",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "The third question streams and commits.",
+        "evidence": [
+          "steps[july].chat.httpStatus=200",
+          "steps[july].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-commit-july",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "The signing and the person's later correction of the day both reach the Provider.",
+        "evidence": [
+          "contract:user: providerRequest=present, inspector.referencedEvents=present",
+          "date-fix:user: providerRequest=present, inspector.referencedEvents=present"
+        ],
+        "id": "O-correction-source",
+        "kind": "objective",
+        "owner": "#318",
+        "reason": "Every required source reached the Provider and is recorded by the Inspector.",
+        "status": "pass"
+      },
+      {
+        "description": "The plan and its cancellation both reach the Provider.",
+        "evidence": [
+          "drinks-plan:user: providerRequest=present, inspector.referencedEvents=present",
+          "drinks-off:user: providerRequest=present, inspector.referencedEvents=present"
+        ],
+        "id": "O-cancel-source",
+        "kind": "objective",
+        "owner": "#318",
+        "reason": "Every required source reached the Provider and is recorded by the Inspector.",
+        "status": "pass"
+      },
+      {
+        "description": "The earlier state and the current one both reach the Provider.",
+        "evidence": [
+          "old-job:user: providerRequest=present, inspector.referencedEvents=present",
+          "first-week:user: providerRequest=absent, inspector.referencedEvents=absent"
+        ],
+        "id": "O-timeline-source",
+        "kind": "objective",
+        "owner": "#318",
+        "reason": "A required source did not reach the Provider request for this turn.",
+        "status": "fail"
+      },
+      {
+        "description": "The present state uses the corrected day and the current workplace.",
+        "evidence": [],
+        "id": "S-current",
+        "kind": "semantic",
+        "owner": "#318",
+        "reason": "No independent review was supplied for this answer.",
+        "status": "needs-review"
+      },
+      {
+        "description": "A cancelled plan is reported as cancelled.",
+        "evidence": [],
+        "id": "S-plan",
+        "kind": "semantic",
+        "owner": "#318",
+        "reason": "No independent review was supplied for this answer.",
+        "status": "needs-review"
+      },
+      {
+        "description": "Then and now are each told correctly and kept apart.",
+        "evidence": [],
+        "id": "S-timeline",
+        "kind": "semantic",
+        "owner": "#318",
+        "reason": "No independent review was supplied for this answer.",
+        "status": "needs-review"
+      },
+      {
+        "description": "The comparison is given without passing judgement on the change.",
+        "evidence": [],
+        "id": "P-stance",
+        "kind": "subjective",
+        "owner": "#318",
+        "reason": "No independent review was supplied for this answer.",
+        "status": "needs-review"
+      }
+    ],
+    "mode": "real-model",
+    "pipelineOnly": [],
+    "reviewer": null,
+    "runId": "run-65c6be52-699f-413b-b419-471ab9ae0d69",
+    "status": "fail"
+  },
+  "diagnosis": [
+    {
+      "diagnosis": {
+        "disagreements": [
+          "The Inspector records a history read but the answering payload carries none."
+        ],
+        "payloadReadStatus": null,
+        "readState": "complete",
+        "sources": [
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: present",
+              "provider payload: earlier-messages entry 1",
+              "day of entry 1: 2026-08-11 (expected 2026-08-11)",
+              "semantic review: none yet; the source reached the model intact, its use is not judged"
+            ],
+            "fault": "undetermined",
+            "source": "contract:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-13",
+              "requestSequence": 13
+            }
+          },
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: present",
+              "provider payload: earlier-messages entry 5",
+              "day of entry 5: 2026-08-20 (expected 2026-08-20)",
+              "semantic review: none yet; the source reached the model intact, its use is not judged"
+            ],
+            "fault": "undetermined",
+            "source": "date-fix:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-13",
+              "requestSequence": 13
+            }
+          }
+        ]
+      },
+      "stepId": "where"
+    },
+    {
+      "diagnosis": {
+        "disagreements": [
+          "The Inspector records a history read but the answering payload carries none."
+        ],
+        "payloadReadStatus": null,
+        "readState": "complete",
+        "sources": [
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: present",
+              "provider payload: earlier-messages entry 3",
+              "day of entry 3: 2026-08-11 (expected 2026-08-11)",
+              "semantic review: none yet; the source reached the model intact, its use is not judged"
+            ],
+            "fault": "undetermined",
+            "source": "drinks-plan:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-15",
+              "requestSequence": 15
+            }
+          },
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: present",
+              "provider payload: earlier-messages entry 5",
+              "day of entry 5: 2026-08-27 (expected 2026-08-27)",
+              "semantic review: none yet; the source reached the model intact, its use is not judged"
+            ],
+            "fault": "undetermined",
+            "source": "drinks-off:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-15",
+              "requestSequence": 15
+            }
+          }
+        ]
+      },
+      "stepId": "drinks"
+    },
+    {
+      "diagnosis": {
+        "disagreements": [],
+        "payloadReadStatus": "partial",
+        "readState": "partial",
+        "sources": [
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: present",
+              "provider payload: earlier-messages entry 1",
+              "day of entry 1: 2026-07-14 (expected 2026-07-14)",
+              "semantic review: none yet; the source reached the model intact, its use is not judged"
+            ],
+            "fault": "undetermined",
+            "source": "old-job:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-17",
+              "requestSequence": 17
+            }
+          },
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: absent",
+              "provider payload: absent",
+              "coverage: omitted={} enumerationComplete=true"
+            ],
+            "fault": "selection_omitted",
+            "source": "first-week:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-17",
+              "requestSequence": 17
+            }
+          }
+        ]
+      },
+      "stepId": "july"
+    }
+  ],
+  "identity": {
+    "fixtureSha256": "cead19fac49b39a1b0dbc2a658ec7580ff285c9d644fbb3dfdffededf2745a17",
+    "fixtureVersion": "final-2",
+    "gitCommit": "b48f2fb03614b8f6a485a000c6efcda9e85f625d",
+    "gitDirty": true,
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "historyRecallGovernance": "active",
+    "recentContextGovernance": "active",
+    "runId": "run-65c6be52-699f-413b-b419-471ab9ae0d69",
+    "oracleSha256": "3b6718f266da235ac3a63574d6c16f83d2ce038461a7e7bdb536e6019542a13f",
+    "title": "U07 Unseen: a change of job, a corrected starting day and a send-off that was called off"
+  },
+  "remainingRisks": [
+    "The working tree had uncommitted changes; the commit alone does not identify the code that ran.",
+    "Timings are CLI network observations, not browser rendering times (T08 #321 covers the browser)."
+  ],
+  "reproducibilityDigest": "6822c2a7706393708acc6472e747464a5adc60a43634dad5cf8c55145f5b6279",
+  "schemaVersion": "continuity-acceptance-report:v1",
+  "sourceManifest": [
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "old-job:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "old-job:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "contract:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "contract:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "drinks-plan:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "drinks-plan:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "date-fix:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "date-fix:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "drinks-off:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "drinks-off:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "first-week:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "first-week:assistant"
+        }
+      ],
+      "stepId": "where"
+    },
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "old-job:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "old-job:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "contract:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "contract:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "drinks-plan:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "drinks-plan:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "date-fix:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "date-fix:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "drinks-off:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "drinks-off:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "first-week:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "first-week:assistant"
+        }
+      ],
+      "stepId": "drinks"
+    },
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "old-job:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "old-job:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "contract:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "contract:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "drinks-plan:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "drinks-plan:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "date-fix:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "date-fix:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "drinks-off:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "drinks-off:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "first-week:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "first-week:assistant"
+        }
+      ],
+      "stepId": "july"
+    }
+  ],
+  "timings": [
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 31.765124999999898,
+      "cliCommittedMs": 14856.645791,
+      "cliFirstVisibleTextMs": 13644.813041,
+      "cliStreamClosedMs": 14856.688916000001,
+      "providerLatencyMs": 0,
+      "stepId": "where"
+    },
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 21.029624999999214,
+      "cliCommittedMs": 8288.675207999997,
+      "cliFirstVisibleTextMs": 7135.041792,
+      "cliStreamClosedMs": 8288.745499999997,
+      "providerLatencyMs": 0,
+      "stepId": "drinks"
+    },
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 19.926916000000347,
+      "cliCommittedMs": 18901.374125000002,
+      "cliFirstVisibleTextMs": 17447.366458000004,
+      "cliStreamClosedMs": 18901.447125,
+      "providerLatencyMs": 0,
+      "stepId": "july"
+    }
+  ],
+  "transcript": [
+    {
+      "assistant": "Let's put the pieces back where they were. On 11 August you told me you'd signed the contract to be kitchen manager at Oakfield Primary — term time only, done by half past three every day — and that you were handing your notice in at the hotel the next day. Then on 20 August you came back to put something right: the school had rung, your background check hadn't come back, and your first day had moved from the first of September to the eighth. That's the last thing you told me about it, so the eighth is as far as I can go with you — I've nothing here about how that day actually went. Your head being all over the place tonight is fair enough, given how many times those dates shifted on you.",
+      "at": "2026-09-21T18:05:00.000Z",
+      "stepId": "where",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "My head is all over the place tonight. Where is it I work now, and what day did I actually start?"
+    },
+    {
+      "assistant": "The send-off is the one thing that didn't get to happen. On 11 August you said you'd take the whole kitchen crew out for leaving drinks at the Anchor on the Friday before you started, your shout. Then on 27 August you told me it was off — a pipe had burst above the hotel kitchen that Tuesday, the whole crew was on double shifts clearing it up, so nobody could get away, and you'd put it in the group chat that you'd leave it. That's the last word on it, as far as anything you've told me goes — it was called off, not moved to another night. Which is a shame, given how much you'd been looking forward to standing them all a round.",
+      "at": "2026-09-21T18:08:00.000Z",
+      "stepId": "drinks",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "And that send-off I said I was going to throw, what became of it?"
+    },
+    {
+      "assistant": "In July the one thing I have from you is the fourteenth, when you said you'd been six years on the line at the Calloway — split shifts, home after midnight five nights a week, and no Sunday dinner with your own kids since the spring. That's how you put it at the time, and it didn't sound like a good trade. Now the day looks turned right round: Oakfield Primary, term time, finished by half past three. But the last word you gave me about that job was the start date moving to the eighth of September, and you've not told me anything since about what it's actually like there, so the comparison I can honestly make is the plain one — midnight finishes against half past three, six years of it against a fortnight in. How the two feel from the inside is where I've got nothing, and you'd know that far better than me.",
+      "at": "2026-09-21T18:11:00.000Z",
+      "stepId": "july",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "Come to think of it, what was work like for me back in July? And how does that compare with now?"
+    }
+  ],
+  "usage": {
+    "inputTokens": 10362,
+    "outputTokens": 3167,
+    "paidCostUsdMicros": null,
+    "providerRequests": 6
+  }
+}

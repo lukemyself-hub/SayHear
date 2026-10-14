@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "continuity-acceptance-fixture:v1",
+  "id": "H06",
+  "fixtureVersion": "final-1",
+  "stage": "final",
+  "languageVariant": "code-switch",
+  "defaults": { "locale": "zh-CN", "timezone": "Asia/Singapore" },
+  "history": [
+    { "key": "roommate", "at": "2026-09-22T12:40:00.000Z", "user": "我大学室友 Kevin 下个月要拿他那个 startup 去 pitch 一家 VC，叫我周末帮他 review 一下 deck。", "assistant": "帮他过 deck，看来这个周末你被预定了。" },
+    { "key": "roommate-after", "at": "2026-09-27T10:15:00.000Z", "user": "昨晚陪 Kevin 把 deck 从头到尾过了两遍，他 financial model 那几页很扎实，就是一到 Q&A 就容易慌。", "assistant": "数字扎实、问答发慌，这个顺序比倒过来好练。" },
+    { "key": "designer", "at": "2026-10-13T05:30:00.000Z", "user": "隔壁组新来了个 designer 也叫 Kevin，今天 design review 上把我的 wireframe 从头批到尾，说整个 flow 要重做。", "assistant": "头一回 review 就要你整个 flow 重做，他是你们这个项目的 design lead 吗？" },
+    { "key": "designer-reply", "at": "2026-10-13T05:34:00.000Z", "user": "现在不想聊他。反正一下午心情都被搞坏了。", "assistant": "好，那先不说他。被从头批到尾，换谁都窝火。" },
+    { "key": "own-pitch", "at": "2026-10-19T13:20:00.000Z", "user": "其实我自己上周四也偷偷给一个 angel 讲了我的 side project，讲了四十分钟，对方一直追着问 unit economics，出来后背都是汗。", "assistant": "被追着问四十分钟 unit economics，后背出汗太正常了。" }
+  ],
+  "steps": [
+    { "id": "ping", "type": "say", "at": "2026-10-22T04:10:00.000Z", "text": "Kevin 刚 WhatsApp 我，说 pitch 有消息了，叫我周末出去喝一杯。" },
+    { "id": "role", "type": "say", "at": "2026-10-22T04:13:00.000Z", "text": "另一个 Kevin 今天又在 Slack 上 @ 我，你还记得他在我们项目里是什么角色吗？" }
+  ]
+}

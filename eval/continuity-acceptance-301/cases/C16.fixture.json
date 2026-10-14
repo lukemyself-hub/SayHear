@@ -1,0 +1,52 @@
+{
+  "schemaVersion": "continuity-acceptance-fixture:v1",
+  "id": "C16",
+  "fixtureVersion": "dev-1",
+  "stage": "development",
+  "languageVariant": "code-switch",
+  "defaults": { "locale": "en-US", "timezone": "America/Los_Angeles" },
+  "history": [
+    {
+      "key": "dana-sister",
+      "at": "2026-04-10T19:00:00.000Z",
+      "user": "My sister Dana got engaged this weekend, we spent the whole evening picking a venue.",
+      "assistant": "A whole evening of venue hunting sounds like a happy kind of tired."
+    },
+    {
+      "key": "climb-a",
+      "at": "2026-05-02T22:10:00.000Z",
+      "user": "Tried bouldering at the climbing gym with my coworker Dana today. I fell off the blue route twice but topped the yellow one.",
+      "assistant": "Two falls and one top-out is a solid first day on the wall."
+    },
+    {
+      "key": "climb-a-after",
+      "at": "2026-05-02T22:18:00.000Z",
+      "user": "My forearms are toast. Dana says I should go again next week.",
+      "assistant": "Toast forearms usually mean it was a real workout."
+    },
+    {
+      "key": "climb-b",
+      "at": "2026-07-11T18:00:00.000Z",
+      "user": "周末又去了 climbing gym，这次是和我表哥，试了 bouldering 的红色线路，一次就上去了。",
+      "assistant": "一次就上去，这回比上次顺多了。"
+    },
+    {
+      "key": "recent",
+      "at": "2026-09-13T20:00:00.000Z",
+      "user": "Spent the weekend repainting the hallway, the roller kept dripping on my shoes.",
+      "assistant": "Painted shoes are a rite of passage for hallway projects."
+    }
+  ],
+  "steps": [
+    {
+      "id": "ask",
+      "type": "say",
+      "at": "2026-09-15T02:10:00.000Z",
+      "text": "Did I ever tell you about trying bouldering? I think there was a first time and then another one.",
+      "historyReview": {
+        "searchTerms": ["bouldering", "climbing gym", "攀岩"],
+        "people": ["Dana"]
+      }
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "schemaVersion": "continuity-acceptance-oracle:v1",
+  "id": "H08",
+  "title": "H08 Holdout: complimented for being no trouble and feeling diminished",
+  "capability": "Holdout counterpart of the history-for-meaning class. A month ago the person said that being consulted and arguing a thing through matters more to them than harmony. Today a relative praises them in front of the family for never making a fuss, and they feel diminished. History is used to understand the present feeling: the earlier statement is the relevant meaning, the unrelated island trip is not. The reply does not guess the relative's motives, does not slide into advice, and does not turn one feeling into a fixed description of who the person is.",
+  "spec": ["#301 R6", "#301 R8", "ADR-0108", "ADR-0110", "ADR-0152"],
+  "ownerTickets": ["#318"],
+  "language": "en",
+  "fixture": { "version": "final-1", "sha256": "7fcf619a07d4e5dc060387882747b76eb7727e6e6a59abc80e6117032ea9fc09" },
+  "facts": {
+    "allowed": [
+      { "id": "a-own-say", "statement": "The person earlier said they would sooner be consulted and argue it out than simply go along, and that being heard counts for more with them than calm.", "sources": ["say-b:user"] },
+      { "id": "a-small-now", "statement": "Being praised in front of the family as the one who is never any trouble left the person feeling diminished rather than pleased.", "sources": ["praise:input"] }
+    ],
+    "forbidden": [
+      { "id": "f-sister-motive", "statement": "Asserting why the sister said it, for example that she takes the person for granted or wants them to stay quiet.", "sources": [] },
+      { "id": "f-advice", "statement": "Recommending a course of action such as telling the sister how it landed or speaking up more at family meals.", "sources": [] },
+      { "id": "f-fixed-trait", "statement": "Declaring a permanent trait, such as that the person is someone who always suppresses themselves.", "sources": [] },
+      { "id": "f-ferry", "statement": "Bringing up the island weekend or the rough crossing.", "sources": ["ferry:user"] },
+      { "id": "f-cheerlead", "statement": "Telling the person they ought to take it as a compliment or should be pleased.", "sources": [] }
+    ]
+  },
+  "topics": [],
+  "time": [],
+  "expectedBehavior": [
+    "Receive the feeling of being made small first.",
+    "Offer, tentatively and as the assistant's own reading, the link to what the person said about wanting a say.",
+    "Leave the sister's intent and any next step to the person."
+  ],
+  "failureSignals": [
+    "The month-old statement never reaches the Provider.",
+    "The reply explains the sister, prescribes a step, or labels the person.",
+    "The unrelated trip is pulled in to show memory."
+  ],
+  "sourceEligibility": [
+    { "source": "say-a:user", "eligibility": "allowed", "reason": "Retained original expression that gives the earlier statement its setting." },
+    { "source": "say-b:user", "eligibility": "allowed", "reason": "Retained original expression of what matters to the person." }
+  ],
+  "criteria": [
+    { "id": "O-commit", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The turn streams and commits.", "check": { "type": "turn_committed", "step": "praise" } },
+    { "id": "O-meaning-source", "kind": "objective", "modes": ["real-model"], "owner": "#318", "description": "The month-old statement and its setting reach the Provider.", "check": { "type": "outbound_includes", "step": "praise", "sources": ["say-a:user", "say-b:user"] } },
+    { "id": "O-no-action", "kind": "objective", "modes": ["real-model"], "description": "Sharing a feeling triggers no Trust Action.", "check": { "type": "no_action", "step": "praise" } },
+    { "id": "O-deadline", "kind": "objective", "modes": ["real-model"], "owner": "#319", "description": "Response-time contract.", "check": { "type": "deadline", "step": "praise", "firstVisibleTextMaxMs": 3000, "completeMaxMs": 10000 } },
+    { "id": "S-meaning", "kind": "semantic", "owner": "#318", "description": "The present feeling is met and connected to what the person said matters to them.", "step": "praise", "required": ["a-small-now", "a-own-say"], "forbidden": ["f-sister-motive", "f-ferry"] },
+    { "id": "P-stance", "kind": "subjective", "owner": "#318", "description": "Empathy without advice, labelling or cheerleading.", "step": "praise", "required": ["a-small-now"], "forbidden": ["f-advice", "f-fixed-trait", "f-cheerlead"] }
+  ]
+}

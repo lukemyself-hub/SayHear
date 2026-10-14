@@ -1,0 +1,46 @@
+{
+  "schemaVersion": "continuity-acceptance-oracle:v1",
+  "id": "HL1",
+  "title": "HL1 Holdout: typing on while a reply is prepared, and a Provider that never answers, at the product's own 30 second budget",
+  "capability": "Holdout counterpart of the request-lifecycle case, run with the real model and the product's default request budget. While a reply is still being prepared the person keeps typing: the newer message is taken as an addition, the older reply is never shown and never stored. A reply whose Provider does not answer is stopped at the 30 second request deadline with an honest timeout, commits nothing late and leaves nothing running, and the conversation carries on normally afterwards. The stalled Provider is an injected fault; that request is never sent to the real Provider.",
+  "spec": ["#301 R10", "#319", "ADR-0152"],
+  "ownerTickets": ["#319"],
+  "language": "en",
+  "fixture": { "version": "final-1", "sha256": "5bd7013d8eb5d70eeb95c280801eb9d024d44f504f6e0fe2171dcbab156341a1" },
+  "facts": {
+    "allowed": [
+      { "id": "a-companion", "statement": "The person's young relative, a sibling's son, came along to the autumn show and they shared small fried rings of dough in the stands.", "sources": ["fair:user"] }
+    ],
+    "forbidden": [
+      { "id": "f-technical", "statement": "Explaining the delay or the stopped request in system terms such as timeouts, streams or retries.", "sources": [] },
+      { "id": "f-whole-fair", "statement": "Going on about the paddling plan when only the companion was asked for.", "sources": ["canoe:user"] }
+    ]
+  },
+  "topics": [],
+  "time": [],
+  "expectedBehavior": [
+    "The reply to the addition answers the narrowed question.",
+    "The superseded reply never appears on the stream or in history.",
+    "The stalled request ends with a timeout no later than the 30 second budget and the next message is answered normally."
+  ],
+  "failureSignals": [
+    "A reply to a message the person already replaced appears on the screen or in history.",
+    "A stalled request keeps the person waiting past the budget or is answered late.",
+    "A command or attempt stays running after the request ended."
+  ],
+  "sourceEligibility": [
+    { "source": "fair:user", "eligibility": "allowed", "reason": "Recent original expression; names the companion." },
+    { "source": "canoe:user", "eligibility": "allowed", "reason": "Recent original expression." }
+  ],
+  "criteria": [
+    { "id": "O-replaced-never-shown", "kind": "objective", "modes": ["real-model"], "owner": "#319", "description": "The reply to the replaced question is neither shown nor stored.", "check": { "type": "replaced_reply_never_shown", "step": "ask" } },
+    { "id": "O-addition-commits", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "History holds the addition once, followed by exactly its reply.", "check": { "type": "history_matches_stream", "step": "supplement" } },
+    { "id": "O-addition-keeps-earlier-question", "kind": "objective", "modes": ["real-model"], "owner": "#319", "description": "The replaced question still reaches the Provider with the addition.", "check": { "type": "outbound_includes_input", "step": "supplement", "inputs": ["ask"] } },
+    { "id": "O-addition-sources", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The message naming the companion reaches the Provider.", "check": { "type": "outbound_includes", "step": "supplement", "sources": ["fair:user"] } },
+    { "id": "O-stall-stops", "kind": "objective", "modes": ["real-model"], "owner": "#319", "description": "With the product's own budget, a request whose Provider never answers ends with a timeout by 30 seconds (31 allowed for the client to see it), commits nothing late and leaves nothing running.", "check": { "type": "stopped_at_deadline", "step": "stall", "maxMs": 31000 } },
+    { "id": "O-after-stall", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The next message is answered normally.", "check": { "type": "history_matches_stream", "step": "after" } },
+    { "id": "O-supplement-deadline", "kind": "objective", "modes": ["real-model"], "owner": "#319", "description": "Response-time contract for the addition.", "check": { "type": "deadline", "step": "supplement", "firstVisibleTextMaxMs": 3000, "completeMaxMs": 10000 } },
+    { "id": "O-after-deadline", "kind": "objective", "modes": ["real-model"], "owner": "#319", "description": "Response-time contract for the message after the stall.", "check": { "type": "deadline", "step": "after", "firstVisibleTextMaxMs": 3000, "completeMaxMs": 10000 } },
+    { "id": "S-addition", "kind": "semantic", "owner": "#319", "description": "The addition is answered as asked, in ordinary words.", "step": "supplement", "required": ["a-companion"], "forbidden": ["f-technical", "f-whole-fair"] }
+  ]
+}

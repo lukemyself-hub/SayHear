@@ -10,6 +10,8 @@ import {
   type ReactNode,
 } from "react";
 
+import { HistoryReviewBody } from "./history-review-panel";
+import { historyReadState, turnDispositionLabel } from "./history-review-data";
 import {
   DIALOGUE_STATE_FIELDS,
   humanizeDiagnosticCode,
@@ -348,6 +350,19 @@ function InspectionReport(props: { inspection: ContextInspectorPayload }) {
         title="Safety Posture"
       >
         <SafetyPostureBody inspection={props.inspection} />
+      </ContextDisclosure>
+
+      <ContextDisclosure
+        open={props.inspection.historyRecall != null}
+        status={
+          props.inspection.historyRecall
+            ? `${historyReadState(props.inspection.historyRecall)} read`
+            : turnDispositionLabel(props.inspection.turn)
+        }
+        subtitle="How this Turn went: the history branch it took, what was read and kept, and which commands carried it. Content-free; the original words open separately."
+        title="History review and Turn"
+      >
+        <HistoryReviewBody inspection={props.inspection} />
       </ContextDisclosure>
 
       <ContextDisclosure
@@ -1155,12 +1170,13 @@ function CommandId(props: { id: string }) {
 
 function ContextDisclosure(props: {
   children: ReactNode;
+  open?: boolean;
   status?: ReactNode;
   subtitle?: string;
   title: string;
 }) {
   return (
-    <details className="inspectorCard contextDisclosure">
+    <details className="inspectorCard contextDisclosure" open={props.open}>
       <summary className="contextDisclosureSummary">
         <span className="contextDisclosureTitle">{props.title}</span>
         {props.subtitle ? (

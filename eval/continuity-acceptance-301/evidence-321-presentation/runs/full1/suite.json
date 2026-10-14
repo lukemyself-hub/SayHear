@@ -1,0 +1,302 @@
+{
+  "cases": [
+    {
+      "caseId": "H01",
+      "status": "fail"
+    },
+    {
+      "caseId": "H02",
+      "status": "fail"
+    },
+    {
+      "caseId": "H03",
+      "status": "fail"
+    },
+    {
+      "caseId": "H04",
+      "status": "fail"
+    },
+    {
+      "caseId": "H05",
+      "status": "fail"
+    },
+    {
+      "caseId": "H06",
+      "status": "fail"
+    },
+    {
+      "caseId": "H07",
+      "status": "fail"
+    },
+    {
+      "caseId": "H08",
+      "status": "fail"
+    },
+    {
+      "caseId": "H09",
+      "status": "fail"
+    },
+    {
+      "caseId": "H10",
+      "status": "fail"
+    },
+    {
+      "caseId": "H11",
+      "status": "fail"
+    },
+    {
+      "caseId": "H12",
+      "status": "fail"
+    },
+    {
+      "caseId": "HL1",
+      "status": "fail"
+    }
+  ],
+  "knownRed": {
+    "unexpectedGreen": [],
+    "unexpectedRed": [
+      {
+        "caseId": "H01",
+        "criterionId": "O-commit",
+        "reason": "The turn did not end in a committed assistant reply."
+      },
+      {
+        "caseId": "H01",
+        "criterionId": "O-detail-commit",
+        "reason": "The turn did not end in a committed assistant reply."
+      },
+      {
+        "caseId": "H01",
+        "criterionId": "O-detail-source",
+        "reason": "A required source did not reach the Provider request for this turn."
+      },
+      {
+        "caseId": "H01",
+        "criterionId": "O-recap-deadline",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed."
+      },
+      {
+        "caseId": "H01",
+        "criterionId": "O-detail-deadline",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed."
+      },
+      {
+        "caseId": "H01",
+        "criterionId": "S-topics",
+        "reason": "There is no committed answer to review."
+      },
+      {
+        "caseId": "H01",
+        "criterionId": "S-detail",
+        "reason": "There is no committed answer to review."
+      },
+      {
+        "caseId": "H02",
+        "criterionId": "O-said-deadline",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed."
+      },
+      {
+        "caseId": "H02",
+        "criterionId": "O-happened-deadline",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed."
+      },
+      {
+        "caseId": "H02",
+        "criterionId": "O-when-deadline",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed."
+      },
+      {
+        "caseId": "H02",
+        "criterionId": "O-commit-market-when",
+        "reason": "The turn did not end in a committed assistant reply."
+      },
+      {
+        "caseId": "H02",
+        "criterionId": "O-market-when-deadline",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed."
+      },
+      {
+        "caseId": "H02",
+        "criterionId": "S-market-when",
+        "reason": "There is no committed answer to review."
+      },
+      {
+        "caseId": "H03",
+        "criterionId": "O-night-deadline",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed."
+      },
+      {
+        "caseId": "H03",
+        "criterionId": "O-order-deadline",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed."
+      },
+      {
+        "caseId": "H03",
+        "criterionId": "O-trip-deadline",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed."
+      },
+      {
+        "caseId": "H04",
+        "criterionId": "O-deadline",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed."
+      },
+      {
+        "caseId": "H05",
+        "criterionId": "O-bare-older",
+        "reason": "A required source did not reach the Provider request for this turn."
+      },
+      {
+        "caseId": "H05",
+        "criterionId": "O-garden-deadline",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed."
+      },
+      {
+        "caseId": "H05",
+        "criterionId": "O-cued-deadline",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed."
+      },
+      {
+        "caseId": "H06",
+        "criterionId": "O-flatmate-source",
+        "reason": "A required source did not reach the Provider request for this turn."
+      },
+      {
+        "caseId": "H06",
+        "criterionId": "O-ping-deadline",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed."
+      },
+      {
+        "caseId": "H06",
+        "criterionId": "O-role-deadline",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed."
+      },
+      {
+        "caseId": "H07",
+        "criterionId": "O-correction-source",
+        "reason": "A required source did not reach the Provider request for this turn."
+      },
+      {
+        "caseId": "H07",
+        "criterionId": "O-timeline-source",
+        "reason": "A required source did not reach the Provider request for this turn."
+      },
+      {
+        "caseId": "H07",
+        "criterionId": "O-where-deadline",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed."
+      },
+      {
+        "caseId": "H07",
+        "criterionId": "O-party-deadline",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed."
+      },
+      {
+        "caseId": "H07",
+        "criterionId": "O-september-deadline",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed."
+      },
+      {
+        "caseId": "H08",
+        "criterionId": "O-deadline",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed."
+      },
+      {
+        "caseId": "H09",
+        "criterionId": "O-commit",
+        "reason": "The turn did not end in a committed assistant reply."
+      },
+      {
+        "caseId": "H09",
+        "criterionId": "O-light-deadline",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed."
+      },
+      {
+        "caseId": "H09",
+        "criterionId": "O-recall-deadline",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed."
+      },
+      {
+        "caseId": "H09",
+        "criterionId": "O-turn-deadline",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed."
+      },
+      {
+        "caseId": "H09",
+        "criterionId": "O-probe-deadline",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed."
+      },
+      {
+        "caseId": "H10",
+        "criterionId": "O-supplement-commit",
+        "reason": "The turn did not end in a committed assistant reply."
+      },
+      {
+        "caseId": "H10",
+        "criterionId": "O-supplement-history",
+        "reason": "Authoritative history does not match what was streamed."
+      },
+      {
+        "caseId": "H10",
+        "criterionId": "O-supplement-deadline",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed."
+      },
+      {
+        "caseId": "H10",
+        "criterionId": "O-switch-deadline",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed."
+      },
+      {
+        "caseId": "H10",
+        "criterionId": "O-after-deadline",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed."
+      },
+      {
+        "caseId": "H10",
+        "criterionId": "S-supplement",
+        "reason": "There is no committed answer to review."
+      },
+      {
+        "caseId": "H11",
+        "criterionId": "O-commit-earliest",
+        "reason": "The turn did not end in a committed assistant reply."
+      },
+      {
+        "caseId": "H11",
+        "criterionId": "O-empty-deadline",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed."
+      },
+      {
+        "caseId": "H11",
+        "criterionId": "O-older-deadline",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed."
+      },
+      {
+        "caseId": "H11",
+        "criterionId": "O-earliest-deadline",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed."
+      },
+      {
+        "caseId": "H11",
+        "criterionId": "S-earliest",
+        "reason": "There is no committed answer to review."
+      },
+      {
+        "caseId": "H12",
+        "criterionId": "O-deadline",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed."
+      },
+      {
+        "caseId": "HL1",
+        "criterionId": "O-supplement-deadline",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed."
+      },
+      {
+        "caseId": "HL1",
+        "criterionId": "O-after-deadline",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed."
+      }
+    ]
+  },
+  "status": "fail"
+}

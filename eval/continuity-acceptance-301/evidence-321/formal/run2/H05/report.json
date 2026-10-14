@@ -1,0 +1,541 @@
+{
+  "budget": {
+    "blockers": [
+      "Real-model mode must be explicitly enabled with SAYHEAR_ACCEPTANCE_REAL_MODEL=enabled in addition to --mode real-model."
+    ],
+    "capUsdMicros": 10000000,
+    "estimatedCostUsdMicros": 384000,
+    "inputTokenUpperBound": 320000,
+    "mode": "real-model",
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "outputTokenUpperBound": 240000,
+    "paidRequestUpperBound": 20,
+    "remainingUsdMicros": 9155596,
+    "requestsPerStepUpperBound": 4,
+    "shape": {
+      "generationSteps": 3,
+      "scheduledScans": 4,
+      "seedTurns": 4
+    },
+    "status": "blocked",
+    "unknownCostEntries": 0,
+    "waivedPreconditions": [
+      {
+        "by": "Luke",
+        "date": "2026-10-11",
+        "statement": "Relayed to the T08 agent by the coordinating agent as Luke's words: \"#307 的遗留问题,应当在 T01–T07 开发期间解决了(包括耗时问题和回忆历史消息等),因此 T08 可以正常启动\" and \"授权 T08 调用 OpenCode Go 跑真实 DeepSeek V4.1 Flash 模型\". This is a decision to proceed. It is not a record that the #307 online acceptance was completed: #307 was closed with its online acceptance not passed.",
+        "id": "issue-307-online-acceptance"
+      }
+    ]
+  },
+  "case": {
+    "caseId": "H05",
+    "criteria": [
+      {
+        "description": "Seeded history is read back verbatim through the normal history API.",
+        "evidence": [],
+        "id": "INV-seed-readback",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "All 4 seeded turns are present exactly once.",
+        "status": "pass"
+      },
+      {
+        "description": "No oracle text, scenario title or expected answer appears in any Provider request.",
+        "evidence": [],
+        "id": "INV-oracle-not-in-outbound",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "Scanned 795 outbound strings; none carries oracle text.",
+        "status": "pass"
+      },
+      {
+        "description": "Authoritative history contains every message exactly once.",
+        "evidence": [],
+        "id": "INV-no-duplicate-messages",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "14 messages, no duplicates.",
+        "status": "pass"
+      },
+      {
+        "description": "The bare announcement streams and commits.",
+        "evidence": [
+          "steps[bare].chat.httpStatus=200",
+          "steps[bare].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-bare-commit",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "The cued announcement streams and commits.",
+        "evidence": [
+          "steps[cued].chat.httpStatus=200",
+          "steps[cued].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-cued-commit",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "The recent pending matter is in the background of the bare announcement.",
+        "evidence": [
+          "choir-a:user: providerRequest=present, inspector.referencedEvents=present",
+          "choir-b:user: providerRequest=present, inspector.referencedEvents=present"
+        ],
+        "id": "O-bare-recent",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Every required source reached the Provider and is recorded by the Inspector.",
+        "status": "pass"
+      },
+      {
+        "description": "The older pending matter reaches the Provider for the bare announcement, so both can be named.",
+        "evidence": [
+          "plot-a:user: providerRequest=absent, inspector.referencedEvents=absent"
+        ],
+        "id": "O-bare-older",
+        "kind": "objective",
+        "owner": "#317",
+        "reason": "A required source did not reach the Provider request for this turn.",
+        "status": "fail"
+      },
+      {
+        "description": "The older pending matter reaches the Provider for the cued announcement.",
+        "evidence": [
+          "plot-a:user: providerRequest=absent, inspector.referencedEvents=absent",
+          "plot-b:user: providerRequest=absent, inspector.referencedEvents=absent"
+        ],
+        "id": "O-cued-older",
+        "kind": "objective",
+        "owner": "#317",
+        "reason": "A required source did not reach the Provider request for this turn.",
+        "status": "fail"
+      },
+      {
+        "description": "What was said a moment earlier reaches the Provider for the cued announcement.",
+        "evidence": [
+          "steps[garden].input.text: providerRequest=present"
+        ],
+        "id": "O-cued-context",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Everything said earlier in the run reached the Provider for this turn.",
+        "status": "pass"
+      },
+      {
+        "description": "Response-time contract for the bare announcement.",
+        "evidence": [
+          "steps[bare].chat.timing.firstVisibleTextMs=1901.6433749999997 (CLI network, limit 3000)",
+          "steps[bare].chat.timing.committedMs=2043.3223339999968 (CLI network, limit 10000)"
+        ],
+        "id": "O-bare-deadline",
+        "kind": "objective",
+        "owner": "#319",
+        "reason": "CLI-observed timings are within the limits. Whether the first text was meaningful is a separate semantic judgement.",
+        "status": "pass"
+      },
+      {
+        "description": "Response-time contract for the ordinary remark.",
+        "evidence": [
+          "steps[garden].chat.timing.firstVisibleTextMs=8247.337500000009 (CLI network, limit 3000)",
+          "steps[garden].chat.timing.committedMs=8263.105917000008 (CLI network, limit 10000)"
+        ],
+        "id": "O-garden-deadline",
+        "kind": "objective",
+        "owner": "#319",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed.",
+        "status": "fail"
+      },
+      {
+        "description": "Response-time contract for the cued announcement.",
+        "evidence": [
+          "steps[cued].chat.timing.firstVisibleTextMs=16447.574250000005 (CLI network, limit 3000)",
+          "steps[cued].chat.timing.committedMs=16959.576791 (CLI network, limit 10000)"
+        ],
+        "id": "O-cued-deadline",
+        "kind": "objective",
+        "owner": "#319",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed.",
+        "status": "fail"
+      },
+      {
+        "description": "Without a cue, both pending matters are named and neither is assumed.",
+        "evidence": [
+          "a-two-pending: fail — Neither pending matter is named.",
+          "f-assume-choir: pass — The wording is neutral about which matter it is.",
+          "f-assume-plot: pass — Not attributed to the older matter.",
+          "f-retell: pass — It does not ask for the back story."
+        ],
+        "id": "S-bare",
+        "kind": "semantic",
+        "owner": "#317",
+        "reason": "At least one ledger item is contradicted by the reply.",
+        "status": "fail"
+      },
+      {
+        "description": "With a cue, the announcement is connected to the old request and the outcome is not invented.",
+        "evidence": [
+          "a-plot-reply: fail — The letter is never connected to the request for a growing plot; the older messages did not reach the Provider.",
+          "f-cued-choir: fail — reply: \"not an email. After all that inbox-checking\" — The letter is treated as the answer to the emailed request to the singing group.",
+          "f-retell: pass — It does not ask for the back story.",
+          "f-outcome: pass — No outcome is invented."
+        ],
+        "id": "S-cued",
+        "kind": "semantic",
+        "owner": "#317",
+        "reason": "At least one ledger item is contradicted by the reply.",
+        "status": "fail"
+      }
+    ],
+    "mode": "real-model",
+    "pipelineOnly": [],
+    "reviewer": "agent:claude-opus-5.5-t08",
+    "runId": "run-7e6058cb-4417-49bb-b510-31e5c0f474fb",
+    "status": "fail"
+  },
+  "diagnosis": [
+    {
+      "diagnosis": {
+        "disagreements": [],
+        "payloadReadStatus": null,
+        "readState": "unread",
+        "sources": [
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: no history branch",
+              "provider payload: message 1",
+              "time of message 1: 2026-10-12 (expected 2026-10-12)",
+              "semantic review: the answer is wrong although the source and its time arrived intact"
+            ],
+            "fault": "generation_error",
+            "source": "choir-a:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-8",
+              "requestSequence": 8
+            }
+          },
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: no history branch",
+              "provider payload: message 3",
+              "time of message 3: 2026-10-14 (expected 2026-10-14)",
+              "semantic review: the answer is wrong although the source and its time arrived intact"
+            ],
+            "fault": "generation_error",
+            "source": "choir-b:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-8",
+              "requestSequence": 8
+            }
+          },
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: no history branch",
+              "provider payload: absent",
+              "coverage: (the Decision took no history branch)"
+            ],
+            "fault": "selection_omitted",
+            "source": "plot-a:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-8",
+              "requestSequence": 8
+            }
+          }
+        ]
+      },
+      "stepId": "bare"
+    },
+    {
+      "diagnosis": {
+        "disagreements": [],
+        "payloadReadStatus": null,
+        "readState": "unread",
+        "sources": [
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: no history branch",
+              "provider payload: absent",
+              "coverage: (the Decision took no history branch)"
+            ],
+            "fault": "selection_omitted",
+            "source": "plot-a:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-13",
+              "requestSequence": 13
+            }
+          },
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: no history branch",
+              "provider payload: absent",
+              "coverage: (the Decision took no history branch)"
+            ],
+            "fault": "selection_omitted",
+            "source": "plot-b:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-13",
+              "requestSequence": 13
+            }
+          }
+        ]
+      },
+      "stepId": "cued"
+    }
+  ],
+  "identity": {
+    "fixtureSha256": "edf3388e43829ef00332e2b1a1227c448b6c8655e12328d8ae40647e83281455",
+    "fixtureVersion": "final-1",
+    "gitCommit": "1cfdf11a992d7bc7f6536c5dda783a4995fd8c28",
+    "gitDirty": true,
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "historyRecallGovernance": "active",
+    "recentContextGovernance": "active",
+    "runId": "run-7e6058cb-4417-49bb-b510-31e5c0f474fb",
+    "oracleSha256": "86764806b2cda9c35d738a046d4c575912a089cda075d5b3932f3955f7cd8dd6",
+    "title": "H05 Holdout: an answer arrives, with and without a cue to which matter it belongs"
+  },
+  "remainingRisks": [
+    "The working tree had uncommitted changes; the commit alone does not identify the code that ran.",
+    "Timings are CLI network observations, not browser rendering times (T08 #321 covers the browser)."
+  ],
+  "reproducibilityDigest": "8b4461aac975f87e49cfdf7eea4df5268bd8d006b2161e49a57801eaf9cc5c15",
+  "schemaVersion": "continuity-acceptance-report:v1",
+  "sourceManifest": [
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "plot-a:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "plot-a:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "plot-b:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "plot-b:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "choir-a:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "choir-a:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "choir-b:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "choir-b:assistant"
+        }
+      ],
+      "stepId": "bare"
+    },
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "plot-a:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "plot-a:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "plot-b:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "plot-b:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "choir-a:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "choir-a:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "choir-b:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "choir-b:assistant"
+        }
+      ],
+      "stepId": "garden"
+    },
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "plot-a:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "plot-a:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "plot-b:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "plot-b:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "choir-a:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "choir-a:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "choir-b:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "choir-b:assistant"
+        }
+      ],
+      "stepId": "cued"
+    }
+  ],
+  "timings": [
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 31.639916999993147,
+      "cliCommittedMs": 2043.3223339999968,
+      "cliFirstVisibleTextMs": 1901.6433749999997,
+      "cliStreamClosedMs": 2043.3716249999998,
+      "providerLatencyMs": 0,
+      "stepId": "bare"
+    },
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 27.346541999999317,
+      "cliCommittedMs": 8263.105917000008,
+      "cliFirstVisibleTextMs": 8247.337500000009,
+      "cliStreamClosedMs": 8263.175125000009,
+      "providerLatencyMs": 0,
+      "stepId": "garden"
+    },
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 24.24749999999767,
+      "cliCommittedMs": 16959.576791,
+      "cliFirstVisibleTextMs": 16447.574250000005,
+      "cliStreamClosedMs": 16959.622166,
+      "providerLatencyMs": 0,
+      "stepId": "cued"
+    }
+  ],
+  "transcript": [
+    {
+      "assistant": "Oh good — that's the waiting over. I'm glad it landed.\n\nWhat did they say?",
+      "at": "2026-10-16T08:40:00.000Z",
+      "stepId": "bare",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "They got back to me at last!"
+    },
+    {
+      "assistant": "Turning someone else's compost for an afternoon will do that to you. It puts the idea of your own ground right in your hands.\n\nMum's heap got the benefit of it today, anyway.",
+      "at": "2026-10-18T16:05:00.000Z",
+      "stepId": "garden",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "Spent the afternoon turning the compost heap at Mum's. I kept thinking how much I want a patch of ground of my own to dig."
+    },
+    {
+      "assistant": "A letter through the door this time, not an email. After all that inbox-checking, it comes on paper. So what does it say?",
+      "at": "2026-10-18T16:08:00.000Z",
+      "stepId": "cued",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "And when I got home there was a letter from the committee on the mat. They have finally answered."
+    }
+  ],
+  "usage": {
+    "inputTokens": 16613,
+    "outputTokens": 3134,
+    "paidCostUsdMicros": null,
+    "providerRequests": 4
+  }
+}

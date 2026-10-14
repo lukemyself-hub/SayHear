@@ -1,0 +1,18 @@
+{
+  "schemaVersion": "continuity-acceptance-fixture:v1",
+  "id": "HL1",
+  "fixtureVersion": "final-1",
+  "stage": "final",
+  "languageVariant": "en",
+  "defaults": { "locale": "en-US", "timezone": "America/Vancouver" },
+  "history": [
+    { "key": "fair", "at": "2026-10-11T02:15:00.000Z", "user": "I took my nephew Theo to the fall fair today and we shared a paper cone of mini donuts on the bleachers by the tractor pull.", "assistant": "Mini donuts on the bleachers with your nephew sounds like the right way to do a fair." },
+    { "key": "canoe", "at": "2026-10-11T02:24:00.000Z", "user": "On the drive home we talked about renting a canoe at Alouette Lake before it gets too cold, the way my uncle used to take me.", "assistant": "A canoe trip the way your uncle did it carries a lot with it." }
+  ],
+  "steps": [
+    { "id": "ask", "type": "say", "at": "2026-10-13T17:00:00.000Z", "continueInBackground": true, "text": "What did I tell you about the fall fair?" },
+    { "id": "supplement", "type": "say", "at": "2026-10-13T17:00:08.000Z", "text": "Actually, all I want to know is who I went with." },
+    { "id": "stall", "type": "say", "at": "2026-10-13T17:02:00.000Z", "providerFault": { "delayBeforeFirstChunkMs": 45000 }, "text": "And what was it we said about the canoe?" },
+    { "id": "after", "type": "say", "at": "2026-10-13T17:04:00.000Z", "text": "Never mind that. Is it too late in the year to plan the lake trip?" }
+  ]
+}

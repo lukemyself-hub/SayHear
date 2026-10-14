@@ -1,14 +1,20 @@
 import {
   ProviderDispatchError,
   type ConversationResponseService,
-  type ConversationResponseStreamEvent,
   type UserId,
 } from "@sayhear/application";
+
+import { createNdjsonConversationResponse } from "./ndjson-response";
 
 type AuthenticatedPrincipal = Readonly<{ userId: UserId }>;
 
 export function createConversationResponseHandler(dependencies: {
   authenticate(request: Request): Promise<AuthenticatedPrincipal | null>;
+  /**
+   * End-to-end request budget (ADR-0152: 30 seconds), enforced by the service
+   * at every step and backstopped here (issue #319).
+   */
+  requestBudgetMs?: number;
   service: ConversationResponseService;
 }): (request: Request) => Promise<Response> {
   return async (request) => {
@@ -40,77 +46,32 @@ export function createConversationResponseHandler(dependencies: {
       text: asRequestString(body.text),
       timezone: asRequestString(body.timezone),
     };
-    const abortController = new AbortController();
-    const encoder = new TextEncoder();
-    const stream = new ReadableStream<Uint8Array>({
-      cancel() {
-        abortController.abort();
+    return createNdjsonConversationResponse({
+      events: (signal) =>
+        dependencies.service.respond(principal.userId, input, signal),
+      onFailure(error) {
+        // Surface the egress failure server-side. Without this, the only
+        // signal is the graceful `response_failed` event the client sees,
+        // leaving the root cause (e.g. a blocked provider policy) invisible.
+        console.error(
+          "conversation_response_failed",
+          error instanceof ProviderDispatchError
+            ? {
+                name: error.name,
+                category: error.category,
+                message: error.message,
+              }
+            : {
+                name: error instanceof Error ? error.name : typeof error,
+                message: error instanceof Error ? error.message : String(error),
+              },
+        );
       },
-      start(controller) {
-        void (async () => {
-          try {
-            for await (const event of dependencies.service.respond(
-              principal.userId,
-              input,
-              abortController.signal,
-            )) {
-              controller.enqueue(encoder.encode(serializeEvent(event)));
-            }
-          } catch (error) {
-            // Surface the egress failure server-side. Without this, the only
-            // signal is the graceful `response_failed` event the client sees,
-            // leaving the root cause (e.g. a blocked provider policy) invisible.
-            console.error(
-              "conversation_response_failed",
-              error instanceof ProviderDispatchError
-                ? {
-                    name: error.name,
-                    category: error.category,
-                    message: error.message,
-                  }
-                : {
-                    name:
-                      error instanceof Error ? error.name : typeof error,
-                    message:
-                      error instanceof Error ? error.message : String(error),
-                  },
-            );
-            abortController.abort();
-            try {
-              controller.enqueue(
-                encoder.encode(
-                  serializeEvent({
-                    category: "unknown",
-                    type: "response_failed",
-                  }),
-                ),
-              );
-            } catch {
-              // Cancellation may already have closed the response stream.
-            }
-          } finally {
-            try {
-              controller.close();
-            } catch {
-              // The client may already have canceled the stream.
-            }
-          }
-        })();
-      },
-    });
-
-    return new Response(stream, {
-      headers: {
-        "cache-control": "no-store",
-        "content-type": "application/x-ndjson; charset=utf-8",
-      },
-      status: 200,
+      ...(dependencies.requestBudgetMs === undefined
+        ? {}
+        : { requestBudgetMs: dependencies.requestBudgetMs }),
     });
   };
-}
-
-function serializeEvent(event: ConversationResponseStreamEvent): string {
-  return `${JSON.stringify(event)}\n`;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

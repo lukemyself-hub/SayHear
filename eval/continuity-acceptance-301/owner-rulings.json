@@ -1,0 +1,104 @@
+{
+  "schemaVersion": "continuity-owner-rulings:v1",
+  "note": "Rulings by the product owner that change how criteria are counted or read. They are applied when a run is scored; the fixtures and oracles they refer to are not edited, so the holdout pack keeps the hashes recorded in holdout/FREEZE.json. The holdout pack was frozen on 2026-10-11; these rulings were made after it had been run against the real model, and are recorded as post-freeze amendments by the owner, not as changes made to improve a result.",
+  "rulings": [
+    {
+      "id": "R1",
+      "by": "Luke",
+      "date": "2026-10-12",
+      "statement": "把旧数字作为「先前说法」复述(如「你先说 2.5,后来更正为 1.5」)算通过,因为符合事实;禁止的仍是把旧数字当现状。",
+      "appliesFrom": "history-reading:v3 / history-recall:v5 (spec-301/history-presentation)"
+    },
+    {
+      "id": "R2",
+      "by": "Luke",
+      "date": "2026-10-12",
+      "statement": "完全没有线索的自然接续(只说「他们终于回信了」)不算验收要求,因为信息量不足。相应判据不计入,保留案例与记录。",
+      "appliesFrom": "history-reading:v3 / history-recall:v5 (spec-301/history-presentation)"
+    },
+    {
+      "id": "R3",
+      "by": "Luke",
+      "date": "2026-10-12",
+      "statement": "以下回答形态可以接受:接上旧事但没问信里说什么;没接到 deck 那件事;换题时先补答上一问。",
+      "appliesFrom": "history-reading:v3 / history-recall:v5 (spec-301/history-presentation)"
+    },
+    {
+      "id": "R4",
+      "by": "Luke",
+      "date": "2026-10-12",
+      "statement": "把被更正掉的十一月七号作为「原本的日子」说出来算通过。",
+      "appliesFrom": "history-reading:v3 / history-recall:v5 (spec-301/history-presentation)"
+    }
+  ],
+  "notCounted": [
+    {
+      "caseId": "H05",
+      "criterionId": "S-bare",
+      "ruling": "R2",
+      "reason": "A natural continuation with no clue at all is not an acceptance requirement: the message carries too little to act on."
+    },
+    {
+      "caseId": "H05",
+      "criterionId": "O-bare-older",
+      "ruling": "R2",
+      "reason": "It requires the older matter to be looked up on the message that carries no clue, which is no longer required."
+    },
+    {
+      "caseId": "C05",
+      "criterionId": "S-bare",
+      "ruling": "R2",
+      "reason": "A natural continuation with no clue at all is not an acceptance requirement: the message carries too little to act on."
+    },
+    {
+      "caseId": "C05",
+      "criterionId": "O-bare-older",
+      "ruling": "R2",
+      "reason": "It requires the older matter to be looked up on the message that carries no clue, which is no longer required."
+    }
+  ],
+  "interpretations": [
+    {
+      "caseId": "H12",
+      "criterionId": "S-controls",
+      "ruling": "R1",
+      "reading": "Restating the superseded figure as the person's earlier wording, followed by the correction, passes. Giving the superseded figure as how things stand now still fails."
+    },
+    {
+      "caseId": "C12",
+      "criterionId": "S-controls",
+      "ruling": "R1",
+      "reading": "Restating the superseded figure as the person's earlier wording, followed by the correction, passes. Giving the superseded figure as how things stand now still fails."
+    },
+    {
+      "caseId": "H05",
+      "criterionId": "S-cued",
+      "ruling": "R3",
+      "reading": "A reply that connects the announcement to the old request and invents no outcome is acceptable even if it did not ask what the letter says."
+    },
+    {
+      "caseId": "C05",
+      "criterionId": "S-cued",
+      "ruling": "R3",
+      "reading": "A reply that connects the announcement to the old submission and invents no outcome is acceptable even if it did not ask what the letter says."
+    },
+    {
+      "caseId": "H06",
+      "criterionId": "S-ping",
+      "ruling": "R3",
+      "reading": "A reply that does not connect the news to the slide sessions is acceptable, provided it does not attach it to the wrong person or event and invents no outcome."
+    },
+    {
+      "caseId": "H10",
+      "criterionId": "S-switch",
+      "ruling": "R3",
+      "reading": "Answering the previous, unanswered question first and then staying with the new subject is acceptable."
+    },
+    {
+      "caseId": "H07",
+      "criterionId": "S-current",
+      "ruling": "R4",
+      "reading": "Mentioning the superseded moving day as the original date that was then corrected passes. Giving it as the moving day, or presenting both dates as equally possible, still fails."
+    }
+  ]
+}

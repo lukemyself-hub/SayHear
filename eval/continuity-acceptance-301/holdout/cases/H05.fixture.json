@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "continuity-acceptance-fixture:v1",
+  "id": "H05",
+  "fixtureVersion": "final-1",
+  "stage": "final",
+  "languageVariant": "en",
+  "defaults": { "locale": "en-GB", "timezone": "Europe/London" },
+  "history": [
+    { "key": "plot-a", "at": "2026-07-06T18:10:00.000Z", "user": "I have finally put my name down for an allotment at the Fenwick Road site. I filled in the form at the parish office and the woman there said the waiting list is long, so I should not hold my breath.", "assistant": "Name on the list, then. That is the part you could do, and you have done it." },
+    { "key": "plot-b", "at": "2026-07-06T18:17:00.000Z", "user": "Apparently the committee writes to you by post when a plot comes free. Could be months. I am going to try to forget about it until something drops through the door.", "assistant": "By post, some month or other. Forgetting about it is probably the only sane way to wait." },
+    { "key": "choir-a", "at": "2026-10-12T19:30:00.000Z", "user": "I emailed the director of the community choir tonight to ask whether I could audition for the winter concert. Took me three drafts to make it sound casual.", "assistant": "Three drafts to sound casual. It is sent now, which is what counts." },
+    { "key": "choir-b", "at": "2026-10-14T20:15:00.000Z", "user": "Nothing back from the choir yet. I have checked my inbox more times today than I would like to admit.", "assistant": "Checking does not hurry it along, and everybody does it anyway." }
+  ],
+  "steps": [
+    { "id": "bare", "type": "say", "at": "2026-10-16T08:40:00.000Z", "text": "They got back to me at last!" },
+    { "id": "garden", "type": "say", "at": "2026-10-18T16:05:00.000Z", "text": "Spent the afternoon turning the compost heap at Mum's. I kept thinking how much I want a patch of ground of my own to dig." },
+    { "id": "cued", "type": "say", "at": "2026-10-18T16:08:00.000Z", "text": "And when I got home there was a letter from the committee on the mat. They have finally answered." }
+  ]
+}

@@ -1,0 +1,58 @@
+{
+  "caseId": "U06",
+  "findings": [
+    {
+      "criterionId": "S-ping",
+      "itemId": "f-merge-people",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-ping",
+      "itemId": "f-swap-run",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-ping",
+      "itemId": "f-result",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-role",
+      "itemId": "a-neighbour-known",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-role",
+      "itemId": "a-job-open",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-role",
+      "itemId": "f-job-fact",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-role",
+      "itemId": "f-merge-people",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    }
+  ],
+  "reviewer": "agent:<name> | human:<name>",
+  "rubricVersion": "continuity-rubric:v1",
+  "runId": "run-279a410d-cfbf-413f-9913-59b60637a96e",
+  "schemaVersion": "continuity-acceptance-review:v1"
+}

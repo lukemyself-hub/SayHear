@@ -20,6 +20,24 @@ import type {
   InteractionTurnId,
   UserId,
 } from "@sayhear/domain";
+import {
+  formatHumanMinute,
+  MESSAGE_NOTE_MARK,
+  MESSAGE_TIME_MARK,
+  renderEarlierMessagesBlock,
+  renderMessageNotes,
+  renderMessageTimeStamps,
+  withMessageNote,
+} from "./message-presentation";
+import {
+  decodeHistoryRecallReceipt,
+  encodeHistoryRecallReceipt,
+  HISTORY_READING_RULES_VERSION,
+  historyReadingRulesUseBlock,
+  renderHistoryRecallReceipt,
+  HISTORY_RECALL_RESULT_VERSION,
+  type HistoryRecallReceiptSnapshot,
+} from "./history-recall";
 import type { CurrentDialogueState } from "./dialogue-state";
 import type { CurrentRollingSummary } from "./rolling-summary";
 import {
@@ -131,6 +149,17 @@ export type ContextPolicyVersions = Readonly<{
 
 export type ContextSourceEvent = Readonly<{
   actor: "user" | "assistant";
+  /**
+   * Set when this user message's wording is the person's own correction (the
+   * current revision was created by a user correction): the instant the
+   * correction was made. It is frozen on the time metadata entry only.
+   */
+  correctedAt?: string;
+  /** Message expression instant from the committed Event row. */
+  expressedAt?: string;
+  /** Request zone for this message, or the session-start fallback. */
+  expressionTimezone?: string | null;
+  expressionTimezoneSource?: "request" | "session_start_fallback" | "unknown";
   locale: string;
   revisionId: ConversationEventRevisionId;
   sequence: number;
@@ -139,9 +168,10 @@ export type ContextSourceEvent = Readonly<{
 
 /**
  * #295: the identity/budget fields of the active governance row that the
- * compile gate compares against the wired compiler and policy before honoring
- * it. A row naming a different runtime is treated exactly like an absent one:
- * no recent content is selected and nothing is frozen.
+ * compile gate compares against the bounded recent selector before honoring
+ * it. The selector identity remains stable when the enclosing frozen Context
+ * format changes. A row naming another selector runtime is treated like an
+ * absent one: no recent content is selected and nothing is frozen.
  */
 export type ContextSourceRecentContextPolicy = Readonly<{
   budgetTokens: number;
@@ -155,8 +185,33 @@ export type ContextSourceRecentContextPolicy = Readonly<{
   selectorPolicyVersion: string;
 }>;
 
+/**
+ * The frozen History Answer input (issue #314). `events` are the referenced
+ * revisions re-read and re-qualified at compile time, in frozen order;
+ * `droppedAtCompile` counts references that no longer qualified.
+ */
+export type ContextSourceHistoryRecall = Readonly<{
+  droppedAtCompile: number;
+  events: readonly (ContextSourceEvent &
+    Readonly<{
+      /**
+       * Set when the quoted wording is the person's own correction of the
+       * message (the current revision was created by a user correction): the
+       * instant the correction was made.
+       */
+      correctedAt?: string;
+      dailySessionId: DailySessionId;
+      expressedAt: string;
+      selectionReason?: string;
+    }>)[];
+  policyVersion: string;
+  result: HistoryRecallReceiptSnapshot["result"];
+  resultId: string;
+}>;
+
 export type ContextSourceSnapshot = Readonly<{
   actionFinalizationReceipt?: ActionFinalizationReceiptSnapshot;
+  historyRecall?: ContextSourceHistoryRecall;
   actionReferenceTargets?: readonly ActionReferenceTarget[];
   curiosityStopSignal?: CurrentCuriosityStopSignal | null;
   dailySession: Readonly<{
@@ -233,6 +288,7 @@ export type CompiledContextSectionKey =
   | "output_format"
   | "locale_pack"
   | "daily_session"
+  | "time_context"
   | "dialogue_state"
   | "curiosity_stop_signal"
   | "person_portrait"
@@ -241,6 +297,8 @@ export type CompiledContextSectionKey =
   | "recall_experience"
   | "trust_action_expression"
   | "rolling_summary"
+  | "history_recall_receipt"
+  | "history_recall_context"
   | "recent_conversation_context"
   | "committed_raw_events"
   | "current_user_input"
@@ -262,14 +320,14 @@ export type CompiledContextReferencedEvent = ContextSourceEvent &
     dailySessionId?: DailySessionId;
     estimatedTokens: number;
     /** Message expression instant for cross-session ordering (ISO-8601). */
-    expressedAt?: string;
     /** Real-world event time when the source supplied it; never fabricated. */
     occurredAt?: string | null;
     selectionReason?: string | null;
     section:
       | "committed_raw_events"
       | "current_user_input"
-      | "recent_conversation_context";
+      | "recent_conversation_context"
+      | "history_recall_context";
     selectionOrder: number | null;
   }>;
 
@@ -396,13 +454,104 @@ export type RecentContextCompilerDependency = Readonly<{
 export const LEGACY_CONTEXT_COMPILER_VERSION = "context-compiler:v1" as const;
 
 /**
- * The #294 recent-aware compiler version (issue #294). It is written whenever a
- * recent-source dependency is wired, so the frozen CompiledContext is
- * distinguishable from a genuinely legacy v1 manifest; a legacy process
- * rejecting it fails closed with `policy_blocked` before any model call.
+ * The #294 recent selector runtime identity (issue #294), pinned by recent
+ * context governance. The complete frozen Context format is versioned
+ * separately by TIME_AWARE_CONTEXT_COMPILER_VERSION and
+ * RECENT_CONTEXT_TIME_COMPILER_VERSION.
  */
 export const RECENT_CONTEXT_COMPILER_VERSION =
   "context-compiler:recent:v1" as const;
+
+/** Time-aware frozen Context format for same-session and current request time. */
+export const PREVIOUS_TIME_AWARE_CONTEXT_COMPILER_VERSION =
+  "context-compiler:time:v1" as const;
+
+/**
+ * v4 writes when a message was written on the message itself (the first line
+ * of each user turn) instead of in a numbered table in the instructions.
+ */
+export const TIME_AWARE_CONTEXT_COMPILER_VERSION =
+  "context-compiler:time:v4" as const;
+
+/** The numbered Times table; replay only. */
+const INDEXED_TIME_AWARE_CONTEXT_COMPILER_VERSION =
+  "context-compiler:time:v3" as const;
+
+const COMPACT_TIME_AWARE_CONTEXT_COMPILER_VERSION =
+  "context-compiler:time:v2" as const;
+
+/** Recent selection plus the time-aware frozen Context format. */
+export const PREVIOUS_RECENT_CONTEXT_TIME_COMPILER_VERSION =
+  "context-compiler:recent-time:v1" as const;
+
+export const RECENT_CONTEXT_TIME_COMPILER_VERSION =
+  "context-compiler:recent-time:v4" as const;
+
+const INDEXED_RECENT_CONTEXT_TIME_COMPILER_VERSION =
+  "context-compiler:recent-time:v3" as const;
+
+const COMPACT_RECENT_CONTEXT_TIME_COMPILER_VERSION =
+  "context-compiler:recent-time:v2" as const;
+
+/**
+ * The frozen Context format of a History Answer command (issue #314). It is
+ * time-aware and carries the history_recall_* sections; every earlier version
+ * must fail closed if such a section is grafted onto it.
+ */
+export const HISTORY_RECALL_TIME_COMPILER_VERSION =
+  "context-compiler:history-time:v2" as const;
+
+/** A History Answer Context with the numbered Times table; replay only. */
+const INDEXED_HISTORY_RECALL_TIME_COMPILER_VERSION =
+  "context-compiler:history-time:v1" as const;
+
+const isHistoryRecallTimeCompilerVersion = (version: string): boolean =>
+  version === HISTORY_RECALL_TIME_COMPILER_VERSION ||
+  version === INDEXED_HISTORY_RECALL_TIME_COMPILER_VERSION;
+
+export const HISTORY_RECALL_CONTEXT_SECTION_KEY =
+  "history_recall_context" as const;
+
+const CONTEXT_TIME_BASE_TOKEN_BUDGET = 256;
+const CONTEXT_TIME_ENTRY_TOKEN_BUDGET = 12;
+const CONTEXT_TIME_ZONE_TOKEN_BUDGET = 16;
+/** Added only when a message outside a History Answer quote carries a note. */
+const CONTEXT_TIME_NOTE_RULE_TOKEN_BUDGET = 128;
+/**
+ * How to read a correction note on a message that is not a History Answer
+ * quote (seven-day background, same Daily Session). Present only when such a
+ * note is sent, so a Context without corrections is unchanged.
+ */
+/** The same rule where the note follows the line saying when the message was written. */
+const INLINE_MESSAGE_NOTE_RULE = `A bracketed line starting "${MESSAGE_NOTE_MARK}" at the top of a message is a note for you about that message, not something anyone said: never read it out, repeat it or mention it. A message noted as their corrected wording is what they stand by; a message noted as written before that correction is how they put it earlier, not a later change of mind.`;
+const MESSAGE_NOTE_RULE = `A message that opens with a bracketed line starting "${MESSAGE_NOTE_MARK}" carries a note for you about that message, not something anyone said: never read it out, repeat it or mention it. A message noted as their corrected wording is what they stand by; a message noted as written before that correction is how they put it earlier, not a later change of mind.`;
+
+type ContextTimeEntry = Readonly<{
+  actor: "user" | "assistant";
+  expressedAt: string | null;
+  expressionTimezone: string | null;
+  expressionTimezoneSource: "request" | "session_start_fallback" | "unknown";
+  messageIndex: number;
+  occurredAt: string | null;
+  revisionId: string;
+  /**
+   * Set when the message's wording is the person's own correction: the
+   * instant the correction was made. Absent otherwise, so a Context without
+   * corrections freezes exactly as before.
+   */
+  correctedAt?: string;
+}>;
+
+type ContextTimeMetadata = Readonly<{
+  anchor: Readonly<{
+    expressedAt: string | null;
+    instantSource: "event" | "command_fallback" | "unknown";
+    revisionId: string;
+    timezone: string | null;
+  }>;
+  entries: readonly ContextTimeEntry[];
+  version: 1;
+}>;
 
 /**
  * The `compiled_contexts.policy_versions` key that carries the frozen
@@ -434,13 +583,8 @@ export function createContextCompiler(dependencies: {
 }): ContextCompiler {
   const integrityKeyVersion =
     dependencies.contentHmacKeyVersion ?? "context-integrity:v1";
-  // The frozen format is honest about the recent-source capability: wiring the
-  // dependency upgrades the stored version, so an old process rejects a new
-  // manifest (policy_blocked) instead of silently reinterpreting it.
-  const effectiveCompilerVersion =
-    dependencies.recentContext === undefined
-      ? dependencies.compilerVersion
-      : RECENT_CONTEXT_COMPILER_VERSION;
+  // The selector identity stays pinned by recent-context governance. The
+  // compiled manifest has a separate version for its time-aware projection.
 
   return {
     async compile(input) {
@@ -507,7 +651,7 @@ export function createContextCompiler(dependencies: {
         dependencies.recentContext &&
         sourceGovernance !== null &&
         recentContextPolicyMatchesRuntime({
-          compilerVersion: effectiveCompilerVersion,
+          compilerVersion: RECENT_CONTEXT_COMPILER_VERSION,
           governance: sourceGovernance,
           policy: dependencies.recentContext.policy,
         })
@@ -517,6 +661,9 @@ export function createContextCompiler(dependencies: {
         dependencies.recentContext && recentContextPolicyVersion !== null
           ? await loadRecentContextSelection({
               dependency: dependencies.recentContext,
+              extraExcludedRevisionIds: (source.historyRecall?.events ?? []).map(
+                (event) => event.revisionId,
+              ),
               frozenAt: now,
               source,
               userId: input.userId,
@@ -530,6 +677,9 @@ export function createContextCompiler(dependencies: {
               dailySessionId: event.dailySessionId,
               estimatedTokens: event.estimatedTokens,
               expressedAt: event.expressedAt,
+              expressionTimezone: event.expressionTimezone ?? null,
+              expressionTimezoneSource:
+                event.expressionTimezoneSource ?? "unknown",
               locale: source.locale,
               occurredAt: event.occurredAt,
               revisionId: event.revisionId,
@@ -540,8 +690,79 @@ export function createContextCompiler(dependencies: {
               text: event.text,
             }));
 
+      // Issue #314: a History Answer command quotes the frozen, re-qualified
+      // review result ahead of the recent background and the live session.
+      if (source.generationStage === "history_answer") {
+        if (!source.historyRecall) {
+          throw new Error(
+            "A History Answer requires its frozen history recall result.",
+          );
+        }
+      } else if (source.historyRecall) {
+        throw new Error("Only a History Answer may carry a history recall result.");
+      }
+      const historyRecallEvents: CompiledContextReferencedEvent[] =
+        source.historyRecall === undefined
+          ? []
+          : source.historyRecall.events.map((event, index) => ({
+              actor: event.actor,
+              dailySessionId: event.dailySessionId,
+              estimatedTokens: estimateTokens(event.text),
+              expressedAt: event.expressedAt,
+              expressionTimezone: event.expressionTimezone ?? null,
+              expressionTimezoneSource:
+                event.expressionTimezoneSource ?? "unknown",
+              locale: event.locale,
+              occurredAt: null,
+              revisionId: event.revisionId,
+              section: "history_recall_context",
+              selectionOrder: index,
+              selectionReason: event.selectionReason ?? "history_date_range",
+              sequence: event.sequence,
+              text: event.text,
+            }));
+      const historyCorrectionMarks = (source.historyRecall?.events ?? []).flatMap(
+        (event, index) =>
+          event.actor === "user" && event.correctedAt !== undefined
+            ? [
+                {
+                  correctedAt: event.correctedAt,
+                  messageIndex: index + 1,
+                  timezone: event.expressionTimezone ?? null,
+                },
+              ]
+            : [],
+      );
+      const historyRecallSection =
+        source.historyRecall === undefined
+          ? undefined
+          : {
+              events: historyRecallEvents,
+              receipt: {
+                // The quoted messages are the first messages sent, in this
+                // order, so a mark names its message by 1-based position.
+                ...(historyCorrectionMarks.length > 0
+                  ? { corrections: historyCorrectionMarks }
+                  : {}),
+                droppedAtCompile: source.historyRecall.droppedAtCompile,
+                injectedRows: historyRecallEvents.length,
+                policyVersion: source.historyRecall.policyVersion,
+                readingRulesVersion: HISTORY_READING_RULES_VERSION,
+                result: source.historyRecall.result,
+                version: HISTORY_RECALL_RESULT_VERSION,
+              } satisfies HistoryRecallReceiptSnapshot,
+              reference: encodeHistoryRecallEventsReference(
+                source.historyRecall.resultId,
+                historyRecallEvents,
+              ),
+            };
+
+      const recalledRevisionIds = new Set<string>(
+        (source.historyRecall?.events ?? []).map((event) => event.revisionId),
+      );
       const historyNewestFirst = source.events
         .filter((event) => {
+          if (recalledRevisionIds.has(event.revisionId)) return false;
           const dialogueCoverage = dialogueState?.coveredThroughSequence ?? 0;
           const summaryCoverage = source.rollingSummary?.coveredThrough ?? 0;
           return event.revisionId !== source.inputRevisionId &&
@@ -555,8 +776,9 @@ export function createContextCompiler(dependencies: {
         if (estimatedTokens > remaining) {
           break;
         }
+        const { correctedAt: _correctedAt, ...sessionEvent } = event;
         selectedNewestFirst.push({
-          ...event,
+          ...sessionEvent,
           estimatedTokens,
           section: "committed_raw_events",
           selectionOrder,
@@ -568,6 +790,7 @@ export function createContextCompiler(dependencies: {
         (left, right) => left.sequence - right.sequence,
       );
       const referencedEvents: CompiledContextReferencedEvent[] = [
+        ...historyRecallEvents,
         ...recentReferencedEvents,
         ...selectedHistory,
         {
@@ -582,10 +805,50 @@ export function createContextCompiler(dependencies: {
         `:closure:${source.dailySession.closurePolicyVersion}` +
         `:dialogue:${source.dialogueRevision}` +
         `:exchange:${source.dailySession.continuousExchangeNo}`;
+      const timeAwareFormat =
+        dependencies.compilerVersion === TIME_AWARE_CONTEXT_COMPILER_VERSION;
+      const timeContext = timeAwareFormat
+        ? createContextTimeMetadata({
+            currentInput: referencedEvents.at(-1)!,
+            currentRequestInstant: source.commandCreatedAt ?? null,
+            currentRequestTimezone:
+              source.requestTimezone ??
+              (currentInput.expressionTimezoneSource === "request"
+                ? currentInput.expressionTimezone ?? null
+                : null),
+            correctedAt: new Map(
+              [
+                ...(source.historyRecall?.events ?? []),
+                ...(recentContext?.selected ?? []),
+                ...source.events,
+              ].flatMap((event) =>
+                event.actor === "user" &&
+                event.correctedAt !== undefined &&
+                event.correctedAt !== null
+                  ? [[String(event.revisionId), event.correctedAt] as const]
+                  : [],
+              ),
+            ),
+            events: referencedEvents,
+          })
+        : undefined;
+      if (historyRecallSection !== undefined && !timeAwareFormat) {
+        throw new Error("A History Answer requires the time-aware Context format.");
+      }
+      const compiledContextVersion = historyRecallSection !== undefined
+        ? HISTORY_RECALL_TIME_COMPILER_VERSION
+        : timeAwareFormat
+        ? recentContext
+          ? RECENT_CONTEXT_TIME_COMPILER_VERSION
+          : TIME_AWARE_CONTEXT_COMPILER_VERSION
+        : recentContext
+          ? RECENT_CONTEXT_COMPILER_VERSION
+          : dependencies.compilerVersion;
       const renderableSections = createSections({
         contentHmacSecret: dependencies.contentHmacSecret,
         currentInput: referencedEvents.at(-1)!,
         dailySessionReference,
+        ...(timeContext === undefined ? {} : { timeContext }),
         history: selectedHistory,
         locale: source.locale,
         policyVersions: source.policyVersions,
@@ -608,6 +871,9 @@ export function createContextCompiler(dependencies: {
         rollingSummary: source.rollingSummary ?? null,
         safetyPosture: source.safetyPosture ?? null,
         actionFinalizationReceipt: source.actionFinalizationReceipt,
+        ...(historyRecallSection === undefined
+          ? {}
+          : { historyRecall: historyRecallSection }),
         ...(recentContext === null
           ? {}
           : {
@@ -675,7 +941,7 @@ export function createContextCompiler(dependencies: {
         ...(actionReferenceHandles.length === 0
           ? {}
           : { actionReferenceHandles }),
-        compilerVersion: effectiveCompilerVersion,
+        compilerVersion: compiledContextVersion,
         degradedReason,
         dialogueRevision: source.dialogueRevision,
         generationCommandId: input.generationCommandId,
@@ -738,10 +1004,72 @@ export function createContextCompiler(dependencies: {
         source.referencedEvents.some(
           (event) => event.section === "recent_conversation_context",
         );
+      const hasHistoryMetadata =
+        source.sections.some(
+          (section) =>
+            section.key === HISTORY_RECALL_CONTEXT_SECTION_KEY ||
+            section.key === "history_recall_receipt",
+        ) ||
+        source.referencedEvents.some(
+          (event) => event.section === "history_recall_context",
+        );
+      const timeSection = source.sections.find(
+        (section) => section.key === "time_context",
+      );
+      const hasTimeMetadata = timeSection !== undefined;
+      const previousTimeFormat =
+        source.compilerVersion === PREVIOUS_TIME_AWARE_CONTEXT_COMPILER_VERSION ||
+        source.compilerVersion ===
+          PREVIOUS_RECENT_CONTEXT_TIME_COMPILER_VERSION;
+      const compactTimeFormat =
+        source.compilerVersion === COMPACT_TIME_AWARE_CONTEXT_COMPILER_VERSION ||
+        source.compilerVersion === COMPACT_RECENT_CONTEXT_TIME_COMPILER_VERSION;
+      const indexedTimeFormat =
+        source.compilerVersion === INDEXED_TIME_AWARE_CONTEXT_COMPILER_VERSION ||
+        source.compilerVersion ===
+          INDEXED_RECENT_CONTEXT_TIME_COMPILER_VERSION ||
+        source.compilerVersion === INDEXED_HISTORY_RECALL_TIME_COMPILER_VERSION;
       const versionAccepted =
-        source.compilerVersion === effectiveCompilerVersion ||
+        (dependencies.compilerVersion === TIME_AWARE_CONTEXT_COMPILER_VERSION &&
+          isHistoryRecallTimeCompilerVersion(source.compilerVersion) &&
+          source.generationStage === "history_answer" &&
+          hasTimeMetadata &&
+          hasHistoryMetadata) ||
+        (!hasHistoryMetadata &&
+          source.generationStage !== "history_answer" &&
+          !isHistoryRecallTimeCompilerVersion(source.compilerVersion) &&
+          ((dependencies.compilerVersion === TIME_AWARE_CONTEXT_COMPILER_VERSION &&
+          (source.compilerVersion === TIME_AWARE_CONTEXT_COMPILER_VERSION ||
+            source.compilerVersion ===
+              INDEXED_TIME_AWARE_CONTEXT_COMPILER_VERSION ||
+            source.compilerVersion === COMPACT_TIME_AWARE_CONTEXT_COMPILER_VERSION) &&
+          hasTimeMetadata &&
+          !hasRecentMetadata) ||
+        (dependencies.compilerVersion === TIME_AWARE_CONTEXT_COMPILER_VERSION &&
+          (source.compilerVersion === RECENT_CONTEXT_TIME_COMPILER_VERSION ||
+            source.compilerVersion ===
+              INDEXED_RECENT_CONTEXT_TIME_COMPILER_VERSION ||
+            source.compilerVersion === COMPACT_RECENT_CONTEXT_TIME_COMPILER_VERSION) &&
+          hasTimeMetadata &&
+          hasRecentMetadata) ||
+        (dependencies.compilerVersion === TIME_AWARE_CONTEXT_COMPILER_VERSION &&
+          source.compilerVersion === PREVIOUS_TIME_AWARE_CONTEXT_COMPILER_VERSION &&
+          hasTimeMetadata &&
+          !hasRecentMetadata) ||
+        (dependencies.compilerVersion === TIME_AWARE_CONTEXT_COMPILER_VERSION &&
+          source.compilerVersion === PREVIOUS_RECENT_CONTEXT_TIME_COMPILER_VERSION &&
+          hasTimeMetadata &&
+          hasRecentMetadata) ||
+        (source.compilerVersion === RECENT_CONTEXT_COMPILER_VERSION &&
+          !hasTimeMetadata &&
+          hasRecentMetadata) ||
         (source.compilerVersion === LEGACY_CONTEXT_COMPILER_VERSION &&
-          !hasRecentMetadata);
+          !hasTimeMetadata &&
+          !hasRecentMetadata) ||
+        (dependencies.compilerVersion !== TIME_AWARE_CONTEXT_COMPILER_VERSION &&
+          source.compilerVersion === dependencies.compilerVersion &&
+          !hasTimeMetadata &&
+          !hasRecentMetadata)));
       if (
         !versionAccepted ||
         source.integrity.algorithm !== "hmac-sha256" ||
@@ -807,7 +1135,93 @@ export function createContextCompiler(dependencies: {
       } else if (recentEvents.length > 0) {
         throw new CompiledContextIntegrityError();
       }
+      const historyRecallSections = {
+        context: source.sections.find(
+          (section) => section.key === HISTORY_RECALL_CONTEXT_SECTION_KEY,
+        ),
+        receipt: source.sections.find(
+          (section) => section.key === "history_recall_receipt",
+        ),
+      };
+      const historyRecallEvents = source.referencedEvents
+        .filter((event) => event.section === "history_recall_context")
+        .toSorted(
+          (left, right) =>
+            (left.selectionOrder ?? 0) - (right.selectionOrder ?? 0),
+        );
+      let historyRecall:
+        | Readonly<{
+            events: readonly CompiledContextReferencedEvent[];
+            receipt: HistoryRecallReceiptSnapshot;
+            reference: string;
+          }>
+        | undefined;
+      if (historyRecallSections.context || historyRecallSections.receipt) {
+        if (!historyRecallSections.context || !historyRecallSections.receipt) {
+          throw new CompiledContextIntegrityError();
+        }
+        let receipt: HistoryRecallReceiptSnapshot;
+        try {
+          receipt = decodeHistoryRecallReceipt(
+            historyRecallSections.receipt.reference,
+          );
+        } catch {
+          throw new CompiledContextIntegrityError();
+        }
+        if (
+          !historyRecallEventsMatch(
+            historyRecallSections.context.reference,
+            historyRecallEvents,
+          ) ||
+          receipt.injectedRows !== historyRecallEvents.length
+        ) {
+          throw new CompiledContextIntegrityError();
+        }
+        historyRecall = {
+          events: historyRecallEvents,
+          receipt,
+          reference: historyRecallSections.context.reference,
+        };
+      } else if (historyRecallEvents.length > 0) {
+        throw new CompiledContextIntegrityError();
+      }
       const currentInput = currentInputs[0];
+      let timeContext: ContextTimeMetadata | undefined;
+      if (timeSection) {
+        try {
+          timeContext = decodeContextTimeMetadata(timeSection.reference);
+        } catch {
+          throw new CompiledContextIntegrityError();
+        }
+        if (
+          !contextTimeMetadataMatches(timeContext, [
+            ...historyRecallEvents,
+            ...recentEvents,
+            ...history,
+            ...(currentInput ? [currentInput] : []),
+          ]) ||
+          !currentInput ||
+          timeContext.anchor.revisionId !== String(currentInput.revisionId) ||
+          (currentInput.expressedAt !== undefined &&
+            (timeContext.anchor.expressedAt !== currentInput.expressedAt ||
+              timeContext.anchor.instantSource !== "event"))
+        ) {
+          throw new CompiledContextIntegrityError();
+        }
+      }
+      if (
+        (source.compilerVersion === TIME_AWARE_CONTEXT_COMPILER_VERSION ||
+          source.compilerVersion === RECENT_CONTEXT_TIME_COMPILER_VERSION ||
+          source.compilerVersion ===
+            INDEXED_TIME_AWARE_CONTEXT_COMPILER_VERSION ||
+          source.compilerVersion ===
+            INDEXED_RECENT_CONTEXT_TIME_COMPILER_VERSION ||
+          compactTimeFormat ||
+          previousTimeFormat) &&
+        !timeContext
+      ) {
+        throw new CompiledContextIntegrityError();
+      }
       const dailySessionReference = source.sections.find(
         (section) => section.key === "daily_session",
       )?.reference;
@@ -865,6 +1279,18 @@ export function createContextCompiler(dependencies: {
         contentHmacSecret: dependencies.contentHmacSecret,
         currentInput,
         dailySessionReference,
+        ...(timeContext === undefined
+          ? {}
+          : {
+              timeContext,
+              timeContextFormat: previousTimeFormat
+                ? "legacy"
+                : compactTimeFormat
+                  ? "compact-v2"
+                  : indexedTimeFormat
+                    ? "compact"
+                    : "inline",
+            }),
         history,
         locale: source.locale,
         policyVersions: source.policyVersions,
@@ -892,6 +1318,7 @@ export function createContextCompiler(dependencies: {
         memorySectionContents,
         rollingSummary: source.rollingSummary ?? null,
         actionFinalizationReceipt: source.actionFinalizationReceipt,
+        ...(historyRecall === undefined ? {} : { historyRecall }),
         ...(recentContext === undefined ? {} : { recentContext }),
       });
       const expectedSections = renderableSections.map(
@@ -913,6 +1340,44 @@ export function createContextCompiler(dependencies: {
         throw new CompiledContextIntegrityError();
       }
 
+      // From history-reading:v3 the quoted messages are material at the end
+      // of the instructions, not conversation turns; a result frozen earlier
+      // replays them as the turns they were.
+      const quoted =
+        historyRecall !== undefined &&
+        historyReadingRulesUseBlock(historyRecall.receipt.readingRulesVersion)
+          ? historyRecall
+          : undefined;
+      const quotedCount = quoted?.events.length ?? 0;
+      const outboundEvents = [
+        ...(quoted === undefined ? historyRecall?.events ?? [] : []),
+        ...(recentContext?.events ?? []),
+        ...history,
+        currentInput,
+      ];
+      const messageNotes = renderOutboundMessageNotes(timeContext, quotedCount);
+      const messageTimeStamps =
+        timeContext === undefined ||
+        previousTimeFormat ||
+        compactTimeFormat ||
+        indexedTimeFormat
+          ? []
+          : renderOutboundMessageTimeStamps(timeContext, quotedCount);
+      const earlierMessagesBlock =
+        quoted !== undefined && timeContext !== undefined
+          ? renderEarlierMessagesBlock({
+              anchorTimezone: timeContext.anchor.timezone,
+              context: presentedMessages(timeContext),
+              entries: quoted.events.map((event, index) => ({
+                ...presentedMessages(timeContext)[index]!,
+                text: event.text,
+              })),
+              now: timeContext.anchor.expressedAt,
+              occasionSizes: (
+                quoted.receipt.result.coverage.search?.occasions ?? []
+              ).map((occasion) => occasion.selectedRows),
+            })
+          : null;
       return {
         ...(source.actionReferenceHandles === undefined
           ? {}
@@ -921,20 +1386,21 @@ export function createContextCompiler(dependencies: {
           .filter(
             (section) =>
               section.key !== "recent_conversation_context" &&
+              section.key !== HISTORY_RECALL_CONTEXT_SECTION_KEY &&
               section.key !== "committed_raw_events" &&
               section.key !== "current_user_input",
           )
           .map((section) => section.content)
           .join("\n") +
-          renderActionReferenceInstructions(source.actionReferenceHandles),
-        messages: [
-          ...(recentContext?.events ?? []),
-          ...history,
-          currentInput,
-        ].map((event) => ({
+          renderActionReferenceInstructions(source.actionReferenceHandles) +
+          (earlierMessagesBlock === null ? "" : `\n${earlierMessagesBlock}`),
+        messages: outboundEvents.map((event, index) => ({
           revisionId: event.revisionId,
           role: event.actor,
-          text: event.text,
+          text: withMessageNote(
+            messageTimeStamps[index] ?? null,
+            withMessageNote(messageNotes[index] ?? null, event.text),
+          ),
         })),
       };
     },
@@ -1185,9 +1651,449 @@ function estimateTokens(text: string): number {
   return Math.max(1, Math.ceil([...text].length / 4));
 }
 
+function createContextTimeMetadata(input: {
+  currentInput: CompiledContextReferencedEvent;
+  currentRequestInstant: Date | null;
+  currentRequestTimezone: string | null;
+  /** Correction instants by revision, for user messages only. */
+  correctedAt?: ReadonlyMap<string, string>;
+  events: readonly CompiledContextReferencedEvent[];
+}): ContextTimeMetadata {
+  const eventInstant = input.currentInput.expressedAt ?? null;
+  const fallbackInstant = input.currentRequestInstant?.toISOString() ?? null;
+  return {
+    anchor: {
+      expressedAt: eventInstant ?? fallbackInstant,
+      instantSource:
+        eventInstant !== null
+          ? "event"
+          : fallbackInstant !== null
+            ? "command_fallback"
+            : "unknown",
+      revisionId: String(input.currentInput.revisionId),
+      timezone: input.currentRequestTimezone,
+    },
+    entries: input.events.map((event, index) => ({
+      actor: event.actor,
+      expressedAt: event.expressedAt ?? null,
+      expressionTimezone: event.expressionTimezone ?? null,
+      expressionTimezoneSource: event.expressionTimezoneSource ?? "unknown",
+      messageIndex: index + 1,
+      occurredAt: event.occurredAt ?? null,
+      revisionId: String(event.revisionId),
+      ...(event.actor === "user" &&
+      input.correctedAt?.get(String(event.revisionId)) !== undefined
+        ? { correctedAt: input.correctedAt.get(String(event.revisionId))! }
+        : {}),
+    })),
+    version: 1,
+  };
+}
+
+function encodeContextTimeMetadata(metadata: ContextTimeMetadata): string {
+  return JSON.stringify(metadata);
+}
+
+function decodeContextTimeMetadata(reference: string): ContextTimeMetadata {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(reference);
+  } catch {
+    throw new Error("Invalid frozen Context time metadata.");
+  }
+  if (!isRecord(parsed) || parsed.version !== 1) {
+    throw new Error("Unsupported frozen Context time metadata.");
+  }
+  const anchor = parsed.anchor;
+  if (
+    !isRecord(anchor) ||
+    typeof anchor.revisionId !== "string" ||
+    !(anchor.expressedAt === null || typeof anchor.expressedAt === "string") ||
+    !(anchor.timezone === null || typeof anchor.timezone === "string") ||
+    (anchor.instantSource !== "event" &&
+      anchor.instantSource !== "command_fallback" &&
+      anchor.instantSource !== "unknown") ||
+    !Array.isArray(parsed.entries)
+  ) {
+    throw new Error("Invalid frozen Context time metadata.");
+  }
+  const entries = parsed.entries.map((entry): ContextTimeEntry => {
+    if (
+      !isRecord(entry) ||
+      (entry.actor !== "user" && entry.actor !== "assistant") ||
+      typeof entry.revisionId !== "string" ||
+      typeof entry.messageIndex !== "number" ||
+      !Number.isSafeInteger(entry.messageIndex) ||
+      (entry.messageIndex as number) < 1 ||
+      !(entry.expressedAt === null || typeof entry.expressedAt === "string") ||
+      !(entry.expressionTimezone === null ||
+        typeof entry.expressionTimezone === "string") ||
+      !(entry.occurredAt === null || typeof entry.occurredAt === "string") ||
+      (entry.expressionTimezoneSource !== "request" &&
+        entry.expressionTimezoneSource !== "session_start_fallback" &&
+        entry.expressionTimezoneSource !== "unknown") ||
+      !(entry.correctedAt === undefined ||
+        (typeof entry.correctedAt === "string" &&
+          entry.actor === "user" &&
+          !Number.isNaN(Date.parse(entry.correctedAt))))
+    ) {
+      throw new Error("Invalid frozen Context time metadata entry.");
+    }
+    return {
+      actor: entry.actor,
+      expressedAt: entry.expressedAt,
+      expressionTimezone: entry.expressionTimezone,
+      expressionTimezoneSource: entry.expressionTimezoneSource,
+      messageIndex: entry.messageIndex as number,
+      occurredAt: entry.occurredAt,
+      revisionId: entry.revisionId,
+      ...(entry.correctedAt === undefined
+        ? {}
+        : { correctedAt: entry.correctedAt as string }),
+    };
+  });
+  return {
+    anchor: {
+      expressedAt: anchor.expressedAt,
+      instantSource: anchor.instantSource,
+      revisionId: anchor.revisionId,
+      timezone: anchor.timezone,
+    },
+    entries,
+    version: 1,
+  };
+}
+
+function contextTimeMetadataMatches(
+  metadata: ContextTimeMetadata,
+  events: readonly CompiledContextReferencedEvent[],
+): boolean {
+  // The reference table only persists these time fields for the recent
+  // section; same-session and current-input times remain in the signed
+  // time_context section and are absent from persisted event references.
+  return (
+    metadata.entries.length === events.length &&
+    metadata.entries.every((entry, index) => {
+      const event = events[index];
+      return (
+        event !== undefined &&
+        entry.messageIndex === index + 1 &&
+        entry.revisionId === String(event.revisionId) &&
+        entry.actor === event.actor &&
+        (event.expressedAt === undefined ||
+          entry.expressedAt === event.expressedAt) &&
+        (event.occurredAt === undefined ||
+          entry.occurredAt === event.occurredAt)
+      );
+    })
+  );
+}
+
+function presentedMessages(timeContext: ContextTimeMetadata) {
+  return timeContext.entries.map((entry) => ({
+    actor: entry.actor,
+    correctedAt: entry.correctedAt ?? null,
+    expressedAt: entry.expressedAt,
+    timezone: entry.expressionTimezone,
+    timezoneRecorded: entry.expressionTimezoneSource === "request",
+  }));
+}
+
+/**
+ * How many leading time entries belong to messages a History Answer presents
+ * as the earlier-messages block (history-reading:v3 on) and therefore does not
+ * send as conversation turns.
+ */
+function quotedBlockCount(
+  historyRecall:
+    | Readonly<{
+        events: readonly unknown[];
+        receipt: HistoryRecallReceiptSnapshot;
+      }>
+    | undefined,
+): number {
+  return historyRecall !== undefined &&
+    historyReadingRulesUseBlock(historyRecall.receipt.readingRulesVersion)
+    ? historyRecall.events.length
+    : 0;
+}
+
+/**
+ * Correction notes for the outbound conversation messages, in provider order.
+ * They follow the instants frozen on the time metadata entries, which only a
+ * Context compiled with them carries; corrections of quoted messages count
+ * too, so a turn written before one of those says so.
+ */
+function renderOutboundMessageNotes(
+  timeContext: ContextTimeMetadata | undefined,
+  quotedCount: number,
+): readonly (string | null)[] {
+  if (timeContext === undefined) return [];
+  const all = presentedMessages(timeContext);
+  return renderMessageNotes({
+    anchorTimezone: timeContext.anchor.timezone,
+    context: all,
+    messages: all.slice(quotedCount),
+  });
+}
+
+const EXPERIENCE_TIME_RULE =
+  "Expression time does not establish when a described event happened. Use experience time only when the message or explicit evidence states it; do not infer it from expression time or the Daily Session date.";
+const RELATIVE_DATE_RULE =
+  "For recall of today/yesterday, compare each expression instant in the current anchor's timezone. A same-session message may be from yesterday; Session ownership never proves absence. Resolve relative dates in historical text using that message's expression time.";
+
+/**
+ * The time section of the current format: the request anchor and how to read
+ * the line each user message carries. The times themselves are on the
+ * messages (`renderOutboundMessageTimeStamps`).
+ */
+function renderInlineContextTimeMetadata(
+  metadata: ContextTimeMetadata,
+  includeMessageNoteRule: boolean,
+): string {
+  const anchor = formatContextInstant(
+    metadata.anchor.expressedAt,
+    metadata.anchor.timezone,
+  );
+  const now =
+    metadata.anchor.expressedAt === null
+      ? ""
+      : ` Now is ${formatInstantInWords(metadata.anchor.expressedAt, metadata.anchor.timezone)}${
+          metadata.anchor.timezone === null
+            ? " UTC; the user's time zone is not recorded"
+            : ""
+        }.`;
+  return [
+    `current request anchor: instant=${metadata.anchor.expressedAt ?? "unknown"}; timezone=${metadata.anchor.timezone ?? "unknown"}; local=${anchor}; source=${metadata.anchor.instantSource}.`,
+    `Each of the user's messages below begins with a bracketed line starting "${MESSAGE_TIME_MARK.trim()}" that says when it was written, in the user's local time. That line is added by the system: it is not part of what was said, and you never write one yourself. Each of your replies was written right after the message it answers.${now}`,
+    EXPERIENCE_TIME_RULE,
+    RELATIVE_DATE_RULE,
+    ...(includeMessageNoteRule ? [INLINE_MESSAGE_NOTE_RULE] : []),
+  ].join("\n");
+}
+
+function formatInstantInWords(instant: string, timezone: string | null): string {
+  try {
+    return formatHumanMinute(instant, timezone ?? "UTC");
+  } catch {
+    return formatContextInstant(instant, timezone);
+  }
+}
+
+/**
+ * When each outbound conversation message was written, in provider order;
+ * `null` for the assistant's turns. Messages presented as the
+ * earlier-messages block carry their times there.
+ */
+function renderOutboundMessageTimeStamps(
+  timeContext: ContextTimeMetadata,
+  quotedCount: number,
+): readonly (string | null)[] {
+  return renderMessageTimeStamps({
+    anchorTimezone: timeContext.anchor.timezone,
+    messages: presentedMessages(timeContext).slice(quotedCount),
+    now: timeContext.anchor.expressedAt,
+  });
+}
+
+function renderContextTimeMetadata(
+  metadata: ContextTimeMetadata,
+  includeRelativeDateRules: boolean,
+  includeMessageNoteRule = false,
+  /** Leading entries that are not sent as conversation messages. */
+  quotedCount = 0,
+): string {
+  const zones = [
+    metadata.anchor.timezone,
+    ...metadata.entries.map((entry) => entry.expressionTimezone),
+  ].filter((zone): zone is string => zone !== null);
+  const zoneCodes = new Map<string, number>();
+  for (const zone of zones) {
+    if (!zoneCodes.has(zone)) zoneCodes.set(zone, zoneCodes.size);
+  }
+  const anchor = formatContextInstant(
+    metadata.anchor.expressedAt,
+    metadata.anchor.timezone,
+  );
+  const lines = [
+    `current request anchor: instant=${metadata.anchor.expressedAt ?? "unknown"}; timezone=${metadata.anchor.timezone ?? "unknown"}; local=${anchor}; source=${metadata.anchor.instantSource}.`,
+    "Expression times are when messages were written, in provider message order (1-based). Zone codes name each message's timezone; source codes are r=request, s=session-start fallback, ?=unknown. The GMT offset disambiguates repeated DST hours.",
+    `Zones: ${[...zoneCodes.entries()].map(([zone, code]) => `${code}=${zone}`).join("; ") || "none"}`,
+    "Times:",
+    // Rows are numbered in provider message order, so entries presented as
+    // the earlier-messages block have none.
+    ...metadata.entries.slice(quotedCount).map((entry, index) => {
+      const zoneCode =
+        entry.expressionTimezone === null
+          ? "?"
+          : String(zoneCodes.get(entry.expressionTimezone));
+      const sourceCode =
+        entry.expressionTimezoneSource === "request"
+          ? "r"
+          : entry.expressionTimezoneSource === "session_start_fallback"
+            ? "s"
+            : "?";
+      const local = formatContextInstant(
+        entry.expressedAt,
+        entry.expressionTimezone,
+      );
+      return `${quotedCount === 0 ? entry.messageIndex : index + 1}=${local};z=${zoneCode};s=${sourceCode}`;
+    }),
+    EXPERIENCE_TIME_RULE,
+  ];
+  if (includeRelativeDateRules) lines.push(RELATIVE_DATE_RULE);
+  if (includeMessageNoteRule) lines.push(MESSAGE_NOTE_RULE);
+  return lines.join("\n");
+}
+
+function createBoundedContextTimeMetadata(input: {
+  metadata: ContextTimeMetadata;
+  maximumMessageCount: number;
+  includeMessageNoteRule: boolean;
+  includeRelativeDateRules: boolean;
+  /** The times are on the messages; the section holds no table. */
+  inline: boolean;
+  quotedCount: number;
+}): Readonly<{ budgetTokens: number; content: string }> {
+  const content = input.inline
+    ? renderInlineContextTimeMetadata(
+        input.metadata,
+        input.includeMessageNoteRule,
+      )
+    : renderContextTimeMetadata(
+        input.metadata,
+        input.includeRelativeDateRules,
+        input.includeMessageNoteRule,
+        input.quotedCount,
+      );
+  const zoneCount = new Set(
+    [
+      input.metadata.anchor.timezone,
+      ...input.metadata.entries.map((entry) => entry.expressionTimezone),
+    ].filter((zone): zone is string => zone !== null),
+  ).size;
+  const budget =
+    CONTEXT_TIME_BASE_TOKEN_BUDGET +
+    input.metadata.entries.length * CONTEXT_TIME_ENTRY_TOKEN_BUDGET +
+    zoneCount * CONTEXT_TIME_ZONE_TOKEN_BUDGET +
+    (input.includeMessageNoteRule ? CONTEXT_TIME_NOTE_RULE_TOKEN_BUDGET : 0);
+  const actualTokens = estimateTokens(content);
+  if (
+    input.metadata.entries.length > input.maximumMessageCount ||
+    actualTokens > budget
+  ) {
+    throw new Error("Context time metadata exceeded its bounded token budget.");
+  }
+  return { budgetTokens: budget, content };
+}
+
+function renderLegacyContextTimeMetadata(metadata: ContextTimeMetadata): string {
+  const anchor = formatLegacyContextInstant(
+    metadata.anchor.expressedAt,
+    metadata.anchor.timezone,
+  );
+  const lines = [
+    "Current request anchor:",
+    `current request anchor instant=${metadata.anchor.expressedAt ?? "unknown"}; source=${metadata.anchor.instantSource}; timezone=${metadata.anchor.timezone ?? "unknown"}; ${anchor}`,
+    "Message expression times (when each message was written). Conversation messages use the same order as the provider message array, starting at 1:",
+    ...metadata.entries.map((entry) => {
+      const local = formatLegacyContextInstant(
+        entry.expressedAt,
+        entry.expressionTimezone,
+      );
+      return `provider_message=${entry.messageIndex}; revision=${entry.revisionId}; role=${entry.actor}; expression instant=${entry.expressedAt ?? "unknown"}; timezone=${entry.expressionTimezone ?? "unknown"} (${entry.expressionTimezoneSource}); ${local}; occurredAt=${entry.occurredAt ?? "unknown"}`;
+    }),
+    "Expression time tells when a message was written. It does not establish when a described event happened. Use experience time only when the message or explicit evidence states it; do not infer it from expression time or the Daily Session date.",
+  ];
+  return lines.join("\n");
+}
+
+function formatLegacyContextInstant(
+  instant: string | null,
+  timezone: string | null,
+): string {
+  if (instant === null) return "local date=unknown; local time=unknown";
+  if (timezone === null) {
+    return "local date=unknown; local time=unknown (timezone unavailable)";
+  }
+  const date = new Date(instant);
+  if (!Number.isFinite(date.getTime())) {
+    return "local date=unknown; local time=unknown (invalid expression instant)";
+  }
+  try {
+    const parts = new Intl.DateTimeFormat("en-US-u-nu-latn", {
+      day: "2-digit",
+      hour: "2-digit",
+      hourCycle: "h23",
+      minute: "2-digit",
+      month: "2-digit",
+      second: "2-digit",
+      timeZone: timezone,
+      timeZoneName: "shortOffset",
+      year: "numeric",
+    }).formatToParts(date);
+    const valueOf = (type: Intl.DateTimeFormatPartTypes) =>
+      parts.find((part) => part.type === type)?.value;
+    const year = valueOf("year");
+    const month = valueOf("month");
+    const day = valueOf("day");
+    const hour = valueOf("hour");
+    const minute = valueOf("minute");
+    const second = valueOf("second");
+    const offset = valueOf("timeZoneName");
+    if (!year || !month || !day || !hour || !minute || !second || !offset) {
+      return "local date=unknown; local time=unknown";
+    }
+    return `local date=${year}-${month}-${day}; local time=${hour}:${minute}:${second} ${offset}`;
+  } catch {
+    return "local date=unknown; local time=unknown (invalid timezone)";
+  }
+}
+
+function formatContextInstant(
+  instant: string | null,
+  timezone: string | null,
+): string {
+  if (instant === null) return "unknown";
+  const date = new Date(instant);
+  if (!Number.isFinite(date.getTime()) || timezone === null) return instant;
+  try {
+    const parts = new Intl.DateTimeFormat("en-US-u-nu-latn", {
+      day: "2-digit",
+      hour: "2-digit",
+      hourCycle: "h23",
+      minute: "2-digit",
+      month: "2-digit",
+      second: "2-digit",
+      timeZone: timezone,
+      timeZoneName: "shortOffset",
+      year: "numeric",
+    }).formatToParts(date);
+    const valueOf = (type: Intl.DateTimeFormatPartTypes) =>
+      parts.find((part) => part.type === type)?.value;
+    const year = valueOf("year");
+    const month = valueOf("month");
+    const day = valueOf("day");
+    const hour = valueOf("hour");
+    const minute = valueOf("minute");
+    const second = valueOf("second");
+    const offset = valueOf("timeZoneName");
+    if (!year || !month || !day || !hour || !minute || !second || !offset) {
+      return "local date=unknown; local time=unknown";
+    }
+    return `${year}-${month}-${day} ${hour}:${minute}:${second} ${offset}`;
+  } catch {
+    return instant;
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 /**
  * #295: a governance row only authorizes the recent path when every identity
- * and budget field names the runtime actually wired into this compiler. Any
+ * and budget field names the selector runtime actually wired here. Any
  * mismatch (or an absent row) fails closed: no recent content is selected and
  * no governance version is frozen.
  */
@@ -1251,6 +2157,8 @@ function emptyRecentContextSelection(
 
 async function loadRecentContextSelection(input: {
   dependency: RecentContextCompilerDependency;
+  /** Revisions already quoted by a History Answer must not repeat here. */
+  extraExcludedRevisionIds?: readonly ConversationEventRevisionId[];
   frozenAt: Date;
   source: ContextSourceSnapshot;
   userId: UserId;
@@ -1298,9 +2206,10 @@ async function loadRecentContextSelection(input: {
       null,
     );
   }
-  const excludeRevisionIds = input.source.events.map(
-    (event) => event.revisionId,
-  );
+  const excludeRevisionIds = [
+    ...input.source.events.map((event) => event.revisionId),
+    ...(input.extraExcludedRevisionIds ?? []),
+  ];
   const request: RecentContextSourceRequest = {
     budgets: input.dependency.policy.budgets,
     cutoff,
@@ -1377,6 +2286,31 @@ async function loadRecentContextSelection(input: {
   });
 }
 
+function encodeHistoryRecallEventsReference(
+  resultId: string,
+  events: readonly CompiledContextReferencedEvent[],
+): string {
+  return `history-recall:v${HISTORY_RECALL_RESULT_VERSION}:${resultId}:${events
+    .map((event) => event.revisionId)
+    .join(",")}`;
+}
+
+function historyRecallEventsMatch(
+  reference: string,
+  events: readonly CompiledContextReferencedEvent[],
+): boolean {
+  const match = new RegExp(
+    `^history-recall:v${HISTORY_RECALL_RESULT_VERSION}:([^:]+):(.*)$`,
+  ).exec(reference);
+  if (!match) return false;
+  const ids = match[2] === "" ? [] : (match[2] ?? "").split(",");
+  return (
+    ids.length === events.length &&
+    ids.every((id, index) => id === String(events[index]?.revisionId)) &&
+    events.every((event, index) => event.selectionOrder === index)
+  );
+}
+
 function recentEventsMatch(
   decoded: ReturnType<typeof decodeRecentContextReference>,
   events: readonly CompiledContextReferencedEvent[],
@@ -1422,12 +2356,21 @@ function createSections(input: {
   safetyPosture?: CurrentSafetyPosture | null;
   safetyPostureContent?: string;
   actionFinalizationReceipt: ActionFinalizationReceiptSnapshot | undefined;
+  /** Issue #314: the frozen History Answer review result and its quotes. */
+  historyRecall?: Readonly<{
+    events: readonly CompiledContextReferencedEvent[];
+    receipt: HistoryRecallReceiptSnapshot;
+    reference: string;
+  }>;
   /** #293: frozen recent-source selection; bodies come from referenced events. */
   recentContext?: Readonly<{
     budgetTokens: number;
     events: readonly CompiledContextReferencedEvent[];
     reference: string;
   }>;
+  timeContext?: ContextTimeMetadata;
+  /** Absent means the current format, `inline`. */
+  timeContextFormat?: "compact" | "compact-v2" | "inline" | "legacy";
 }): readonly (CompiledContextSection & Readonly<{ content: string }>)[] {
   // While the Safety Posture is active, enforcement is compilation: the
   // ordinary behavior anchors are swapped for the versioned reduced variant,
@@ -1447,6 +2390,36 @@ function createSections(input: {
         })
       : undefined);
   const reducedPersonaActive = safetyPostureSectionContent !== undefined;
+  const timeMetadataSection =
+    input.timeContext === undefined
+      ? undefined
+      : input.timeContextFormat === "legacy"
+        ? {
+            budgetTokens: null,
+            content: renderLegacyContextTimeMetadata(input.timeContext),
+          }
+        : {
+            ...createBoundedContextTimeMetadata({
+              metadata: input.timeContext,
+              includeMessageNoteRule: renderOutboundMessageNotes(
+                input.timeContext,
+                quotedBlockCount(input.historyRecall),
+              ).some((note) => note?.startsWith(MESSAGE_NOTE_MARK) === true),
+              quotedCount: quotedBlockCount(input.historyRecall),
+              includeRelativeDateRules: input.timeContextFormat !== "compact-v2",
+              inline:
+                input.timeContextFormat === undefined ||
+                input.timeContextFormat === "inline",
+              maximumMessageCount:
+                input.rawEventTokenBudget +
+                (input.recentContext?.budgetTokens ?? 0) +
+                (input.historyRecall?.events.reduce(
+                  (total, event) => total + event.estimatedTokens,
+                  0,
+                ) ?? 0) +
+                1,
+            }),
+          };
   const definitions: readonly Readonly<{
     budgetTokens: number | null;
     content: string;
@@ -1562,6 +2535,16 @@ function createSections(input: {
       reference: input.dailySessionReference,
       truncatable: false,
     },
+    ...(timeMetadataSection === undefined
+      ? []
+      : [
+          {
+            ...timeMetadataSection,
+            key: "time_context" as const,
+            reference: encodeContextTimeMetadata(input.timeContext!),
+            truncatable: false,
+          },
+        ]),
     ...((input.dialogueState !== null && input.dialogueState !== undefined) ||
     input.dialogueStateContent
       ? [
@@ -1579,6 +2562,33 @@ function createSections(input: {
     ...renderCuriosityStopSignalSection(input),
     ...renderMemorySections(input),
     ...renderRecallExperienceSection(input),
+    ...(input.historyRecall === undefined
+      ? []
+      : [
+          {
+            budgetTokens: null,
+            content: renderHistoryRecallReceipt(input.historyRecall.receipt),
+            key: "history_recall_receipt" as const,
+            reference: encodeHistoryRecallReceipt(input.historyRecall.receipt),
+            truncatable: false,
+          },
+          {
+            budgetTokens: null,
+            content: input.historyRecall.events
+              .map(
+                (event) =>
+                  `${event.actor}:${event.revisionId}:${event.expressedAt ?? "unknown"}:${event.occurredAt ?? "null"}:${event.text}`,
+              )
+              .join("\n"),
+            key: HISTORY_RECALL_CONTEXT_SECTION_KEY,
+            reference: input.historyRecall.reference,
+            selectedTokens: input.historyRecall.events.reduce(
+              (total, event) => total + event.estimatedTokens,
+              0,
+            ),
+            truncatable: false,
+          },
+        ]),
     ...(input.recentContext === undefined
       ? []
       : [

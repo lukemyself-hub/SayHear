@@ -17,16 +17,26 @@ import {
   RecentContextReferenceError,
   validateSafetyPostureContent,
   type CurrentSafetyPosture,
+  type HistoryRecallInspection,
+  type HistoryExperienceSearchPlan,
+  decodeHistoryRecallReceipt,
+  type HistoryQueryPlan,
+  type TurnInspection,
   type MemorySectionKey,
   type SafetyPostureContent,
 } from "@sayhear/application";
 
+import {
+  controlExclusionSql,
+  generatingUserRevisionIsCurrentSql,
+} from "./postgres-source-eligibility";
 import { loadDialogueStateForContext } from "./postgres-dialogue-state-repository";
 import type { Pool, PoolClient } from "pg";
 
 import { createUuidV7 } from "./uuid-v7";
 
 type GenerationMetadataRow = Readonly<{
+  generation_stage: string;
   attempt_status: string;
   checked_at: Date;
   command_status: string;
@@ -51,7 +61,8 @@ type GenerationMetadataRow = Readonly<{
     section:
       | "committed_raw_events"
       | "current_user_input"
-      | "recent_conversation_context";
+      | "recent_conversation_context"
+      | "history_recall_context";
     selectionOrder: number | null;
     selectionReason: string | null;
     sequence: number;
@@ -155,6 +166,7 @@ export class PostgresInternalInspectionRepository
           command.consent_policy_version,
           command.harness_policy_version,
           command.conversation_action_catalog_version,
+          command.generation_stage,
           command.status AS command_status,
           command.recovery_policy_version,
           command.recovery_status,
@@ -313,6 +325,14 @@ export class PostgresInternalInspectionRepository
         referencedEvents: row.context_referenced_events,
         sections: row.context_sections,
       });
+      const historyRecall = await loadHistoryRecallInspection(client, {
+        commandId: input.generationCommandId,
+        userId: input.userId,
+      });
+      const turn = await loadTurnInspection(client, {
+        commandId: input.generationCommandId,
+        userId: input.userId,
+      });
       await client.query("COMMIT");
       return {
         attemptStatus: row.attempt_status,
@@ -345,7 +365,10 @@ export class PostgresInternalInspectionRepository
           })),
           sectionBudgets: row.context_section_budgets,
           sections: row.context_sections.map(
-            ({ contentHmac: _contentHmac, ...section }) => section,
+            ({ contentHmac: _contentHmac, ...section }) =>
+              section.key === "history_recall_receipt"
+                ? { ...section, reference: inspectableReceiptReference(section.reference) }
+                : section,
           ),
           retrievalManifest: row.context_retrieval_manifest,
           safetyPosture: {
@@ -367,7 +390,10 @@ export class PostgresInternalInspectionRepository
         generationCommandId: asGenerationCommandId(
           row.generation_command_id,
         ),
+        generationStage: row.generation_stage,
         harnessPolicyVersion: row.harness_policy_version,
+        historyRecall,
+        turn,
         inputTokens: optionalNumber(row.input_tokens),
         model: row.model,
         modelRunAttemptId: asModelRunAttemptId(
@@ -506,6 +532,73 @@ export class PostgresInternalInspectionRepository
         `,
         [input.userId, row.daily_session_id],
       );
+      // Issue #320: the history review's frozen sources, re-qualified now. The
+      // Decision command resolves to its History Answer command.
+      const historySources = await client.query<{
+        actor: "assistant" | "user";
+        expressed_at: Date | null;
+        revision_id: string;
+        selection_order: number;
+        text: string;
+      }>(
+        `
+          SELECT
+            ref.actor,
+            ref.expressed_at,
+            ref.conversation_event_revision_id::text AS revision_id,
+            ref.selection_order,
+            revision.canonical_text AS text
+          FROM generation_commands command
+          INNER JOIN compiled_contexts context
+            ON context.generation_command_id = COALESCE(
+              (SELECT result.answer_command_id
+               FROM history_recall_results result
+               WHERE result.decision_command_id = command.generation_command_id
+                 AND result.user_id = command.user_id),
+              command.generation_command_id
+            )
+           AND context.user_id = command.user_id
+          INNER JOIN compiled_context_revision_refs ref
+            ON ref.compiled_context_id = context.compiled_context_id
+           AND ref.user_id = context.user_id
+           AND ref.section = 'history_recall_context'
+          INNER JOIN conversation_event_revisions revision
+            ON revision.conversation_event_revision_id =
+              ref.conversation_event_revision_id
+           AND revision.user_id = ref.user_id
+          INNER JOIN conversation_events event
+            ON event.conversation_event_id = revision.conversation_event_id
+           AND event.user_id = revision.user_id
+          LEFT JOIN generation_commands generating_command
+            ON generating_command.generation_command_id = event.generation_command_id
+           AND generating_command.user_id = event.user_id
+          WHERE command.user_id = $1
+            AND command.generation_command_id = $2
+            AND event.lifecycle_status = 'active'
+            AND event.current_revision_id = ref.conversation_event_revision_id
+            AND revision.content_purged_at IS NULL
+            AND ${controlExclusionSql({
+              revisionId: "ref.conversation_event_revision_id",
+              userId: "ref.user_id",
+            })} IS NULL
+            AND (
+              ref.actor <> 'assistant'
+              OR (
+                generating_command.input_revision_id IS NOT NULL
+                AND ${generatingUserRevisionIsCurrentSql({
+                  generatingRevisionId: "generating_command.input_revision_id",
+                  userId: "ref.user_id",
+                })}
+                AND ${controlExclusionSql({
+                  revisionId: "generating_command.input_revision_id",
+                  userId: "ref.user_id",
+                })} IS NULL
+              )
+            )
+          ORDER BY ref.selection_order
+        `,
+        [input.userId, input.generationCommandId],
+      );
       await insertSensitiveAccessAudit(client, {
         ...input,
         disposition: "allowed",
@@ -514,6 +607,13 @@ export class PostgresInternalInspectionRepository
       await client.query("COMMIT");
       return {
         content: {
+          historySources: historySources.rows.map((source) => ({
+            actor: source.actor,
+            expressedAt: source.expressed_at?.toISOString() ?? null,
+            revisionId: asConversationEventRevisionId(source.revision_id),
+            selectionOrder: Number(source.selection_order),
+            text: source.text,
+          })),
           events: content.rows.map((event) => ({
             actor: event.actor,
             revisionId: asConversationEventRevisionId(
@@ -862,4 +962,198 @@ async function insertSensitiveAccessAudit(
       input.now,
     ],
   );
+}
+
+/**
+ * Content-free account of a controlled history review, readable from either
+ * end (the Decision command or the History Answer command). Owner scoped.
+ */
+function inspectablePlan(
+  stored: HistoryQueryPlan | HistoryExperienceSearchPlan | null,
+): HistoryRecallInspection["plan"] {
+  if (stored === null) return null;
+  if ("kind" in stored && stored.kind === "search_experience") {
+    return {
+      endDate: stored.endDate,
+      kind: "search_experience",
+      personGroups: stored.groups.filter((group) => group.role === "person").length,
+      searchPolicyVersion: stored.searchPolicyVersion,
+      startDate: stored.startDate,
+      termGroups: stored.groups.filter((group) => group.role === "term").length,
+      timezone: stored.timezone,
+      variants: stored.groups.reduce((total, group) => total + group.variants.length, 0),
+    };
+  }
+  return stored as HistoryQueryPlan;
+}
+
+/**
+ * The frozen receipt reference carries the model's proposal (search clues,
+ * people) and the plan's term variants: private text that reaches the model
+ * but must never reach the panel. The panel gets the same manifest with the
+ * clues replaced by counts, and an unreadable reference is reported as such.
+ */
+function inspectableReceiptReference(reference: string): string {
+  try {
+    const snapshot = decodeHistoryRecallReceipt(reference);
+    const proposal = snapshot.result.proposal;
+    return JSON.stringify({
+      // How many quoted messages were marked as the person's own correction;
+      // which ones and when stays with the frozen Context.
+      correctionMarks: snapshot.corrections?.length ?? 0,
+      droppedAtCompile: snapshot.droppedAtCompile,
+      injectedRows: snapshot.injectedRows,
+      policyVersion: snapshot.policyVersion,
+      readingRulesVersion: snapshot.readingRulesVersion ?? null,
+      result: {
+        coverage: snapshot.result.coverage,
+        failureCode: snapshot.result.failureCode,
+        plan: inspectablePlan(
+          snapshot.result.plan as HistoryQueryPlan | HistoryExperienceSearchPlan | null,
+        ),
+        proposalKind: proposal.kind,
+        status: snapshot.result.status,
+      },
+      version: snapshot.version,
+    });
+  } catch {
+    return "unreadable";
+  }
+}
+
+async function loadTurnInspection(
+  client: PoolClient,
+  input: { commandId: string; userId: string },
+): Promise<TurnInspection | null> {
+  const turn = await client.query<{
+    interaction_turn_id: string;
+    status: string;
+  }>(
+    `SELECT turn.interaction_turn_id::text, turn.status
+     FROM generation_commands command
+     INNER JOIN interaction_turns turn
+       ON turn.interaction_turn_id = command.interaction_turn_id
+      AND turn.user_id = command.user_id
+     WHERE command.user_id = $1 AND command.generation_command_id = $2`,
+    [input.userId, input.commandId],
+  );
+  const turnRow = turn.rows[0];
+  if (!turnRow) return null;
+  const commands = await client.query<{
+    attempt_status: string | null;
+    command_status: string;
+    completed_at: Date | null;
+    egress_status: string | null;
+    error_category: string | null;
+    first_token_at: Date | null;
+    generation_command_id: string;
+    generation_stage: string;
+    provider_request_id: string | null;
+  }>(
+    `SELECT command.generation_command_id::text, command.generation_stage,
+            command.status AS command_status,
+            attempt.status AS attempt_status, attempt.error_category,
+            attempt.provider_request_id, attempt.first_token_at,
+            attempt.completed_at, egress.status AS egress_status
+     FROM generation_commands command
+     LEFT JOIN LATERAL (
+       SELECT latest.* FROM model_run_attempts latest
+       WHERE latest.generation_command_id = command.generation_command_id
+         AND latest.user_id = command.user_id
+       ORDER BY latest.attempt_no DESC LIMIT 1
+     ) attempt ON TRUE
+     LEFT JOIN provider_egress_dispositions egress
+       ON egress.model_run_attempt_id = attempt.model_run_attempt_id
+      AND egress.user_id = command.user_id
+     WHERE command.user_id = $1 AND command.interaction_turn_id = $2
+     ORDER BY command.created_at,
+       (command.generation_stage <> 'decision'),
+       command.generation_command_id`,
+    [input.userId, turnRow.interaction_turn_id],
+  );
+  const committed = await client.query(
+    `SELECT 1 FROM conversation_events event
+     WHERE event.user_id = $1 AND event.actor = 'assistant'
+       AND event.lifecycle_status = 'active'
+       AND event.generation_command_id = ANY($2::uuid[])
+     LIMIT 1`,
+    [input.userId, commands.rows.map((row) => row.generation_command_id)],
+  );
+  const assistantEventCommitted = (committed.rowCount ?? 0) > 0;
+  const finalDisposition: TurnInspection["finalDisposition"] =
+    assistantEventCommitted
+      ? "committed"
+      : turnRow.status === "failed"
+        ? "failed"
+        : turnRow.status === "interrupted"
+          ? "interrupted"
+          : turnRow.status === "settled"
+            ? "settled_without_reply"
+            : "in_progress";
+  return {
+    assistantEventCommitted,
+    commands: commands.rows.map((row) => ({
+      attemptStatus: row.attempt_status,
+      commandStatus: row.command_status,
+      completedAt: row.completed_at?.toISOString() ?? null,
+      egressDisposition: row.egress_status,
+      errorCategory: row.error_category,
+      firstTokenAt: row.first_token_at?.toISOString() ?? null,
+      generationCommandId: row.generation_command_id,
+      providerRequestId: row.provider_request_id,
+      stage: row.generation_stage,
+    })),
+    finalDisposition,
+    interactionTurnId: turnRow.interaction_turn_id,
+    turnStatus: turnRow.status,
+  };
+}
+
+async function loadHistoryRecallInspection(
+  client: PoolClient,
+  input: { commandId: string; userId: string },
+): Promise<HistoryRecallInspection | null> {
+  const result = await client.query<{
+    answer_command_id: string;
+    coverage: HistoryRecallInspection["coverage"];
+    decision_command_id: string;
+    failure_code: string | null;
+    item_refs: Array<{
+      actor: "user" | "assistant";
+      expressedAt: string;
+      group?: number;
+      revisionId: string;
+      role?: "match" | "context";
+    }>;
+    plan: { plan: HistoryQueryPlan | HistoryExperienceSearchPlan | null };
+    policy_version: string;
+    status: HistoryRecallInspection["status"];
+  }>(
+    `SELECT decision_command_id::text, answer_command_id::text, policy_version,
+            status, failure_code, plan, coverage, item_refs
+     FROM history_recall_results
+     WHERE user_id = $1
+       AND (decision_command_id = $2 OR answer_command_id = $2)`,
+    [input.userId, input.commandId],
+  );
+  const row = result.rows[0];
+  if (!row) return null;
+  return {
+    answerCommandId: row.answer_command_id,
+    coverage: row.coverage,
+    decisionCommandId: row.decision_command_id,
+    failureCode: row.failure_code,
+    // The search clues are private text: only their counts are inspectable.
+    plan: inspectablePlan(row.plan.plan),
+    policyVersion: row.policy_version,
+    role: row.answer_command_id === input.commandId ? "answer" : "decision",
+    sources: row.item_refs.map((ref) => ({
+      actor: ref.actor,
+      expressedAt: ref.expressedAt,
+      ...(ref.group === undefined ? {} : { group: ref.group }),
+      revisionId: ref.revisionId,
+      ...(ref.role === undefined ? {} : { role: ref.role }),
+    })),
+    status: row.status,
+  };
 }

@@ -1,0 +1,72 @@
+{
+  "caseId": "H11",
+  "findings": [
+    {
+      "criterionId": "S-empty",
+      "itemId": "a-nothing-friday",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-empty",
+      "itemId": "f-invent-friday",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-empty",
+      "itemId": "f-internals",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-older",
+      "itemId": "a-adoption",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-older",
+      "itemId": "f-false-empty",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-older",
+      "itemId": "f-internals",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-earliest",
+      "itemId": "tm-first-mention",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-earliest",
+      "itemId": "f-false-first",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-earliest",
+      "itemId": "f-internals",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    }
+  ],
+  "reviewer": "agent:<name> | human:<name>",
+  "rubricVersion": "continuity-rubric:v1",
+  "runId": "run-17d6056d-8bf5-4de9-ad42-d2a0d5d1d99b",
+  "schemaVersion": "continuity-acceptance-review:v1"
+}

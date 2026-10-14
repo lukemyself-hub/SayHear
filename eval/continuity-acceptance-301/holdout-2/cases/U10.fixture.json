@@ -1,0 +1,82 @@
+{
+  "schemaVersion": "continuity-acceptance-fixture:v1",
+  "id": "U10",
+  "fixtureVersion": "final-2",
+  "stage": "final",
+  "languageVariant": "zh",
+  "defaults": {
+    "locale": "zh-CN",
+    "timezone": "Asia/Shanghai"
+  },
+  "history": [
+    {
+      "key": "hike-a",
+      "at": "2026-10-19T12:30:00.000Z",
+      "user": "上周末去雁荡山爬了两天。表弟阿凯和他女朋友小满跟我一起去的，小满刚进山门没走几步，登山鞋的鞋底就整个掉了下来。",
+      "assistant": "还没开始爬，鞋底先下山了。希望她当时笑得出来。"
+    },
+    {
+      "key": "hike-b",
+      "at": "2026-10-19T12:38:00.000Z",
+      "user": "她笑得比谁都响。第二天起了大雾，什么也看不见，我们走到半山的茶亭就不往上了，在那儿喝了一下午茶，搭景区的电瓶车下的山。",
+      "assistant": "大雾天在茶亭里坐一下午，听着不算白来。"
+    },
+    {
+      "key": "parking",
+      "at": "2026-10-21T11:15:00.000Z",
+      "user": "物业让我周五之前答复车位还续不续租，我一直拖着没给他们回话。",
+      "assistant": "周五的期限摆在那儿，你一直绕着走，看来这个答复没那么好给。"
+    }
+  ],
+  "steps": [
+    {
+      "id": "ask",
+      "type": "say",
+      "at": "2026-10-23T07:00:00.000Z",
+      "abortAfterMs": 500,
+      "text": "我跟你说过的那次爬山是怎么回事来着？"
+    },
+    {
+      "id": "supplement",
+      "type": "say",
+      "at": "2026-10-23T07:00:25.000Z",
+      "text": "不好意思，刚才被我打断了。你只要告诉我是谁跟我一块儿去的就行。"
+    },
+    {
+      "id": "ask-again",
+      "type": "say",
+      "at": "2026-10-23T07:02:00.000Z",
+      "abortAfterMs": 2500,
+      "text": "那第二天后来怎么样了？"
+    },
+    {
+      "id": "switch",
+      "type": "say",
+      "at": "2026-10-23T07:02:20.000Z",
+      "text": "先不说爬山了。今天真正让我心烦的其实是车位那件事。"
+    },
+    {
+      "id": "resend",
+      "type": "resend",
+      "at": "2026-10-23T07:02:45.000Z",
+      "of": "switch"
+    },
+    {
+      "id": "restart",
+      "type": "restart",
+      "at": "2026-10-23T07:03:00.000Z"
+    },
+    {
+      "id": "reconnect",
+      "type": "resend",
+      "at": "2026-10-23T07:03:10.000Z",
+      "of": "switch"
+    },
+    {
+      "id": "after",
+      "type": "say",
+      "at": "2026-10-23T07:04:00.000Z",
+      "text": "我想我还是续了吧，省得天天满小区找地方停。"
+    }
+  ]
+}

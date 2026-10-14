@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "continuity-acceptance-fixture:v1",
+  "id": "H02",
+  "fixtureVersion": "final-1",
+  "stage": "final",
+  "languageVariant": "zh",
+  "defaults": { "locale": "zh-CN", "timezone": "Asia/Shanghai" },
+  "history": [
+    { "key": "market", "at": "2026-11-17T11:40:00.000Z", "user": "前天陪我妈去了趟城南的花市，她挑了两盆蟹爪兰，非要自己拎，走到公交站还是塞给了我。", "assistant": "她想自己拎回去，最后还是到了你手上。" },
+    { "key": "tyre", "at": "2026-11-17T11:47:00.000Z", "user": "今天中午趁午休把自行车后胎补了，扎进去的是颗小图钉，补完手上全是黑的。", "assistant": "一颗图钉，折腾掉一个午休。" },
+    { "key": "mentor", "at": "2026-11-17T11:55:00.000Z", "user": "对了，前阵子还跟以前厂里带我的师傅老秦吃了顿饭，他头发全白了，席上一直在说当年车间的事。", "assistant": "说了一顿饭的车间旧事，看来他还惦记着那会儿。" }
+  ],
+  "steps": [
+    { "id": "said", "type": "say", "at": "2026-11-18T11:20:00.000Z", "text": "我昨天跟你说了哪几件事来着？" },
+    { "id": "happened", "type": "say", "at": "2026-11-18T11:22:00.000Z", "text": "那昨天当天，我自己到底干了什么？" },
+    { "id": "when", "type": "say", "at": "2026-11-18T11:24:00.000Z", "text": "我跟老秦是哪天吃的饭来着？" },
+    { "id": "market-when", "type": "say", "at": "2026-11-18T11:26:00.000Z", "text": "那花市呢，是几号去的？" }
+  ]
+}

@@ -1,0 +1,65 @@
+{
+  "caseId": "H05",
+  "findings": [
+    {
+      "criterionId": "S-bare",
+      "itemId": "a-two-pending",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-bare",
+      "itemId": "f-assume-choir",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-bare",
+      "itemId": "f-assume-plot",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-bare",
+      "itemId": "f-retell",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-cued",
+      "itemId": "a-plot-reply",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-cued",
+      "itemId": "f-cued-choir",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-cued",
+      "itemId": "f-retell",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-cued",
+      "itemId": "f-outcome",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    }
+  ],
+  "reviewer": "agent:<name> | human:<name>",
+  "rubricVersion": "continuity-rubric:v1",
+  "runId": "run-15c73fcf-750f-4280-8b13-48aa77275a19",
+  "schemaVersion": "continuity-acceptance-review:v1"
+}

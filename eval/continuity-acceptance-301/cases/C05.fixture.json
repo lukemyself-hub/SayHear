@@ -1,0 +1,56 @@
+{
+  "schemaVersion": "continuity-acceptance-fixture:v1",
+  "id": "C05",
+  "fixtureVersion": "dev-2",
+  "stage": "development",
+  "languageVariant": "en",
+  "defaults": { "locale": "en-GB", "timezone": "Europe/London" },
+  "history": [
+    {
+      "key": "kiln-a",
+      "at": "2026-06-02T18:30:00.000Z",
+      "user": "I finally posted my entry for the Marlowe Open, the juried ceramics show. Three stoneware bowls with the ash glaze I have been fighting with since winter.",
+      "assistant": "Since winter is a long time to fight a glaze. Sending the bowls off must have felt like letting go of something."
+    },
+    {
+      "key": "kiln-b",
+      "at": "2026-06-02T18:36:00.000Z",
+      "user": "They say results come by post in the autumn. I have decided not to think about it until then.",
+      "assistant": "Autumn it is, then. Out of your hands for now."
+    },
+    {
+      "key": "job-a",
+      "at": "2026-09-17T08:10:00.000Z",
+      "user": "Sent off the application for the archive assistant post at the county records office this morning. Closing date is Friday.",
+      "assistant": "In before the deadline. That is one thing off the list."
+    },
+    {
+      "key": "job-b",
+      "at": "2026-09-19T17:45:00.000Z",
+      "user": "No word yet from the records office. I keep refreshing my email like it will help.",
+      "assistant": "Refreshing never speeds it up, and somehow we all do it anyway."
+    }
+  ],
+  "steps": [
+    {
+      "id": "bare",
+      "type": "say",
+      "at": "2026-09-21T09:00:00.000Z",
+      "text": "I finally got a reply!",
+      "historyReview": { "searchTerms": ["entry", "application", "submitted", "waiting"], "continuationBasis": ["current_input"] }
+    },
+    {
+      "id": "studio",
+      "type": "say",
+      "at": "2026-09-23T19:20:00.000Z",
+      "text": "Spent the evening at the wheel again. First time I have thrown anything decent since I sent those bowls away."
+    },
+    {
+      "id": "cued",
+      "type": "say",
+      "at": "2026-09-23T19:23:00.000Z",
+      "text": "And there was an envelope on the mat when I got in. They finally wrote back.",
+      "historyReview": { "searchTerms": ["bowls", "juried", "entry"], "continuationBasis": ["current_input", "adjacent_user"] }
+    }
+  ]
+}

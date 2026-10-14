@@ -1,0 +1,56 @@
+{
+  "schemaVersion": "continuity-acceptance-oracle:v1",
+  "id": "H10",
+  "title": "H10 Holdout: giving up on a question, narrowing it, changing subject, sending again and coming back",
+  "capability": "Holdout counterpart of the cancel-and-recover class, against a real model. While an answer is still being prepared the person gives up on it (twice, at different moments), narrows the question, moves to another subject, re-sends, loses the connection and comes back. A narrowed question is answered as narrowed; an abandoned answer never arrives late; nothing is stored twice; and a reply that was cut off never becomes a successful Assistant Event.",
+  "spec": ["#301 R10", "ADR-0152", "#312"],
+  "ownerTickets": ["#319"],
+  "language": "en",
+  "fixture": { "version": "final-1", "sha256": "64409e2d99d602c3a012ee077ad36d173d238155660b38b00cbf784f282b6881" },
+  "facts": {
+    "allowed": [
+      { "id": "a-companions", "statement": "Two people cycled with the person: a colleague and that colleague's daughter, who had a flat tyre almost at once.", "sources": ["ride-a:user"] },
+      { "id": "a-repair-today", "statement": "The decision about the car repair, not the outing, is what weighs on the person right now.", "sources": ["switch:input", "garage:user"] }
+    ],
+    "forbidden": [
+      { "id": "f-whole-ride", "statement": "Retelling the downpour on the second day and the lift back in a van when only the companions were asked for.", "sources": ["ride-b:user"] },
+      { "id": "f-stale-continuation", "statement": "Carrying on with the abandoned answer about the outing after the person moved on to the car repair.", "sources": ["ride-a:user", "ride-b:user"] },
+      { "id": "f-technical-talk", "statement": "Describing the interruption in system terms such as retries, streams or lookups.", "sources": [] }
+    ]
+  },
+  "topics": [],
+  "time": [],
+  "expectedBehavior": [
+    "After the first cancel, answer the narrowed question about companions only.",
+    "After the second cancel and the change of subject, stay with the worry about the repair.",
+    "A re-sent message, before or after a restart, resolves to the original and generates nothing new.",
+    "Cancelled replies leave no committed Assistant Event."
+  ],
+  "failureSignals": [
+    "An assistant reply appears in history for a cancelled turn.",
+    "A re-sent message is stored or answered twice.",
+    "The narrowed question is ignored and the whole outing is retold.",
+    "The reply to the change of subject goes back to the outing."
+  ],
+  "sourceEligibility": [
+    { "source": "ride-a:user", "eligibility": "allowed", "reason": "Recent original expression; names the companions." },
+    { "source": "ride-b:user", "eligibility": "allowed", "reason": "Recent original expression." },
+    { "source": "garage:user", "eligibility": "allowed", "reason": "Recent original expression of the other worry." }
+  ],
+  "criteria": [
+    { "id": "O-cancel-1", "kind": "objective", "modes": ["real-model"], "description": "Nothing is committed for the first abandoned question.", "check": { "type": "no_commit_after_abort", "step": "ask" } },
+    { "id": "O-supplement-commit", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The narrowed question streams and commits.", "check": { "type": "turn_committed", "step": "supplement" } },
+    { "id": "O-supplement-history", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "History holds the narrowed question once, followed by exactly its reply.", "check": { "type": "history_matches_stream", "step": "supplement" } },
+    { "id": "O-supplement-sources", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The message naming the companions reaches the Provider.", "check": { "type": "outbound_includes", "step": "supplement", "sources": ["ride-a:user"] } },
+    { "id": "O-cancel-2", "kind": "objective", "modes": ["real-model"], "description": "Nothing is committed for the second abandoned question.", "check": { "type": "no_commit_after_abort", "step": "ask-again" } },
+    { "id": "O-switch-commit", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "History holds the change of subject once, followed by exactly its reply.", "check": { "type": "history_matches_stream", "step": "switch" } },
+    { "id": "O-resend", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "Sending the same message again is idempotent.", "check": { "type": "resend_is_idempotent", "step": "resend", "of": "switch" } },
+    { "id": "O-reconnect", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "Sending it again after a restart is idempotent.", "check": { "type": "resend_is_idempotent", "step": "reconnect", "of": "switch" } },
+    { "id": "O-after-restart", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The conversation carries on normally after the restart.", "check": { "type": "history_matches_stream", "step": "after" } },
+    { "id": "O-supplement-deadline", "kind": "objective", "modes": ["real-model"], "owner": "#319", "description": "Response-time contract for the narrowed question.", "check": { "type": "deadline", "step": "supplement", "firstVisibleTextMaxMs": 3000, "completeMaxMs": 10000 } },
+    { "id": "O-switch-deadline", "kind": "objective", "modes": ["real-model"], "owner": "#319", "description": "Response-time contract for the change of subject.", "check": { "type": "deadline", "step": "switch", "firstVisibleTextMaxMs": 3000, "completeMaxMs": 10000 } },
+    { "id": "O-after-deadline", "kind": "objective", "modes": ["real-model"], "owner": "#319", "description": "Response-time contract for the first turn after a restart (cold).", "check": { "type": "deadline", "step": "after", "firstVisibleTextMaxMs": 3000, "completeMaxMs": 10000 } },
+    { "id": "S-supplement", "kind": "semantic", "owner": "#319", "description": "The narrowed question is answered as narrowed.", "step": "supplement", "required": ["a-companions"], "forbidden": ["f-whole-ride", "f-technical-talk"] },
+    { "id": "S-switch", "kind": "semantic", "owner": "#319", "description": "After the change of subject the reply stays with the new subject.", "step": "switch", "required": ["a-repair-today"], "forbidden": ["f-stale-continuation", "f-technical-talk"] }
+  ]
+}

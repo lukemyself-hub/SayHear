@@ -1,0 +1,399 @@
+{
+  "budget": {
+    "blockers": [],
+    "capUsdMicros": 10000000,
+    "estimatedCostUsdMicros": 268800,
+    "inputTokenUpperBound": 224000,
+    "mode": "real-model",
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "outputTokenUpperBound": 168000,
+    "paidRequestUpperBound": 14,
+    "remainingUsdMicros": 2983852,
+    "requestsPerStepUpperBound": 4,
+    "shape": {
+      "generationSteps": 2,
+      "scheduledScans": 3,
+      "seedTurns": 5
+    },
+    "status": "ready",
+    "unknownCostEntries": 0,
+    "waivedPreconditions": [
+      {
+        "by": "Luke",
+        "date": "2026-10-11",
+        "statement": "Relayed to the T08 agent by the coordinating agent as Luke's words: \"#307 的遗留问题,应当在 T01–T07 开发期间解决了(包括耗时问题和回忆历史消息等),因此 T08 可以正常启动\" and \"授权 T08 调用 OpenCode Go 跑真实 DeepSeek V4.1 Flash 模型\". This is a decision to proceed. It is not a record that the #307 online acceptance was completed: #307 was closed with its online acceptance not passed.",
+        "id": "issue-307-online-acceptance"
+      }
+    ]
+  },
+  "case": {
+    "caseId": "U06",
+    "criteria": [
+      {
+        "description": "Seeded history is read back verbatim through the normal history API.",
+        "evidence": [],
+        "id": "INV-seed-readback",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "All 5 seeded turns are present exactly once.",
+        "status": "pass"
+      },
+      {
+        "description": "No oracle text, scenario title or expected answer appears in any Provider request.",
+        "evidence": [],
+        "id": "INV-oracle-not-in-outbound",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "Scanned 741 outbound strings; none carries oracle text.",
+        "status": "pass"
+      },
+      {
+        "description": "Authoritative history contains every message exactly once.",
+        "evidence": [],
+        "id": "INV-no-duplicate-messages",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "14 messages, no duplicates.",
+        "status": "pass"
+      },
+      {
+        "description": "The first turn streams and commits.",
+        "evidence": [
+          "steps[ping].chat.httpStatus=200",
+          "steps[ping].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-commit",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "The second turn streams and commits.",
+        "evidence": [
+          "steps[role].chat.httpStatus=200",
+          "steps[role].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-commit-role",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "The person's own recent run is in the background.",
+        "evidence": [
+          "own-run:user: providerRequest=present, inspector.referencedEvents=present"
+        ],
+        "id": "O-recent",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Every required source reached the Provider and is recorded by the Inspector.",
+        "status": "pass"
+      },
+      {
+        "description": "The messages about the neighbour reach the Provider.",
+        "evidence": [
+          "neighbour:user: providerRequest=present, inspector.referencedEvents=present",
+          "neighbour-reply:user: providerRequest=present, inspector.referencedEvents=present"
+        ],
+        "id": "O-neighbour-source",
+        "kind": "objective",
+        "owner": "#317",
+        "reason": "Every required source reached the Provider and is recorded by the Inspector.",
+        "status": "pass"
+      },
+      {
+        "description": "The news is not attached to the wrong person or event and no outcome is invented.",
+        "evidence": [],
+        "id": "S-ping",
+        "kind": "semantic",
+        "owner": "#317",
+        "reason": "No independent review was supplied for this answer.",
+        "status": "needs-review"
+      },
+      {
+        "description": "What is known is stated and the assistant's own guess is not turned into a fact.",
+        "evidence": [],
+        "id": "S-role",
+        "kind": "semantic",
+        "owner": "#318",
+        "reason": "No independent review was supplied for this answer.",
+        "status": "needs-review"
+      }
+    ],
+    "mode": "real-model",
+    "pipelineOnly": [],
+    "reviewer": null,
+    "runId": "run-279a410d-cfbf-413f-9913-59b60637a96e",
+    "status": "needs-review"
+  },
+  "diagnosis": [
+    {
+      "diagnosis": {
+        "disagreements": [
+          "The Inspector records a history read but the answering payload carries none."
+        ],
+        "payloadReadStatus": null,
+        "readState": "complete",
+        "sources": [
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: present",
+              "provider payload: earlier-messages entry 9",
+              "day of entry 9: 2026-12-05 (expected 2026-12-05)",
+              "semantic review: none yet; the source reached the model intact, its use is not judged"
+            ],
+            "fault": "undetermined",
+            "source": "own-run:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-10",
+              "requestSequence": 10
+            }
+          }
+        ]
+      },
+      "stepId": "ping"
+    },
+    {
+      "diagnosis": {
+        "disagreements": [
+          "The Inspector records a history read but the answering payload carries none."
+        ],
+        "payloadReadStatus": null,
+        "readState": "complete",
+        "sources": [
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: present",
+              "provider payload: earlier-messages entry 5",
+              "day of entry 5: 2026-09-27 (expected 2026-09-27)",
+              "semantic review: none yet; the source reached the model intact, its use is not judged"
+            ],
+            "fault": "undetermined",
+            "source": "neighbour:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-12",
+              "requestSequence": 12
+            }
+          },
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: present",
+              "provider payload: earlier-messages entry 7",
+              "day of entry 7: 2026-09-27 (expected 2026-09-27)",
+              "semantic review: none yet; the source reached the model intact, its use is not judged"
+            ],
+            "fault": "undetermined",
+            "source": "neighbour-reply:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-12",
+              "requestSequence": 12
+            }
+          }
+        ]
+      },
+      "stepId": "role"
+    }
+  ],
+  "identity": {
+    "fixtureSha256": "155e93f4716120c2c99051be58b86fcf2c3b5f32382d881f9b524a7ab4d05bd2",
+    "fixtureVersion": "final-2",
+    "gitCommit": "b48f2fb03614b8f6a485a000c6efcda9e85f625d",
+    "gitDirty": true,
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "historyRecallGovernance": "active",
+    "recentContextGovernance": "active",
+    "runId": "run-279a410d-cfbf-413f-9913-59b60637a96e",
+    "oracleSha256": "3782d4ca3dcf2bead3c5d74439e863abc25f6bc0a746e689e2f8315f63608e2b",
+    "title": "U06 Unseen: two people sharing a first name, two similar runs, and a guess the assistant once made"
+  },
+  "remainingRisks": [
+    "The working tree had uncommitted changes; the commit alone does not identify the code that ran.",
+    "Timings are CLI network observations, not browser rendering times (T08 #321 covers the browser)."
+  ],
+  "reproducibilityDigest": "dfe9520edeb0b5dfcdab83b0d007aa9794d12297e014d251b3be84b0fa705464",
+  "schemaVersion": "continuity-acceptance-report:v1",
+  "sourceManifest": [
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "roommate:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "roommate:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "roommate-after:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "roommate-after:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "neighbour:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "neighbour:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "neighbour-reply:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "neighbour-reply:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "own-run:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "own-run:assistant"
+        }
+      ],
+      "stepId": "ping"
+    },
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "roommate:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "roommate:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "roommate-after:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "roommate-after:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "neighbour:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "neighbour:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "neighbour-reply:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "neighbour-reply:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "own-run:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "own-run:assistant"
+        }
+      ],
+      "stepId": "role"
+    }
+  ],
+  "timings": [
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 25.56579200000033,
+      "cliCommittedMs": 31535.040083,
+      "cliFirstVisibleTextMs": 31088.240458,
+      "cliStreamClosedMs": 31535.14325,
+      "providerLatencyMs": 0,
+      "stepId": "ping"
+    },
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 22.65320800000336,
+      "cliCommittedMs": 9704.237666,
+      "cliFirstVisibleTextMs": 9310.386000000006,
+      "cliStreamClosedMs": 9704.327250000002,
+      "providerLatencyMs": 0,
+      "stepId": "role"
+    }
+  ],
+  "transcript": [
+    {
+      "assistant": "哇，finish 了。不过我这边的 Vivian 有两个——九月里你说过的那个大学 roommate（报了 Taipei 全马那个），还有楼下新搬来没多久的邻居——是哪一个，还是这事跟你两天前自己跑的那个 10K 有关？",
+      "at": "2026-12-07T04:10:00.000Z",
+      "stepId": "ping",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "Vivian 刚 text 我，说她 finish 了！还问我这个周末要不要一起吃 brunch 庆祝一下。"
+    },
+    {
+      "assistant": "你其实没说过。九月二十七号那天你提到楼下新搬来的 Vivian，在 lift 里背着一个超大的 foam roller，看了一眼你的跑鞋，说你 heel strike 太重、鞋跟外侧都磨平了；我当时猜她会不会是做 physio 的，你说还没来得及问，lift 就到她那层了。所以她是做什么工作的，那会儿你就还没问出来。",
+      "at": "2026-12-07T04:13:00.000Z",
+      "stepId": "role",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "对了，楼下那个 Vivian，她到底是做什么工作的来着？"
+    }
+  ],
+  "usage": {
+    "inputTokens": 7145,
+    "outputTokens": 3187,
+    "paidCostUsdMicros": null,
+    "providerRequests": 4
+  }
+}

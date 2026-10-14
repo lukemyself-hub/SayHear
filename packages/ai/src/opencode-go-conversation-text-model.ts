@@ -493,10 +493,19 @@ async function* parseChatCompletion(input: {
     if (toolCalls.size === 0) {
       throw new ProviderDispatchError("invalid_response");
     }
-  } else if (toolCalls.size > 0 || emittedTextLength === 0) {
-    // A `stop` stream that carried tool fragments, or that produced only
-    // reasoning and no visible text, is not a usable turn.
+  } else if (toolCalls.size > 0) {
+    // A `stop` stream that carried tool fragments is not a usable turn.
     throw new ProviderDispatchError("invalid_response");
+  } else if (emittedTextLength === 0) {
+    // A well-formed `stop` stream that produced only reasoning and no visible
+    // text. The cause is proven, so the caller can give it one more try
+    // instead of treating it like a malformed stream.
+    throw new ProviderDispatchError(
+      "invalid_response",
+      "The Provider completed without any visible text.",
+      true,
+      emptyOutputFailure(usage),
+    );
   }
   for (const [, call] of sortedToolCalls(toolCalls)) {
     if (call.name === "") {
@@ -889,6 +898,21 @@ function parseChatSseBlock(block: string): ChatSseItem | null {
  * Provider's literal reason is `length`, kept distinct from the Responses
  * API's `max_output_tokens` so evidence records what was actually reported.
  */
+function emptyOutputFailure(
+  usage: Record<string, unknown> | null,
+): ProviderResponseFailure {
+  return {
+    cachedTokens: cachedTokensFrom(usage),
+    inputTokens: safeTokenCount(usage?.prompt_tokens),
+    kind: "empty_output",
+    outputLength: 0,
+    outputTokens: safeTokenCount(usage?.completion_tokens),
+    providerReason: null,
+    reasoningTokens: reasoningTokensFrom(usage),
+    totalTokens: safeTokenCount(usage?.total_tokens),
+  };
+}
+
 function outputBudgetFailure(
   usage: Record<string, unknown> | null,
   outputLength: number,

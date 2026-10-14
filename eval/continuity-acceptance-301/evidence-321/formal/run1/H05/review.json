@@ -1,0 +1,34 @@
+{
+  "caseId": "H05",
+  "findings": [
+    {
+      "criterionId": "S-bare",
+      "itemId": "a-two-pending",
+      "reason": "Neither pending matter is named; the reply only asks what they said.",
+      "verdict": "fail"
+    },
+    {
+      "criterionId": "S-bare",
+      "itemId": "f-assume-choir",
+      "quote": "After all that inbox-checking",
+      "reason": "The answer is attributed to the recent emailed matter without checking.",
+      "verdict": "fail"
+    },
+    {
+      "criterionId": "S-bare",
+      "itemId": "f-assume-plot",
+      "reason": "Not attributed to the older matter.",
+      "verdict": "pass"
+    },
+    {
+      "criterionId": "S-bare",
+      "itemId": "f-retell",
+      "reason": "It does not ask for the back story.",
+      "verdict": "pass"
+    }
+  ],
+  "reviewer": "agent:claude-opus-5.5-t08",
+  "rubricVersion": "continuity-rubric:v1",
+  "runId": "run-c06db437-984b-43ab-9b75-b0c5726b0f77",
+  "schemaVersion": "continuity-acceptance-review:v1"
+}

@@ -88,6 +88,9 @@ Entity 和 Memory 等消费者，1A.3b 再增加 Reflection 消费者。
 | Provider 429 / 5xx | 受控退避与 jitter；不产生部分领域状态 |
 | Schema 非法 | 有限次数修复；随后 `needs_review` |
 | 用户删除与生成并发 | `data_epoch` / fencing token 阻止结果提交 |
+| 请求超过整体 60 秒（ADR-0152，2026-10-12 修订） | 截止时刻在受理时冻结并由所有步骤共用；超过后不开始新步骤，进行中的调用被取消（取消不了的不再等待），迟到结果不展示、不提交；无 token 展示为 failed(timeout)，已展示为 `interrupted`；技术重试不会越过截止 |
+| 新用户消息到达时旧回答仍在途 | 旧回答失去展示与提交资格（同一 Session 存在更新的用户消息，数据库围栏）；进程内另取消其 Provider 调用；新消息是新 Turn，冻结上下文含前一个有效用户问题 |
+| Decision 转为 Action 提案后 | 无论受理结果，Decision 的 command/attempt 都被结算；已报告的 Provider 用量无论完成与否入账，未知保持 NULL |
 
 自动重试只允许发生在“没有任何 token 可能展示给用户”时。其余情况显式告诉用户
 回答被中断；不能让新生成内容伪装成用户刚才已经看到的原回答。
@@ -152,17 +155,20 @@ GenerationCommand；只有新回答完整成功后才创建 Assistant Event，UI
 ### 8.4 Conversation Action 契约
 
 当 User Event 同时包含普通表达和用户控制意图时，Conversation Model 仍只能产生
-以下两类结果之一：
+以下结果之一（互斥，由 Harness 确定性执行）：
 
-1. 一个普通 Final Response；或
-2. 恰好一个 typed Conversation Action proposal。
+1. 一个普通 Final Response；
+2. 恰好一个 typed Conversation Action proposal；或
+3. 恰好一个受控只读历史查询提案（#314，见 §8.4.2）。它不是 Conversation Action。
+
+同一 Decision 同时出现 Trust Action 与历史查询提案时，Trust Action 确定性胜出（ADR-0092）。
 
 这两种结果由 Conversation Agent Harness 组织，但执行权限不属于 Harness 或模型。
 当前冻结的 Conversation Harness Policy 的第一阶段返回普通主回应或一个 Action proposal。
 Action 路径只有在 Action Gateway 已返回 receipt 时，才允许一个 tools-disabled 的 Finalization
-判断。普通回应路径只有在 1A.3b 当前状态与主动关心门禁通过时，才允许一个 tools-disabled 的
-Proactive Follow-up Segment 判断；两条第二阶段路径互斥，普通回应没有合格 target 时不产生第二次
-调用。技术重试仍只增加各自 Command 下的 ModelRunAttempt，不增加 Action 或自主 step。
+判断。历史查询路径在确定性查询完成并冻结结果后，才允许一个 tools-disabled 的 History Answer
+判断（§8.4.2）。普通回应路径的 Proactive Follow-up Segment 已随 G2 退役（ADR-0141），不再是现行
+第二阶段；Action 与历史查询两条第二阶段路径互斥，普通回应不产生第二次调用。技术重试仍只增加各自 Command 下的 ModelRunAttempt，不增加 Action 或自主 step。
 
 这些不同生成意图不能共享一个 GenerationCommand：
 
@@ -171,7 +177,9 @@ Proactive Follow-up Segment 判断；两条第二阶段路径互斥，普通回�
   新增 source，使用不同 Prompt / Schema 并冻结 `tools_disabled=true`；
 - Proactive Follow-up Segment Command 以冻结主回应、current DialogueState、target 与 reservation
   为 source，使用窄 Prompt / Schema 并冻结 `tools_disabled=true`；
-- 两个 Command 都引用同一 InteractionTurn，各自拥有 ModelRunAttempt；
+- History Answer Command 以 Decision 冻结的历史查询结果引用与版本为新增 source，使用独立
+  Prompt、冻结 `tools_disabled=true`，并有自己的预算与 ModelRunAttempt；
+- 各 Command 都引用同一 InteractionTurn，各自拥有 ModelRunAttempt；
 - Finalization 不得伪装成 Decision 的 technical retry、schema repair 或 fallback；
 - Action 已提交但 Finalization 中断时，从 receipt 恢复，不重新执行 Action。
 
@@ -179,6 +187,211 @@ Conversation Action 必须来自当前已发布的 `Conversation Action Catalog`
 按产品阶段、用户 capability、运行状态和 Action policy 过滤，只包含用户真正可以
 请求的高层产品能力；`update_claim`、`rewrite_journal`、`invalidate_profile`、
 `delete_embedding` 或 `start_workflow` 等内部传播机制不向模型暴露。
+
+#### 8.4.2 受控只读历史查询与 History Answer（#314）
+
+**提案**：函数 `review_conversation_history`（`start_date`、可选 `end_date`、`time_basis`、`source_scope`），
+由 Harness 加入 `functions`，不进 Catalog。Egress 把它归一化为独立事件 `history_query_proposal`；
+未提供该函数、工具被禁用或参数含任何额外键都 fail closed。
+
+**确定性计划**：`resolveHistoryQueryPlan`——日期范围 ≤ `maxDateSpanDays`（v1 为 3）、不得晚于请求
+本地日期；时区取冻结命令的请求时区，缺失则回退 Session 起始时区，再缺失则 `timezone_unavailable`。
+日期转换为 UTC 半开区间在 SQL 内完成（DST 安全）；截止时刻为受理请求的输入事件时刻，之后的消息、
+当前 Daily Session 的消息（已在原文窗口内）不进入本次读取。
+
+**读取与资格**：`PostgresHistoryRecallSource` 在只读 REPEATABLE READ 事务内读取，先核验 owner 与
+Data Epoch；稳定游标 `(created_at, daily_session_id, sequence_no)` 分页，受 `maxPages/pageSize/
+maxSourceRows` 约束；资格谓词（active、当前 revision、未 purge、final/corrected、Correction/Forget
+明确关联、Assistant 依附于其生成请求）与近期背景共用 `postgres-source-eligibility.ts`。被排除行的
+正文不越过读取端口。预算 `maxContextTokens`（v1 为 3,000）与单条上限决定实际注入；未枚举完/未注入的
+部分使结果为 `partial`。
+
+**冻结与阶段**：见 ADR-0094 修订。History Answer 编译时重新读取并重验每个引用（失效者丢弃并计入
+`droppedAtCompile`）；发送前与提交前的 `contextReferencesAreCurrent` 对 `history_recall_context` 同样
+重查 Correction/Forget 与 revision 当前性。**所有路径的来源资格检查在提交前仍完整执行。**
+
+**Inspector**：`GenerationInspectionMetadata` 增加 `generationStage` 与 `historyRecall`（角色、状态、
+失败码、计划日期、枚举/注入覆盖、来源 revision 引用与时间），两端命令互相可达；无正文。
+
+**已知边界**：Retry 与恢复路径没有请求 revision，不提供该函数，历史问题退化为普通回复；原文词法检索见 8.4.4（#316）。
+
+#### 8.4.3 按日期回顾主要话题（#315，`history-recall:v2`）
+
+在 8.4.2 的计划与读取上扩展，不改变阶段、冻结与资格结构：
+
+- **两种时间基准**：`time_basis` = `expressed_date`（默认，消息何时说）或 `experienced_date`（经历何时发生）。
+  经历时间目前没有任何有来源的列，所以经历日期查询读取 `[开始日, min(结束日+14 天, 请求本地日)]` 内“说过的话”作为
+  线索，**结果恒为 `partial`**（`coverage.limits = ["experience_time_not_recorded"]`），回答指引要求只采用原话里
+  相对表达时间的说法、否则保持“日期未给出”。表达日期与经历日期的结果从不混用。
+- **范围与读取**：日期范围上限 `maxDateSpanDays`（v2 为 92）；≤14 个日期逐日列出，更宽的只列有消息的日期。
+  v2 预算：每页 50 行、最多 8 页、400 行、3,000 token、单条 600 token、读取超时 2 秒，版本号
+  `history-recall:v2`。读取包含当前 Daily Session 中属于该范围的消息（跨午夜的同一会话仍含“昨天”），只排除
+  请求本身；编译时以 revision 去重，同一条不会在原文窗口里再出现一次。截止时刻与游标语义同 8.4.2。
+- **覆盖优先的选取**（`selectHistoryRecall`）：先以相邻消息间隔 >30 分钟切成时间块；总量超预算时按“小块先足额、
+  大块均分余量”分配每块预算（水位填充），块内先放弃 Assistant 行，再放弃较长的用户行，块的开头一条最后才放弃；
+  完全相同的重复用户文本只保留一条。这样最新或最长的话题不能挤掉当天更早的话题。最终仍按时间顺序注入。
+- **覆盖记录**（内容无关）：`enumerationComplete`、`readThrough`（未读完时读到哪一刻）、`blocks/blocksCovered`、
+  逐日 `state`（empty/complete/partial/unread）、`omitted`（含 `assistant_context_trimmed`、`duplicate_text`，这两类
+  不算漏读来源）、`limits`、`timeBasis`。`partial` 当且仅当读取未枚举完、用户来源被预算裁掉或存在 `limits`。
+- **回答指引**：完整、完整空日、部分（预算 / 读取提前停止）、读取失败、经历日期各有不同的指引句；均不含内部术语。
+  细节追问由 Decision 再次调用同一函数，答案取自原文而不是上一轮助手摘要。
+
+#### 8.4.4 原文经历检索（#316，`history-recall:v3`）
+
+8.4.2/8.4.3 的同一函数增加第二种提案 `search_experience`：`search_terms`（≤ 6 个短词/短语，每个 2–32 字符，含近义与
+中英两种写法）、可选 `people`（≤ 3）、可选 `start_date/end_date`。词只是**寻找线索**，不是用户事实，不形成
+Claim、Entity 或别名；未知键、控制字符、只给 `people` 一律 fail closed。一轮仍只有一个查询（`maxHistoryQueries: 1`），
+模型生成的改写就在这个 Decision 内，没有额外的检索前模型。
+
+**确定性计划**（`resolveExperienceSearchPlan`）：NFKC、小写、空白折叠；每个线索附带有限的繁/简变体
+（`maxVariantsPerGroup`）；日期范围 ≤ `maxSpanDays`（search 策略 `history-experience-search:v1` 为 400），起点不得晚于请求本地日期。与日期回顾一样只排除请求本身（不再排除当前 Daily Session，编译时按 revision 去重）。person 线索只在
+**恰好命中一个 Entity 的已验证标签/别名**时才用该 Entity 的其他已验证标签扩词；命中多个 Entity 则不扩词
+（同名不合并），不创建或关联任何 Entity。**person 线索单独不能选中消息**，必须同时命中至少一个主题词。
+
+**读取**（`PostgresExperienceSearchSource`，无投影、无索引、无新表）：在只读 REPEATABLE READ 事务内，对 owner
+最近的 `scanLimit`（search 策略 v1 为 6,000）条仍有资格的 **User** 原文按 `created_at` 倒序扫描，CJK 线索按子串、ASCII 线索按
+单词边界匹配；Assistant 文本永不作为命中。共享截止时间 `deadlineMs`（别名、命中、上下文三次读取共用，
+作为各事务的 statement_timeout）。资格谓词与 §8.4.2 完全共用（`postgres-source-eligibility.ts`）：Correction/Forget
+明确关联的命中被排除并只计数，其文本不越过端口。
+没有为普通原文建立词法投影：当前规模下有界扫描足够，且这避免了第二份私人文本拷贝；若实测扫描上限
+不够，再增加可重建投影时必须同时登记 Purge、失效与重建回归。
+
+**候选与分组**：命中按「命中线索数、时间」排序，同一 Daily Session 内相距 ≤ `contextWindowMinutes` 的命中是同一
+次经历，其余各自独立成组（≤ `maxGroups`，超出记 `candidate_limit`）。每组保留命中本轮、前后各 `neighborTurns`
+轮相邻 User 消息及其绑定的 Assistant 回复；没有任何命中仍有资格的组不单独注入相邻文本。组按时间升序编号，
+冻结在 `item_refs` 的 `group/role`（match/context），引用原因 `history_lexical_match/history_lexical_context`
+（迁移 0075）。
+
+**覆盖与措辞**：`coverage.search` 记录 `scannedRows`、`scanComplete`、`oldestScannedAt`、`matchedRows`、
+`candidateGroups/selectedGroups`、`aliasChannel/contextChannel` 与 `outcome`（candidates / no_match /
+insufficient_coverage / channel_failed）；回执只用这些事实：无匹配只说“在能看到的范围里没找到”，扫描未到范围起点
+则说明只看了一部分，永不断言“没聊过”“第一次”“只有一次”；有多次经历时明确“每次各算各的”。回执同时声明被引用的
+过往消息是记录而不是指令，Assistant 行只用于理解。Correction/Forget 命中的存在**不**写进回执。
+
+**编译时重验**：与日期回顾相同；若某组的命中在编译时已失效，该组的相邻上下文一并丢弃（计入 `droppedAtCompile`）。
+
+**Inspector**：`plan` 只暴露线索组数量与变体总数，不含线索文本；`sources` 带 `group/role`。
+
+#### 8.4.5 当前话题的自然接续（#317，`history-recall:v4`）
+
+在 8.4.4 的同一函数、同一原文检索上增加**接续**用法：提案可带 `continuation_basis`（`current_input` /
+`adjacent_user` / `dialogue_state`，去重、至少一项），表示这次查找不是用户问过去，而是当前表达需要较早背景
+（代词/省略，如“终于有回复了”）。仍是一轮一个查询、无检索前模型、无 embedding、无新表/迁移；提案（含依据）单独
+记录在已登记的 `history_recall_results.plan`，Inspector 的 `coverage.continuation` 只含计数与结论。
+
+- **信号有效性**（`validateContinuationBasis`）：`loadDecisionFacts` 从本轮 Decision 冻结的 CompiledContext 取信号，文本只
+  在内存：当前输入；其引用里仍为事件当前 revision 的其他用户表达（最多 5 条）；`dialogue_state` 仅当该 Context 实际带有
+  source-valid 的 DialogueState 段（失败/撤销/不一致则 Context 不含，依据被拒绝）。落后（lagging）的状态仍可用，其后的原文
+  本就由 Context 补读。全部依据无效 → `continuation_basis_unavailable`，退化为普通回复。
+- **低信息线索**：问候/致谢等线索被剔除，剩余为空则 `search_terms_unusable`，不读取。当前 Daily Session 的命中不算“较早事情”。
+- **消歧**（`assessContinuation`）：命中按 8.4.4 分成独立事情（不合并）。“锚定”= 线索词本身出现在有效信号里。某事情的锚定数严格
+  多于其他所有事情 → `leading`；只有一件 → `single`；否则 `tied`（候选数超过 `maxGroups` 则 `too_broad`）；无命中 `none`。
+  仅靠词重叠不能产生领先者，所以既不会“总是澄清”也不会“总猜最近”。
+- **回答**：接续使用 History Answer 任务指令 `task-instruction-history-answer:v2`（回应当前表达，而非回答“问过去”）。回执按结论
+  指示：single/leading 自然接上且不要求重讲、不断言结果；tied 只问一个点名各事的简短问题；too_broad/none/失败按普通回复，不出现
+  “查不到”类话；不新增进展追问或待办。
+- **诊断分层**：选择（basis/锚定/verdict/occasions 支持度）、误召回（引用来源与 group）、澄清（verdict=tied 的回执）与最终生成
+  （既有 Provider/Event 记录）分别可见。真实模型的自然度与打扰感判据归 T08 #321。
+
+#### 8.4.6 用历史理解当前变化：阅读合同与同一人格（#318）
+
+不新增阶段、表、迁移或人格。日期回顾、较早查询与自然接续三条路径只要引用了原文，回执（`history_recall_receipt`）末尾都带同一段
+`History reading rules (history-reading:v3)`（`renderHistoryReadingRules`，无引用时不带）：引用是用户当时的原话，时间是表达时间；
+同一事上后说的才是现在、先说的只作过去；只有用户自己的更正能改写其先前说法，没有更正含义的新说法不改变其他原话，也不触发排除；
+被取消/无后文的计划不当作已发生；Assistant 行不是用户陈述；不补离职原因、他人动机；一时感受不固化为人格或标签；与当下无关的
+旧事不因“检索到了”而提起，联系只作为助手自己的试探性理解；不给建议。身份、语气与安全仍只来自 Canonical Persona / Safety
+Posture / 关系边界各 section——三条路径与普通回复由同一个 `createSections` 编译，History Answer 命令从 Decision 命令复制
+全部 persona/safety/relationship 版本，系统测试逐项断言它们相同。已有的资格排除（Correction/Forget 关联来源整条排除）不变。
+
+检索侧一处变化：`buildExperienceGroups` 在候选事情超过 `maxGroups` 时，保证“用户最新一次提到”的那件事占一个名额（替换
+排名最弱的一件，被替换的计入 `candidate_limit`），避免按线索数排序把现在的状态挤出去而只剩旧状态。函数描述新增用法：用户
+讲述对某具体人/事的感受，而较早所述有助于理解其在意处时，用当前表达里**字面出现**的词作接续线索（`current_input`）。
+**已知局限**：用户之后反复问同一话题的问句本身也含线索词，会占用名额（见 #318 交接笔记）。共情与人格的主观品质不由本节任何
+机械检查宣称达标，按 ADR-0110 由 T08 人评裁定。
+
+**用户更正在出站中可辨（`history-reading:v2`）。**被用户更正过的消息保留原来的表达时间与位置（时间线取 `conversation_events.created_at`），
+所以在 v1 下，更正之后几分钟内、未被关联的旧说法复述会排在它后面，被读成“最新说法”。数据层里用户更正是确定的：当前 revision 的
+`created_by = 'user_correction'`，其 `created_at` 就是更正生效时刻。History Answer 编译时把这类被引用的用户消息记入回执快照
+`corrections`（消息在出站中的 1 起始序号、更正时刻、时区；不含正文），回执在阅读规则前逐条写明“第 N 条是用户自己的更正，更正于某本地时间”；
+规则增加：用户的明确更正优先于其在该时刻之前就同一事项写下的任何说法，不论这些说法在时间线上的位置；“最新说法为现状”只在没有更正
+覆盖时适用。不做语义匹配、不扩大排除范围，复述仍是允许来源（ADR-0149）。规则版本随结果冻结在快照的 `readingRulesVersion`；没有该字段的
+在途/历史结果按 v1 原样重放，未知版本失败关闭。Inspector 只给 `correctionMarks` 计数与规则版本。真实模型是否据此把更正后的说法当作现状，
+由 C12 的 `S-controls` 裁定（T08）。
+
+**较早原文作为材料块、更正就地说明（`history-reading:v3`，SPEC #301 呈现修复）。**v2 及之前，被引用的较早原文作为普通
+user / assistant 消息排在当前对话前面，消息本身没有标记，“哪条是什么时候说的”只在 Times 序号表里；更正标记写在回执末尾、按序号指回消息。
+真实模型因此反复确认“回执说 N 条已引用，但认不出是哪些”，有时直接答“内容看不到”，并把更正时刻之前的旧说法复述读成改口。布局由
+`eval/continuity-acceptance-301/presentation-bench`（直接调用 Provider 的设计用基准，不是验收证据）在 8 个 fixture、6 种布局上选定：
+现状的回答调用推理中位 3,420 token，材料块布局 506，更正方向从 1/5 到 21/21。v3 的呈现（`message-presentation.ts`）：
+
+- **材料块。**History Answer 引用的消息不再进 `messages`。它们由冻结的 `history_recall_context` 事件与已签名的 `time_context` 元数据确定性
+  渲染成一个有边界的块，追加在指令末尾：标题 `EARLIER MESSAGES (…)`、一行“Now is …”、按天分组（检索路径在 occasion 计数与实际条数
+  对得上时再按 occasion 分组）、逐条编号、每条带说出的时刻、正文逐行以 `> ` 开头（正文里的任何文字都无法冒充条目或块尾）、
+  结尾 `END OF EARLIER MESSAGES (N in total).`，计数与可见条目一致。没有引用时不发块，回执也不指向块。
+- **时间。**标题用人读的日期与“N 天前”；条目时刻取该消息自己的时区，与当前请求时区不同才写出时区名。同一本地日内出现不同 GMT 偏移
+  （夏令时重复的那个小时）时，该日条目带 GMT 偏移；消息没有随请求保存时区时注明 `(time zone assumed)`，对应原来 Times 表的 `s=s`。
+  Times 序号表只列真正作为对话轮次发出的消息并重新编号；元数据条目本身仍覆盖全部消息并参与完整性校验。
+- **更正。**被用户更正过的条目就地写明这是更正后的说法及更正时刻；“写下时刻早于该更正时刻”的其他用户消息（未更正的取表达时间，已更正的
+  取其更正时刻）就地写明它写于该更正之前、不是之后的改口。不比较内容、不判断是否同一件事，不出站更正前的原文，不排除、不重排任何消息；
+  Correction / Forget 的既有控制语义（ADR-0149）不变。被更正消息当时生成的 Assistant 回复继续按既有关联排除，所以它后面没有相邻
+  Assistant 条目。基准里另一种呈现（按“这句话写下的时刻”重排）方向同样全对，但更常把旧数字带回来，未采用。
+- **七天近期背景与同一 Daily Session。**同一问题在那里同样存在（更正后的文字留在原位置、原时间，此前完全没有标记）。两个来源
+  （`postgres-recent-context-source.ts`、`loadContextSource`）返回更正时刻，这两类对话轮次以 `[Note. …]` 开头；只有确实发出这类说明时，
+  `time_context` 段才追加一行读法规则（预算相应加 128 token）。没有更正的 Context 逐字节不变，功能关闭时的普通聊天基线不受影响。
+- **回执与规则。**回执的回答要求指向“指令末尾标题为 EARLIER MESSAGES 的块”，不再引用 Times 表，也不再按序号写“第 N 条是更正”；
+  另加一行说明其后的对话是当前对话、不属于该块、照常可用（基准里模型在“被问时段内的消息有的在对话里、不在引用里”处犹豫）。
+  阅读规则保持完整版：基准里精简规则没有降低推理量，反而更常复述被更正掉的数字。规则要求不得把标题、编号、方括号说明念出或提及。
+- **冻结与重放。**更正时刻冻结在 `time_context` 元数据条目上（可选字段 `correctedAt`，无更正时不存在）。是否用材料块由回执快照里的
+  `readingRulesVersion` 决定：v1 / v2 冻结的结果仍把引用消息作为对话轮次、按原样逐字节重放
+  （夹具 `history-answer-context-reading-v2-f179b3d.json`）。块文本不进入任何段的 content，段摘要与 HMAC 不变。
+- **已知的小额低估。**块的标题、编号与说明行以及 `[Note.]` 行的 token 不计入各段 `selectedTokens`（每条约 10–40 token）。
+- **来源围栏不变。**块里的条目就是原来作为轮次发出的那些修订，仍经编译时重新过资格、Egress 重推导与提交前复查；Inspector、Purge 面不变。
+
+**空正文重试。**回复调用完成但没有可见正文时，同一 Command 的第一次尝试按 ADR-0083（2026-10-12 修订）做一次技术重试，
+仍为空则 `invalid_response` 失败关闭；重试走普通派发路径，来源与治理复查全部重跑（`tests/system/empty-reply-retry.system.test.ts`）。
+
+**Decision 函数说明（`history-recall:v5` 起，现行 `history-recall:v6`）。**有线索的自然接续里，模型曾把来信归到七天背景里可见的另一件事，依据“较早背景已在对话中就不要用”
+而不查。函数说明补充：对话里可见的事与当前消息给出的来信方、到达方式、所涉对象不吻合时，不算已在对话中，用这些细节去查。说明里取自开发
+案例的例句已换成不取自任何案例的例子。v6 再把“单独调用”改为“只做这一次调用，不做第二次；按日期的调用也覆盖该时段的细节”，因为长对话的细节
+追问常同时提出两个查询，而第二个历史提案仍按 ADR-0093 判 `invalid_response`。**启用步骤**：策略版本写在治理授权行里，代码每升一版（现为 v6）需要一条该版本的授权行才启用——部署后由具备
+权限的操作者 `POST /api/internal/operator/history-recall {"action":"enable"}`；若环境里已有旧版本的生效行，先 `{"action":"disable"}`
+（同一请求排空未结算的 History Answer），`GET` 读到 `historyAnswers.unsettled: 0` 后再 `enable`，并用 `GET` 与 `effective-runtime-config` 的
+`policy.history_recall_governance_version` 核对。
+
+**时间就地标注（`context-compiler:time:v4` / `recent-time:v4` / `history-time:v2`，ADR-0093 2026-10-12 修订）。**所有回合的 Context 不再输出
+`Times:` 序号表：每条用户消息的第一行是系统加的 `[written Tuesday 17 November 2026, yesterday, 19:40]`（用户本地时间；同一本地日出现多个
+GMT 偏移时附偏移，时区与锚点不同时附时区名，时区未记录或假定时写明，时间缺失时写 `at an unrecorded time`），助手消息不标；`time_context`
+段只留锚点、现在时刻和读法说明。更正说明行排在时间行之后。原因是 Decision 调用为把消息与序号表对齐而大量推理并超时。上文凡提到 Times 序号表
+之处，描述的是 `time:v3` / `recent-time:v3` / `history-time:v1` 及更早版本；这些版本冻结的 Context 仍按原格式逐字节重放。已知缺口：时间行
+（每条约 15 token）与更正说明行一样不计入 manifest 的 token 核算。
+
+#### 8.4.7 历史路径的来源控制、诊断与独立关闭（#320）
+
+**来源控制围栏。**同一批用户控制（Correction 的新 revision / Forget 排除 / Data Epoch 与 Purge）对日期回顾、较早检索、自然接续三个入口
+一致生效，围栏点依次为：读取前、读取后冻结前、冻结后编译前（编译时重验引用）、编译后发送前（`claimDispatch`）、发送后首个
+可见 token 前（`recordFirstToken`，本票新增：来源引用、Data Epoch、治理再核对一次，失败即结算为 `policy_blocked`，不展示）、
+Provider 结果落定（`recordProviderCompletion`）与提交（`commitCompleteResponse`）。**无法撤回**：首个 token 之后才到达的控制只能阻止
+提交，已展示的文字不撤回，Turn 记 `interrupted`，用户显式 Retry（见 8.2）。独立允许来源（同日其他消息）不因一个来源被排除而被整体关闭。
+范围不变：只排除明确关联的整条消息及绑定的 Assistant 回复；用户自己此后对旧说法的不相关复述不被排除（ADR-0149）。
+
+**独立关闭。**`history_recall_policies`（0081）与 `history_recall_results.governance_policy_version`；操作入口
+`/api/internal/operator/history-recall`（GET 状态、POST enable/disable/drain，鉴权与 recent-context 入口一致）。规则见 ADR-0093 的 #320 修订。
+关闭（disable）在同一请求里把未结算的 History Answer 命令失败关闭排空，并返回 `historyAnswers: {drained, unsettled}`；`GET` 返回
+`historyAnswers.unsettled`；`drain` 只在分支关闭时可用（开启时 409）。回滚到不含历史分支的应用版本前必须读到 `unsettled: 0`
+（ADR-0093 / ADR-0094 的 SPEC #301 评审修订）。部署开关关闭或治理撤销后，崩溃遗留的 History Answer 由恢复扫描失败关闭结算，已过请求
+截止的不等恢复窗口。
+
+**关闭后的普通回复。**分支关闭、未部署或 Retry 退化时，回复是不带回执的普通回复，Context 的编译方式与分支开启时相同
+（`context-compiler:time:v4` / `recent-time:v4`；差别只在是否提供历史函数）。已知缺口：没有确定性约束阻止模型据近期背景断言“没聊过”，见 ADR-0093 的 SPEC #301 评审修订。
+`effective-runtime-config` 增加 `switch.history_recall_governance_enabled` / `policy.history_recall_governance_version`，探针缺失时报 `unverified`。
+
+**诊断。**受控 Inspector 增加 `turn`（同一 Turn 全部 command 的阶段、状态、Provider Egress 处置、Provider 请求 id，以及最终处置
+`committed|failed|interrupted|in_progress|settled_without_reply`）；History Answer 的回执 reference 对 Inspector 去掉查询线索与人物，仅留计数
+（编译冻结的 reference 仍含线索，在已登记的私人面 `compiled_contexts` / `history_recall_results` 内，随 Purge 清除，系统测试按整库扫描证明）。
+原文展开沿用 `conversation_content:read` + 近期 step-up：`GET /api/internal/inspection/conversation-content` 对历史 command 额外返回
+`historySources`（按模型所见顺序，仅返回当前仍允许的来源；被排除/清除的不返回）；拒绝只给固定原因码，不含查询、人物或范围。
+验收 harness 的 `diagnose` 用三处真实边界判定五类问题（无来源 / 选漏 / 时间丢失 / 读取失败 / 生成错误）：权威历史、Inspector、实际出站请求
+（含消息第一行的时间行——旧版本为 `Times:` 列表——与指令末尾的较早原文块）；Provider 请求 id 把 Inspector 的 command 与实际 payload 对上；生成错误只能由语义裁定产生，缺裁定为 `undetermined`。
 
 #### 8.4.1 Action Capability 元模型
 
@@ -226,8 +439,10 @@ Action Gateway 的固定执行顺序是：
 
 一个 enabled Definition 缺少 handler、绑定多个 handler、contract version 不兼容或
 要求 Harness 解释领域规则时，Catalog 不得发布；runtime 遇到漂移必须 fail closed。
-新增正常能力不得修改 Harness loop、Provider Adapter、ActionProposal envelope、
-GenerationCommand stages 或 Finalization。
+新增正常 Conversation Action 不得修改 Harness loop、Provider Adapter、ActionProposal envelope、
+GenerationCommand stages 或 Finalization。（#314 的受控只读历史查询不是 Conversation Action：它
+按 ADR-0093/0094 修订显式新增了一个 Decision 结果与一个 History Answer stage；这不是 Action 扩展，
+也不放宽该约束对 Action 的适用。）
 
 Decision Command 的模型侧 Interface 由 Harness 从冻结 Catalog 生成：
 
@@ -552,6 +767,10 @@ Segment Command。Retry 创建新的 Decision Command，并重新取得 state、
 
 ### 9.1.1 近期对话背景
 
+> 本节保留七天背景首版的技术范围。新增历史回顾目标及模型回答验收见 §9.1.2 与
+> [ADR-0152](../adr/0152-continuity-requires-history-recall-and-response-acceptance.md)，
+> 不再将下述“首版不追加正式人评”推广到新连续记忆能力。
+
 首版技术与验收路线见 [ADR-0150](../adr/0150-recent-context-ships-after-deterministic-validation.md)：
 在现有来源读取与 Context Compiler 内直接编译原文，不增加模型摘要流水线或自主
 历史查询循环；新增路径可单独关闭，读取失败/超时放弃本轮新增背景。上线前验证
@@ -559,7 +778,8 @@ Segment Command。Retry 创建新的 Decision Command，并重新取得 state、
 
 [#287](https://github.com/lukemyself-hub/SayHear/issues/287) 与
 [ADR-0149](../adr/0149-recent-conversation-context-is-bounded-source-history.md) 已确认
-以下设计合同，具体实现与发布仍待 #286 后续方案。本节补充 §9.1 的跨 Session 来源
+以下设计合同，实现与发布证据见[七天背景 SPEC](https://github.com/lukemyself-hub/SayHear/issues/292)
+最新记录。本节补充 §9.1 的跨 Session 来源
 输入；它是 Context 中的来源投影，不新增长期 Memory、模型摘要或 Framework 真源。
 
 - 每轮自动读取最近 7 个用户本地日内的有界原文，包含今天和此前 6 天，空日不补足。
@@ -582,6 +802,58 @@ Segment Command。Retry 创建新的 Decision Command，并重新取得 state、
 - 读取失败可降级为只依据当前有效输入回应，不复用未经重验的旧背景、不编造连续性。
   用户可见语言遵循 [§15.3.1](../product/15-conversation-behavior.md#1531-近期对话背景)，
   不把内部 degraded reason 直接作为聊天文案。
+
+### 9.1.2 连续记忆的时间、来源与交付约束
+
+[体验 SPEC](https://github.com/lukemyself-hub/SayHear/issues/301)已确认；以下是候选实现
+必须满足的技术不变量，具体运行阶段、检索机制与框架由
+[路线决议](https://github.com/lukemyself-hub/SayHear/issues/306#issuecomment-6093970042)已确定
+首轮验证方向，尚未实现。先独立修复时间输入、验证并部署生产，线上验收完成后才
+验证满足完整 SPEC 的组件复用与自建路线；比较全能力及生命周期成本，不能以现状缺少检索作为框架优势证据。最新方向暂不考虑 embedding，先使用常规检索，延续 ADR-0115。最终框架采用仍须效果及整体维护成本证据。当前研究任务止于路线决策，只在必要时做局部原型；路线确认后另行开发集成，再正式验收产品体验。
+
+**时间信息必须到达实际模型输入。** 历史表达时间、原表达的时区语境与本轮当前日期/
+时区锚点不能只保存在 Context 引用或 Inspector。日期标签应与实际来源绑定，在最终
+Provider Adapter 序列化之后仍可验证。经历时间只能来自支持它的内容或证据；未知保持
+未知，不以 event.created_at、Session 日期或当前时间代替。原话“昨天”不得随着读取
+日期移动。按消息时间回顾不改变 Session/Journal 的归属。
+
+**默认背景、相关接续和明确回顾具有不同覆盖要求。** 七天有界背景仍可遗漏内容；
+明确日期回顾须能覆盖该范围主要话题，不能直接用固定 top-k 或默认背景冒充完整结果。
+较早普通经历不以 Claim/Reflection 成功为前提。来源范围、截断和失败状态必须足以
+区分部分结果与经核实的无记录；“首次”结论须有相应范围证据。是否采用分页、摘要、
+语义索引或工具调用由研究决定，不在本合同预选。
+
+**来源及用户控制一致。** 用户表达、必要 Assistant 上下文与 AI 推断不能混作事实。
+任何新摘要、索引、缓存或框架状态若保存私人内容，须有来源 lineage、有效性与 Purge
+合同。查找、模型出站、结果提交和续答都遵循适用的 owner/revision/epoch、删除与既有
+明确关联来源排除；不复活被禁止使用的来源，也不扩大普通经历 Forget 的语义。
+此前同 Session 原文与当前输入的既有处理范围不因本合同被静默改写。
+
+**可选两段式回应受最新用户意图约束。** 第一段只依赖当时有效输入，不预判尚未确认
+的历史；补充原问题可影响后续回答，换题/取消阻止旧请求迟到续答。实现须证明有界等待、
+重复请求去重、取消竞态、进程恢复和已展示内容的保存规则。是否分别提交 Event、怎样
+冻结补充输入与阶段，必须先修订适用的 ADR-0093/0094 契约；不能用 technical retry
+隐藏新阶段，也不能挪用已退役的 Proactive Follow-up 自动获得授权。
+
+**诊断与聊天表达分离。** Inspector/研究证据应可区分来源不存在、查找范围不足、
+选择遗漏、时间投影丢失与模型生成错误，不新增默认私人正文日志。聊天只呈现自然
+回答和适当的不确定性；数据路径成功不等于体验验收成功。实际模型场景门槛见
+[行为评测规则](../evaluation/01-behavior-contract-and-rubric.md)。
+
+**实现状态（issue #319）。** 整体请求预算 `SAYHEAR_CONVERSATION_REQUEST_BUDGET_MS`（默认且最大 30 000）与对话
+Provider 超时 `SAYHEAR_CONVERSATION_PROVIDER_TIMEOUT_MS` 已与后台角色共用的 `SAYHEAR_PROVIDER_TIMEOUT_MS`
+分开，只能收紧不能放宽；截止由受理时冻结在命令上的绝对时刻保证（见 ADR-0083 修订），BFF 在预算后另设兜底。
+Portal 在回答准备期间允许继续输入（取代旧回答）或停止，客户端 62 秒后自行停止等待。以上由确定性桩与
+真实 BFF/HTTP 边界证明；**实际模型下的时延表现（15 秒内提交占比、60 秒停止）仍由 T08 复验**，本节不构成时延证据。
+
+**首轮采用单段交付并限制整体等待。** 先取得允许历史，再自然回答，暂缓两段式阶段。
+从应用接受输入到可见首个有意义回应不超过3秒，完整回答不超过10秒，整体请求30秒
+停止，涵盖查找、排队、生成与传输，不按步骤重置。占位内容不算有意义回应；取消后
+迟到结果不能展示或提交。超过门槛须定位原因再讨论方案，不能自行放宽要求。
+这些是已确认验收要求，尚不构成当前实现或生产时延证据。
+
+这些约束不要求每轮发送全部历史，不预设增加模型调用，也不限制研究只能保留现有
+框架。若候选需要改变长期状态所有权，应显式论证并修订 ADR-0068，不能先产生双重真源。
 
 ### 9.2 输出
 

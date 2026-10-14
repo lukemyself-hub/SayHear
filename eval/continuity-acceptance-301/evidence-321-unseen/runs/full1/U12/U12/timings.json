@@ -1,0 +1,17 @@
+[
+  {
+    "appState": "warm",
+    "caseId": "U12",
+    "committedMs": 19334.685875000003,
+    "firstVisibleTextMs": 18414.91925,
+    "kind": "history",
+    "liveRequests": 2,
+    "outcome": "assistant_committed",
+    "outputTokens": 2401,
+    "reasoningTokens": 2180,
+    "runId": "run-813ecd20-b465-4bd4-a04e-2dd5c0f91c44",
+    "stepId": "house",
+    "streamClosedMs": 19334.770582999998,
+    "withinContract": false
+  }
+]

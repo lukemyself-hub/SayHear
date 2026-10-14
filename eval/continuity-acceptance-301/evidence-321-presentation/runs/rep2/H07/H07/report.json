@@ -1,0 +1,652 @@
+{
+  "budget": {
+    "blockers": [],
+    "capUsdMicros": 10000000,
+    "estimatedCostUsdMicros": 422400,
+    "inputTokenUpperBound": 352000,
+    "mode": "real-model",
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "outputTokenUpperBound": 264000,
+    "paidRequestUpperBound": 22,
+    "remainingUsdMicros": 7541461,
+    "requestsPerStepUpperBound": 4,
+    "shape": {
+      "generationSteps": 3,
+      "scheduledScans": 5,
+      "seedTurns": 6
+    },
+    "status": "ready",
+    "unknownCostEntries": 0,
+    "waivedPreconditions": [
+      {
+        "by": "Luke",
+        "date": "2026-10-11",
+        "statement": "Relayed to the T08 agent by the coordinating agent as Luke's words: \"#307 的遗留问题,应当在 T01–T07 开发期间解决了(包括耗时问题和回忆历史消息等),因此 T08 可以正常启动\" and \"授权 T08 调用 OpenCode Go 跑真实 DeepSeek V4.1 Flash 模型\". This is a decision to proceed. It is not a record that the #307 online acceptance was completed: #307 was closed with its online acceptance not passed.",
+        "id": "issue-307-online-acceptance"
+      }
+    ]
+  },
+  "case": {
+    "caseId": "H07",
+    "criteria": [
+      {
+        "description": "Seeded history is read back verbatim through the normal history API.",
+        "evidence": [],
+        "id": "INV-seed-readback",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "All 6 seeded turns are present exactly once.",
+        "status": "pass"
+      },
+      {
+        "description": "No oracle text, scenario title or expected answer appears in any Provider request.",
+        "evidence": [],
+        "id": "INV-oracle-not-in-outbound",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "Scanned 957 outbound strings; none carries oracle text.",
+        "status": "pass"
+      },
+      {
+        "description": "Authoritative history contains every message exactly once.",
+        "evidence": [],
+        "id": "INV-no-duplicate-messages",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "18 messages, no duplicates.",
+        "status": "pass"
+      },
+      {
+        "description": "The first question streams and commits.",
+        "evidence": [
+          "steps[where].chat.httpStatus=200",
+          "steps[where].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-commit",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "The second question streams and commits.",
+        "evidence": [
+          "steps[party].chat.httpStatus=200",
+          "steps[party].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-commit-party",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "The third question streams and commits.",
+        "evidence": [
+          "steps[september].chat.httpStatus=200",
+          "steps[september].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-commit-september",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "The signing and the person's later correction of the date both reach the Provider.",
+        "evidence": [
+          "lease:user: providerRequest=absent, inspector.referencedEvents=absent",
+          "date-fix:user: providerRequest=present, inspector.referencedEvents=present"
+        ],
+        "id": "O-correction-source",
+        "kind": "objective",
+        "owner": "#318",
+        "reason": "A required source did not reach the Provider request for this turn.",
+        "status": "fail"
+      },
+      {
+        "description": "The plan and its cancellation both reach the Provider.",
+        "evidence": [
+          "party-plan:user: providerRequest=present, inspector.referencedEvents=present",
+          "party-cancel:user: providerRequest=present, inspector.referencedEvents=present"
+        ],
+        "id": "O-cancel-source",
+        "kind": "objective",
+        "owner": "#318",
+        "reason": "Every required source reached the Provider and is recorded by the Inspector.",
+        "status": "pass"
+      },
+      {
+        "description": "The earlier state and the current one both reach the Provider.",
+        "evidence": [
+          "old-flat:user: providerRequest=present, inspector.referencedEvents=present",
+          "first-week:user: providerRequest=absent, inspector.referencedEvents=absent"
+        ],
+        "id": "O-timeline-source",
+        "kind": "objective",
+        "owner": "#318",
+        "reason": "A required source did not reach the Provider request for this turn.",
+        "status": "fail"
+      },
+      {
+        "description": "Response-time contract for the first question.",
+        "evidence": [
+          "steps[where].chat.timing.firstVisibleTextMs=12493.978167000001 (CLI network, limit 3000)",
+          "steps[where].chat.timing.committedMs=13218.291792 (CLI network, limit 10000)"
+        ],
+        "id": "O-where-deadline",
+        "kind": "objective",
+        "owner": "#319",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed.",
+        "status": "fail"
+      },
+      {
+        "description": "Response-time contract for the second question.",
+        "evidence": [
+          "steps[party].chat.timing.firstVisibleTextMs=7575.642082999999 (CLI network, limit 3000)",
+          "steps[party].chat.timing.committedMs=8325.406208 (CLI network, limit 10000)"
+        ],
+        "id": "O-party-deadline",
+        "kind": "objective",
+        "owner": "#319",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed.",
+        "status": "fail"
+      },
+      {
+        "description": "Response-time contract for the third question.",
+        "evidence": [
+          "steps[september].chat.timing.firstVisibleTextMs=11595.089417000003 (CLI network, limit 3000)",
+          "steps[september].chat.timing.committedMs=12614.121874999997 (CLI network, limit 10000)"
+        ],
+        "id": "O-september-deadline",
+        "kind": "objective",
+        "owner": "#319",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed.",
+        "status": "fail"
+      },
+      {
+        "description": "The present state uses the corrected date and the current home.",
+        "evidence": [],
+        "id": "S-current",
+        "kind": "semantic",
+        "owner": "#318",
+        "reason": "No independent review was supplied for this answer.",
+        "status": "needs-review"
+      },
+      {
+        "description": "A cancelled plan is reported as cancelled.",
+        "evidence": [],
+        "id": "S-plan",
+        "kind": "semantic",
+        "owner": "#318",
+        "reason": "No independent review was supplied for this answer.",
+        "status": "needs-review"
+      },
+      {
+        "description": "Then and now are each told correctly and kept apart.",
+        "evidence": [],
+        "id": "S-timeline",
+        "kind": "semantic",
+        "owner": "#318",
+        "reason": "No independent review was supplied for this answer.",
+        "status": "needs-review"
+      },
+      {
+        "description": "The comparison is given without passing judgement on the move.",
+        "evidence": [],
+        "id": "P-stance",
+        "kind": "subjective",
+        "owner": "#318",
+        "reason": "No independent review was supplied for this answer.",
+        "status": "needs-review"
+      }
+    ],
+    "mode": "real-model",
+    "pipelineOnly": [],
+    "reviewer": null,
+    "runId": "run-7b9b1119-f743-4593-9137-517f832aacf2",
+    "status": "fail"
+  },
+  "diagnosis": [
+    {
+      "diagnosis": {
+        "disagreements": [
+          "The Inspector records a history read but the answering payload carries none."
+        ],
+        "payloadReadStatus": null,
+        "readState": "complete",
+        "sources": [
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: absent",
+              "provider payload: absent",
+              "coverage: omitted={} enumerationComplete=true"
+            ],
+            "fault": "selection_omitted",
+            "source": "lease:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-13",
+              "requestSequence": 13
+            }
+          },
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: present",
+              "provider payload: earlier-messages entry 1",
+              "day of entry 1: 2026-10-27 (expected 2026-10-27)",
+              "semantic review: none yet; the source reached the model intact, its use is not judged"
+            ],
+            "fault": "undetermined",
+            "source": "date-fix:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-13",
+              "requestSequence": 13
+            }
+          }
+        ]
+      },
+      "stepId": "where"
+    },
+    {
+      "diagnosis": {
+        "disagreements": [
+          "The Inspector records a history read but the answering payload carries none."
+        ],
+        "payloadReadStatus": null,
+        "readState": "complete",
+        "sources": [
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: present",
+              "provider payload: earlier-messages entry 3",
+              "day of entry 3: 2026-10-20 (expected 2026-10-20)",
+              "semantic review: none yet; the source reached the model intact, its use is not judged"
+            ],
+            "fault": "undetermined",
+            "source": "party-plan:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-15",
+              "requestSequence": 15
+            }
+          },
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: present",
+              "provider payload: earlier-messages entry 5",
+              "day of entry 5: 2026-11-10 (expected 2026-11-10)",
+              "semantic review: none yet; the source reached the model intact, its use is not judged"
+            ],
+            "fault": "undetermined",
+            "source": "party-cancel:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-15",
+              "requestSequence": 15
+            }
+          }
+        ]
+      },
+      "stepId": "party"
+    },
+    {
+      "diagnosis": {
+        "disagreements": [],
+        "payloadReadStatus": "completed",
+        "readState": "complete",
+        "sources": [
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: present",
+              "provider payload: earlier-messages entry 1",
+              "day of entry 1: 2026-09-07 (expected 2026-09-07)",
+              "semantic review: none yet; the source reached the model intact, its use is not judged"
+            ],
+            "fault": "undetermined",
+            "source": "old-flat:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-17",
+              "requestSequence": 17
+            }
+          },
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: absent",
+              "provider payload: absent",
+              "coverage: omitted={} enumerationComplete=true"
+            ],
+            "fault": "selection_omitted",
+            "source": "first-week:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-17",
+              "requestSequence": 17
+            }
+          }
+        ]
+      },
+      "stepId": "september"
+    }
+  ],
+  "identity": {
+    "fixtureSha256": "ba315566baf06305ffe16934fc54cbb89b2df93455b9ab92da083eced8dc8d0a",
+    "fixtureVersion": "final-1",
+    "gitCommit": "600c061cd32839355c7036e867fa0b00d0990e2c",
+    "gitDirty": true,
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "historyRecallGovernance": "active",
+    "recentContextGovernance": "active",
+    "runId": "run-7b9b1119-f743-4593-9137-517f832aacf2",
+    "oracleSha256": "97168357e27caa2f02494b7798407f6c5019382e5bab540b256610512477a207",
+    "title": "H07 Holdout: an old home and a new one, a corrected moving date, and a plan that was called off"
+  },
+  "remainingRisks": [
+    "The working tree had uncommitted changes; the commit alone does not identify the code that ran.",
+    "Timings are CLI network observations, not browser rendering times (T08 #321 covers the browser)."
+  ],
+  "reproducibilityDigest": "305141547f3137466d73deaf6baa5356ee0cb0c591f6b425fa7a42e75b48551a",
+  "schemaVersion": "continuity-acceptance-report:v1",
+  "sourceManifest": [
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "old-flat:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "old-flat:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "lease:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "lease:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "party-plan:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "party-plan:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "date-fix:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "date-fix:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "party-cancel:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "party-cancel:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "first-week:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "first-week:assistant"
+        }
+      ],
+      "stepId": "where"
+    },
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "old-flat:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "old-flat:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "lease:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "lease:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "party-plan:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "party-plan:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "date-fix:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "date-fix:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "party-cancel:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "party-cancel:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "first-week:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "first-week:assistant"
+        }
+      ],
+      "stepId": "party"
+    },
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "old-flat:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "old-flat:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "lease:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "lease:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "party-plan:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "party-plan:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "date-fix:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "date-fix:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "party-cancel:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "party-cancel:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "first-week:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "first-week:assistant"
+        }
+      ],
+      "stepId": "september"
+    }
+  ],
+  "timings": [
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 34.51420899999994,
+      "cliCommittedMs": 13218.291792,
+      "cliFirstVisibleTextMs": 12493.978167000001,
+      "cliStreamClosedMs": 13218.35125,
+      "providerLatencyMs": 0,
+      "stepId": "where"
+    },
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 27.621125000001484,
+      "cliCommittedMs": 8325.406208,
+      "cliFirstVisibleTextMs": 7575.642082999999,
+      "cliStreamClosedMs": 8325.477833,
+      "providerLatencyMs": 0,
+      "stepId": "party"
+    },
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 20.31275000000096,
+      "cliCommittedMs": 12614.121874999997,
+      "cliFirstVisibleTextMs": 11595.089417000003,
+      "cliStreamClosedMs": 12614.198750000003,
+      "providerLatencyMs": 0,
+      "stepId": "september"
+    }
+  ],
+  "transcript": [
+    {
+      "assistant": "你说过的其实只有搬家日子这一件事。十月二十七号那天你跟我更正过一次，说不是十一月七号了，房东讲墙要重新刷一遍、得晾几天，所以推到了十一月十四号。再往后你没再提过搬没搬成，所以十四号到底住进去没有，我也不知道。至于你现在住在哪儿，你没跟我讲过。",
+      "at": "2026-11-30T12:10:00.000Z",
+      "stepId": "where",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "我脑子有点乱，我现在是住在哪儿、哪天搬进来的来着？"
+    },
+    {
+      "assistant": "十月二十号那天你说，搬完的那个周末想请几个朋友来暖房，你自己下厨，做一桌子菜。后来到十一月十号，你说不办了——下楼把脚崴了，肿得穿不上鞋，站都站不久，已经在群里跟大家说了取消。这之后你没再提过这顿饭，所以它就一直停在取消那儿，没听你说又办起来了。",
+      "at": "2026-11-30T12:13:00.000Z",
+      "stepId": "party",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "那我之前说要请朋友来的那一顿呢，后来怎么着了？"
+    },
+    {
+      "assistant": "九月里你跟我说的只有七号晚上那一段，就那一处。你说你在老城区槐荫里那套合租房住了三年，三个人抢一个卫生间，隔壁天天半夜打游戏，越住越烦——这是你那天说的，之后再没提过那儿。跟现在比，我这边比不了，因为你现在住哪儿你没跟我讲过，我只知道你十月里说过要搬，日子后来改到十一月十四号，搬没搬成你也没再说，所以槐荫里那边是你九月的说法，现在什么样我不知道。",
+      "at": "2026-11-30T12:16:00.000Z",
+      "stepId": "september",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "对了，九月那会儿我是住在哪儿、什么样的？跟现在比呢？"
+    }
+  ],
+  "usage": {
+    "inputTokens": 9775,
+    "outputTokens": 1666,
+    "paidCostUsdMicros": null,
+    "providerRequests": 6
+  }
+}

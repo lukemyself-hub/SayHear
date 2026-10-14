@@ -1,0 +1,240 @@
+{
+  "schemaVersion": "continuity-acceptance-oracle:v1",
+  "id": "U10",
+  "title": "U10 Unseen: giving up on an answer, narrowing, changing subject, re-sending and reconnecting",
+  "capability": "Second, unseen counterpart of the cancel-and-recover class, against a real model. While an answer is still being prepared the person gives up on it (twice, at different moments), narrows the question, moves to another subject, re-sends, loses the connection and comes back. A narrowed question is answered as narrowed; an abandoned answer never arrives late; nothing is stored twice; and a reply that was cut off never becomes a successful Assistant Event. Following the owner's ruling, briefly answering the question that was left open before turning to the new subject is acceptable.",
+  "spec": [
+    "#301 R10",
+    "ADR-0152",
+    "#312"
+  ],
+  "ownerTickets": [
+    "#319"
+  ],
+  "language": "zh",
+  "fixture": {
+    "version": "final-2",
+    "sha256": "55d15a7b1e6fe83cee1360c84937547105233ede33ea323157cbf54951da6daa"
+  },
+  "facts": {
+    "allowed": [
+      {
+        "id": "a-companions",
+        "statement": "Two people went up the mountain with the person: a male cousin and his girlfriend, whose boot lost its sole almost at the entrance.",
+        "sources": [
+          "hike-a:user"
+        ]
+      },
+      {
+        "id": "a-parking-today",
+        "statement": "The answer owed about renewing the parking space, not the outing, is what troubles the person right now.",
+        "sources": [
+          "switch:input",
+          "parking:user"
+        ]
+      }
+    ],
+    "forbidden": [
+      {
+        "id": "f-whole-hike",
+        "statement": "Retelling the fog on the second day, the afternoon in the tea pavilion and the ride down when only the companions were asked for.",
+        "sources": [
+          "hike-b:user"
+        ]
+      },
+      {
+        "id": "f-stale-continuation",
+        "statement": "Carrying on with the outing as the subject after the person moved on to the parking space. A brief answer to the question left open, before turning to the new subject, is acceptable.",
+        "sources": [
+          "hike-a:user",
+          "hike-b:user"
+        ]
+      },
+      {
+        "id": "f-technical-talk",
+        "statement": "Describing the interruption in system terms such as retries, streams or lookups.",
+        "sources": []
+      }
+    ]
+  },
+  "topics": [],
+  "time": [],
+  "expectedBehavior": [
+    "Abandoned questions leave nothing behind.",
+    "The narrowed question gets the two companions and no more.",
+    "After the change of subject the reply is about the parking space.",
+    "Re-sending, before or after a restart, changes nothing."
+  ],
+  "failureSignals": [
+    "A cut-off reply is stored, or arrives after the person moved on.",
+    "The narrowed question is answered with the whole outing.",
+    "The same message is stored twice."
+  ],
+  "sourceEligibility": [
+    {
+      "source": "hike-a:user",
+      "eligibility": "allowed",
+      "reason": "Retained original expression; names the companions."
+    },
+    {
+      "source": "hike-b:user",
+      "eligibility": "allowed",
+      "reason": "Retained original expression of the second day."
+    },
+    {
+      "source": "parking:user",
+      "eligibility": "allowed",
+      "reason": "Recent original expression, inside the default background."
+    }
+  ],
+  "criteria": [
+    {
+      "id": "O-cancel-1",
+      "kind": "objective",
+      "modes": [
+        "real-model"
+      ],
+      "description": "Nothing is committed for the first abandoned question.",
+      "check": {
+        "type": "no_commit_after_abort",
+        "step": "ask"
+      }
+    },
+    {
+      "id": "O-supplement-commit",
+      "kind": "objective",
+      "modes": [
+        "deterministic",
+        "real-model"
+      ],
+      "description": "The narrowed question streams and commits.",
+      "check": {
+        "type": "turn_committed",
+        "step": "supplement"
+      }
+    },
+    {
+      "id": "O-supplement-history",
+      "kind": "objective",
+      "modes": [
+        "deterministic",
+        "real-model"
+      ],
+      "description": "History holds the narrowed question once, followed by exactly its reply.",
+      "check": {
+        "type": "history_matches_stream",
+        "step": "supplement"
+      }
+    },
+    {
+      "id": "O-supplement-sources",
+      "kind": "objective",
+      "modes": [
+        "deterministic",
+        "real-model"
+      ],
+      "description": "The message naming the companions reaches the Provider.",
+      "check": {
+        "type": "outbound_includes",
+        "step": "supplement",
+        "sources": [
+          "hike-a:user"
+        ]
+      }
+    },
+    {
+      "id": "O-cancel-2",
+      "kind": "objective",
+      "modes": [
+        "real-model"
+      ],
+      "description": "Nothing is committed for the second abandoned question.",
+      "check": {
+        "type": "no_commit_after_abort",
+        "step": "ask-again"
+      }
+    },
+    {
+      "id": "O-switch-commit",
+      "kind": "objective",
+      "modes": [
+        "deterministic",
+        "real-model"
+      ],
+      "description": "History holds the change of subject once, followed by exactly its reply.",
+      "check": {
+        "type": "history_matches_stream",
+        "step": "switch"
+      }
+    },
+    {
+      "id": "O-resend",
+      "kind": "objective",
+      "modes": [
+        "deterministic",
+        "real-model"
+      ],
+      "description": "Sending the same message again is idempotent.",
+      "check": {
+        "type": "resend_is_idempotent",
+        "step": "resend",
+        "of": "switch"
+      }
+    },
+    {
+      "id": "O-reconnect",
+      "kind": "objective",
+      "modes": [
+        "deterministic",
+        "real-model"
+      ],
+      "description": "Sending it again after a restart is idempotent.",
+      "check": {
+        "type": "resend_is_idempotent",
+        "step": "reconnect",
+        "of": "switch"
+      }
+    },
+    {
+      "id": "O-after-restart",
+      "kind": "objective",
+      "modes": [
+        "deterministic",
+        "real-model"
+      ],
+      "description": "The conversation carries on normally after the restart.",
+      "check": {
+        "type": "history_matches_stream",
+        "step": "after"
+      }
+    },
+    {
+      "id": "S-supplement",
+      "kind": "semantic",
+      "owner": "#319",
+      "description": "The narrowed question is answered as narrowed.",
+      "step": "supplement",
+      "required": [
+        "a-companions"
+      ],
+      "forbidden": [
+        "f-whole-hike",
+        "f-technical-talk"
+      ]
+    },
+    {
+      "id": "S-switch",
+      "kind": "semantic",
+      "owner": "#319",
+      "description": "After the change of subject the reply stays with the new subject.",
+      "step": "switch",
+      "required": [
+        "a-parking-today"
+      ],
+      "forbidden": [
+        "f-stale-continuation",
+        "f-technical-talk"
+      ]
+    }
+  ]
+}

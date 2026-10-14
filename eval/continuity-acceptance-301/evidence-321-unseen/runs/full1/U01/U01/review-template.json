@@ -1,0 +1,93 @@
+{
+  "caseId": "U01",
+  "findings": [
+    {
+      "criterionId": "S-topics",
+      "itemId": "t-basement",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-topics",
+      "itemId": "t-invitations",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-topics",
+      "itemId": "t-mother",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-topics",
+      "itemId": "t-driving-test",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-topics",
+      "itemId": "t-shop",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-topics",
+      "itemId": "tm-yesterday",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-topics",
+      "itemId": "f-today-ticket",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-topics",
+      "itemId": "f-decided",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-detail",
+      "itemId": "a-two-files",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-detail",
+      "itemId": "a-helper",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-detail",
+      "itemId": "f-today-ticket",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-detail",
+      "itemId": "f-ruled-out-cause",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    }
+  ],
+  "reviewer": "agent:<name> | human:<name>",
+  "rubricVersion": "continuity-rubric:v1",
+  "runId": "run-dbbbd471-4fa2-4a32-9487-10287173bb04",
+  "schemaVersion": "continuity-acceptance-review:v1"
+}

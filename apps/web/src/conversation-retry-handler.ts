@@ -1,13 +1,13 @@
-import type {
-  ConversationResponseService,
-  ConversationResponseStreamEvent,
-  UserId,
-} from "@sayhear/application";
+import type { ConversationResponseService, UserId } from "@sayhear/application";
+
+import { createNdjsonConversationResponse } from "./ndjson-response";
 
 type AuthenticatedPrincipal = Readonly<{ userId: UserId }>;
 
 export function createConversationRetryHandler(dependencies: {
   authenticate(request: Request): Promise<AuthenticatedPrincipal | null>;
+  /** End-to-end request budget, as for the chat route (issue #319). */
+  requestBudgetMs?: number;
   service: ConversationResponseService;
 }): (request: Request) => Promise<Response> {
   return async (request) => {
@@ -36,59 +36,17 @@ export function createConversationRetryHandler(dependencies: {
       originalTurnId: asRequestString(body.originalTurnId),
       retryRequestId: asRequestString(body.retryRequestId),
     };
-    const abortController = new AbortController();
-    const encoder = new TextEncoder();
-    const stream = new ReadableStream<Uint8Array>({
-      cancel() {
-        abortController.abort();
+    return createNdjsonConversationResponse({
+      events: (signal) =>
+        dependencies.service.retry(principal.userId, input, signal),
+      onFailure() {
+        // The terminal event already tells the client; nothing private is logged.
       },
-      start(controller) {
-        void (async () => {
-          try {
-            for await (const event of dependencies.service.retry(
-              principal.userId,
-              input,
-              abortController.signal,
-            )) {
-              controller.enqueue(encoder.encode(serializeEvent(event)));
-            }
-          } catch {
-            abortController.abort();
-            try {
-              controller.enqueue(
-                encoder.encode(
-                  serializeEvent({
-                    category: "unknown",
-                    type: "response_failed",
-                  }),
-                ),
-              );
-            } catch {
-              // Cancellation may already have closed the response stream.
-            }
-          } finally {
-            try {
-              controller.close();
-            } catch {
-              // The client may already have canceled the stream.
-            }
-          }
-        })();
-      },
-    });
-
-    return new Response(stream, {
-      headers: {
-        "cache-control": "no-store",
-        "content-type": "application/x-ndjson; charset=utf-8",
-      },
-      status: 200,
+      ...(dependencies.requestBudgetMs === undefined
+        ? {}
+        : { requestBudgetMs: dependencies.requestBudgetMs }),
     });
   };
-}
-
-function serializeEvent(event: ConversationResponseStreamEvent): string {
-  return `${JSON.stringify(event)}\n`;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

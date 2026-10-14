@@ -1,0 +1,47 @@
+{
+  "caseId": "H11",
+  "findings": [
+    {
+      "criterionId": "S-empty",
+      "itemId": "a-nothing-friday",
+      "quote": "十月二十三号那天，没有找到你留下的话",
+      "reason": "The verified empty day is reported as empty. The closing hedge ('可能只是没留在这儿') is softer than a verified read warrants; noted as an observation.",
+      "verdict": "pass"
+    },
+    {
+      "criterionId": "S-empty",
+      "itemId": "f-invent-friday",
+      "reason": "No content is supplied for the Friday.",
+      "verdict": "pass"
+    },
+    {
+      "criterionId": "S-empty",
+      "itemId": "f-internals",
+      "reason": "No mechanism vocabulary.",
+      "verdict": "pass"
+    },
+    {
+      "criterionId": "S-older",
+      "itemId": "a-adoption",
+      "quote": "从救助站领回来一只三个月大的橘猫",
+      "reason": "Both early-October messages are retold with their dates.",
+      "verdict": "pass"
+    },
+    {
+      "criterionId": "S-older",
+      "itemId": "f-false-empty",
+      "reason": "The stretch is not declared empty.",
+      "verdict": "pass"
+    },
+    {
+      "criterionId": "S-older",
+      "itemId": "f-internals",
+      "reason": "No mechanism vocabulary.",
+      "verdict": "pass"
+    }
+  ],
+  "reviewer": "agent:claude-opus-5.5-t08",
+  "rubricVersion": "continuity-rubric:v1",
+  "runId": "run-1067892c-063f-41c9-b84c-a7f6aeec618c",
+  "schemaVersion": "continuity-acceptance-review:v1"
+}

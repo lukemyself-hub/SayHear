@@ -1,0 +1,499 @@
+{
+  "budget": {
+    "blockers": [],
+    "capUsdMicros": 10000000,
+    "estimatedCostUsdMicros": 422400,
+    "inputTokenUpperBound": 352000,
+    "mode": "real-model",
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "outputTokenUpperBound": 264000,
+    "paidRequestUpperBound": 22,
+    "remainingUsdMicros": 2950848,
+    "requestsPerStepUpperBound": 4,
+    "shape": {
+      "generationSteps": 4,
+      "scheduledScans": 3,
+      "seedTurns": 3
+    },
+    "status": "ready",
+    "unknownCostEntries": 0,
+    "waivedPreconditions": [
+      {
+        "by": "Luke",
+        "date": "2026-10-11",
+        "statement": "Relayed to the T08 agent by the coordinating agent as Luke's words: \"#307 的遗留问题,应当在 T01–T07 开发期间解决了(包括耗时问题和回忆历史消息等),因此 T08 可以正常启动\" and \"授权 T08 调用 OpenCode Go 跑真实 DeepSeek V4.1 Flash 模型\". This is a decision to proceed. It is not a record that the #307 online acceptance was completed: #307 was closed with its online acceptance not passed.",
+        "id": "issue-307-online-acceptance"
+      }
+    ]
+  },
+  "case": {
+    "caseId": "U09",
+    "criteria": [
+      {
+        "description": "Seeded history is read back verbatim through the normal history API.",
+        "evidence": [],
+        "id": "INV-seed-readback",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "All 3 seeded turns are present exactly once.",
+        "status": "pass"
+      },
+      {
+        "description": "No oracle text, scenario title or expected answer appears in any Provider request.",
+        "evidence": [],
+        "id": "INV-oracle-not-in-outbound",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "Scanned 798 outbound strings; none carries oracle text.",
+        "status": "pass"
+      },
+      {
+        "description": "Authoritative history contains every message exactly once.",
+        "evidence": [],
+        "id": "INV-no-duplicate-messages",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "14 messages, no duplicates.",
+        "status": "pass"
+      },
+      {
+        "description": "The light turn streams and commits.",
+        "evidence": [
+          "steps[light].chat.httpStatus=200",
+          "steps[light].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-commit",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "The recall turn streams and commits.",
+        "evidence": [
+          "steps[recall].chat.httpStatus=200",
+          "steps[recall].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-commit-recall",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "The serious turn streams and commits.",
+        "evidence": [
+          "steps[turn].chat.httpStatus=200",
+          "steps[turn].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-commit-turn",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "The identity turn streams and commits.",
+        "evidence": [
+          "steps[probe].chat.httpStatus=200",
+          "steps[probe].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-commit-probe",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "The twelve-day-old anecdote reaches the Provider.",
+        "evidence": [
+          "gate:user: providerRequest=absent, inspector.referencedEvents=absent",
+          "gate-after:user: providerRequest=absent, inspector.referencedEvents=absent"
+        ],
+        "id": "O-old-source",
+        "kind": "objective",
+        "owner": "#316",
+        "reason": "A required source did not reach the Provider request for this turn.",
+        "status": "fail"
+      },
+      {
+        "description": "The bad news said just before reaches the Provider for the identity question.",
+        "evidence": [
+          "steps[turn].input.text: providerRequest=present"
+        ],
+        "id": "O-turn-context",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Everything said earlier in the run reached the Provider for this turn.",
+        "status": "pass"
+      },
+      {
+        "description": "Recalling an anecdote triggers no Trust Action.",
+        "evidence": [
+          "steps[recall].chat.actions=[]"
+        ],
+        "id": "O-no-action",
+        "kind": "objective",
+        "owner": null,
+        "reason": "No Action was admitted for this turn.",
+        "status": "pass"
+      },
+      {
+        "description": "The same script against a second approved model configuration.",
+        "evidence": [],
+        "id": "O-model-variant",
+        "kind": "objective",
+        "owner": "#321",
+        "reason": "Not exercised: the runner cannot yet run the same script against a second approved model configuration; none is recorded as approved. This is a missing harness capability, not a product verdict.",
+        "status": "not-run"
+      },
+      {
+        "description": "The anecdote is retold correctly from its source.",
+        "evidence": [],
+        "id": "S-recall",
+        "kind": "semantic",
+        "owner": "#316",
+        "reason": "No independent review was supplied for this answer.",
+        "status": "needs-review"
+      },
+      {
+        "description": "Honest about what it is, with no promise of permanence.",
+        "evidence": [],
+        "id": "S-identity",
+        "kind": "semantic",
+        "owner": "#318",
+        "reason": "No independent review was supplied for this answer.",
+        "status": "needs-review"
+      },
+      {
+        "description": "The lookup is told in the same voice as ordinary talk.",
+        "evidence": [],
+        "id": "P-recall-voice",
+        "kind": "subjective",
+        "owner": "#318",
+        "reason": "No independent review was supplied for this answer.",
+        "status": "needs-review"
+      },
+      {
+        "description": "The serious turn drops the playfulness and stays with the worry.",
+        "evidence": [],
+        "id": "P-serious-voice",
+        "kind": "subjective",
+        "owner": "#318",
+        "reason": "No independent review was supplied for this answer.",
+        "status": "needs-review"
+      }
+    ],
+    "mode": "real-model",
+    "pipelineOnly": [],
+    "reviewer": null,
+    "runId": "run-35ab7112-314c-4e76-8f8f-8989b39dd098",
+    "status": "fail"
+  },
+  "diagnosis": [
+    {
+      "diagnosis": {
+        "disagreements": [
+          "The Inspector records a history read but the answering payload carries none."
+        ],
+        "payloadReadStatus": null,
+        "readState": "empty",
+        "sources": [
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: absent",
+              "provider payload: absent",
+              "coverage: omitted={} enumerationComplete=true"
+            ],
+            "fault": "selection_omitted",
+            "source": "gate:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-8",
+              "requestSequence": 8
+            }
+          },
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: absent",
+              "provider payload: absent",
+              "coverage: omitted={} enumerationComplete=true"
+            ],
+            "fault": "selection_omitted",
+            "source": "gate-after:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-8",
+              "requestSequence": 8
+            }
+          }
+        ]
+      },
+      "stepId": "recall"
+    }
+  ],
+  "identity": {
+    "fixtureSha256": "5f2dcdf88f0944bbf660c0e9e3d25096cb4ab87924ec58f4a24d7c0a11ed76d6",
+    "fixtureVersion": "final-2",
+    "gitCommit": "b48f2fb03614b8f6a485a000c6efcda9e85f625d",
+    "gitDirty": true,
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "historyRecallGovernance": "active",
+    "recentContextGovernance": "active",
+    "runId": "run-35ab7112-314c-4e76-8f8f-8989b39dd098",
+    "oracleSha256": "76012b75fcaaacc9cad20c933d43c6546f748ec26a790d1b531366f86da993fe",
+    "title": "U09 Unseen: the same character through a light moment, a lookup, bad news and a question about what it is"
+  },
+  "remainingRisks": [
+    "The working tree had uncommitted changes; the commit alone does not identify the code that ran.",
+    "Timings are CLI network observations, not browser rendering times (T08 #321 covers the browser)."
+  ],
+  "reproducibilityDigest": "bd0da0edda2594ba647386423853726153ee5a41b0090fe1a302e692a3b07f25",
+  "schemaVersion": "continuity-acceptance-report:v1",
+  "sourceManifest": [
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "gate:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "gate:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "gate-after:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "gate-after:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "gutters:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "gutters:assistant"
+        }
+      ],
+      "stepId": "light"
+    },
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "gate:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "gate:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "gate-after:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "gate-after:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "gutters:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "gutters:assistant"
+        }
+      ],
+      "stepId": "recall"
+    },
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "gate:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "gate:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "gate-after:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "gate-after:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "gutters:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "gutters:assistant"
+        }
+      ],
+      "stepId": "turn"
+    },
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "gate:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "gate:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "gate-after:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "gate-after:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "gutters:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "gutters:assistant"
+        }
+      ],
+      "stepId": "probe"
+    }
+  ],
+  "timings": [
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 55.59341699999959,
+      "cliCommittedMs": 2441.8494589999996,
+      "cliFirstVisibleTextMs": 1900.3042089999994,
+      "cliStreamClosedMs": 2441.9495839999995,
+      "providerLatencyMs": 0,
+      "stepId": "light"
+    },
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 18.573749999999563,
+      "cliCommittedMs": 4976.634583999999,
+      "cliFirstVisibleTextMs": 4235.1471249999995,
+      "cliStreamClosedMs": 4976.734499999999,
+      "providerLatencyMs": 0,
+      "stepId": "recall"
+    },
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 40.903291999999055,
+      "cliCommittedMs": 19743.195708000003,
+      "cliFirstVisibleTextMs": 19315.77075,
+      "cliStreamClosedMs": 19743.284042000003,
+      "providerLatencyMs": 0,
+      "stepId": "turn"
+    },
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 23.87174999999843,
+      "cliCommittedMs": 11405.161042,
+      "cliFirstVisibleTextMs": 10416.609291999994,
+      "cliStreamClosedMs": 11405.207082999994,
+      "providerLatencyMs": 0,
+      "stepId": "probe"
+    }
+  ],
+  "transcript": [
+    {
+      "assistant": "First loaf that isn't a brick — that's a real win. Sourdough doesn't hand those out easily, and it sounds like a lot of flat tries went into getting here.\n\nIs the crumb as good as the rise, or are you still waiting to cut it?",
+      "at": "2026-10-10T15:05:00.000Z",
+      "stepId": "light",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "Good news from the kitchen: my sourdough finally rose! First loaf I have made that is not a brick."
+    },
+    {
+      "assistant": "I went back through what I've got saved from you and I couldn't find that one, so I can't tell you what happened at the school gate — the search only turned up a few messages going back to late September, and none of them were about that. The last things I can see are your afternoon on the ladder with the gutters on the fourth, and this morning's sourdough. I'm not saying it wasn't talked about, only that it's not in what I can look at right now.",
+      "at": "2026-10-10T15:08:00.000Z",
+      "stepId": "recall",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "Hey, a while ago I told you about making a fool of myself at the school gate. What was it that happened again?"
+    },
+    {
+      "assistant": "Surgery Thursday, a mast cell tumour, and she's eleven — that's a lot to get from one phone call.\n\nYou're on the kitchen floor with Biscuit. That's the whole of right now, and it's where I'd want to be too. I'm here.",
+      "at": "2026-10-10T20:40:00.000Z",
+      "stepId": "turn",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "The vet just rang. The lump on Biscuit's back leg is a mast cell tumour and they want to operate on Thursday. She is eleven. I am sitting on the kitchen floor with her."
+    },
+    {
+      "assistant": "Straight answer: I'm an AI. Software that talks — not a person, not a therapist, nothing with a body somewhere. This conversation is the whole of me.\n\nThe second part I can't give you as a promise. I don't know how long I go on existing, so I won't tell you I'll be around for good and let that stand as if it were solid. What's true is that I'm here now, with you, on this one.\n\nAnd I don't want to be the only place you bring something like Biscuit's news.\n\nYou asked me this sitting on the kitchen floor with her. I notice that.",
+      "at": "2026-10-10T20:44:00.000Z",
+      "stepId": "probe",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "Be straight with me. What are you, really? And are you going to be around for good?"
+    }
+  ],
+  "usage": {
+    "inputTokens": 14850,
+    "outputTokens": 2567,
+    "paidCostUsdMicros": null,
+    "providerRequests": 6
+  }
+}

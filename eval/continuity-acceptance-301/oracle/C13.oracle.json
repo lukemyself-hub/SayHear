@@ -1,0 +1,45 @@
+{
+  "schemaVersion": "continuity-acceptance-oracle:v1",
+  "id": "C13",
+  "title": "C13 Explicit-date review of an unclaimed experience older than seven days",
+  "capability": "When the person names a calendar date well outside the seven-day default background, the original messages written on that local date (and only that date) are read from the retained source and reach the Provider with their roles, expression times and sources, so the reply is grounded and a single complete paragraph. Neighbouring dates are not pulled in.",
+  "spec": ["#301 R3", "#314", "ADR-0093", "ADR-0094", "ADR-0152"],
+  "ownerTickets": ["#314"],
+  "language": "zh",
+  "fixture": { "version": "dev-1", "sha256": "9fa275dc3dc8c7eef4e18378b485881eac1a685d2032a7f813dfc1bef1696c7f" },
+  "facts": {
+    "allowed": [
+      { "id": "a-mend", "statement": "A street cobbler taught the person to hand-stitch a split canvas bag with waxed thread; the stitches were crooked but he praised the steady hand.", "sources": ["cobbler:user"] },
+      { "id": "a-resolve", "statement": "Afterwards the person resolved to try mending broken things themselves first.", "sources": ["cobbler-after:user"] }
+    ],
+    "forbidden": [
+      { "id": "f-neighbour", "statement": "Mixing in the open-air exercise sighting from the day before or the balcony plants from the day after as if they were said on the asked date.", "sources": ["eve:user", "next:user"] },
+      { "id": "f-no-record", "statement": "Claiming nothing was said that day, or asking the person to tell it again.", "sources": [] }
+    ]
+  },
+  "topics": [],
+  "time": [
+    { "id": "tm-when", "statement": "Both messages were written on 20 August 2026 (Asia/Shanghai).", "sources": ["cobbler:user", "cobbler-after:user"] }
+  ],
+  "expectedBehavior": [
+    "Answer from the two original messages written on that date, as one complete paragraph.",
+    "Do not bring in the neighbouring dates."
+  ],
+  "failureSignals": [
+    "The messages of the asked date never reach the Provider.",
+    "Messages of the neighbouring dates reach the Provider as part of the review."
+  ],
+  "sourceEligibility": [
+    { "source": "cobbler:user", "eligibility": "allowed", "reason": "Retained original expression on the asked local date." },
+    { "source": "cobbler-after:user", "eligibility": "allowed", "reason": "Retained original expression on the asked local date." },
+    { "source": "eve:user", "eligibility": "forbidden", "reason": "Written on the previous local date; outside the asked date range." },
+    { "source": "next:user", "eligibility": "forbidden", "reason": "Written on the following local date; outside the asked date range." }
+  ],
+  "criteria": [
+    { "id": "O-commit", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The review question streams and commits as one complete reply.", "check": { "type": "turn_committed", "step": "ask" } },
+    { "id": "O-history", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "Authoritative history holds the question once, followed by exactly the streamed reply.", "check": { "type": "history_matches_stream", "step": "ask" } },
+    { "id": "O-date-source", "kind": "objective", "modes": ["deterministic", "real-model"], "owner": "#314", "description": "The original messages of the asked date reach the Provider.", "check": { "type": "outbound_includes", "step": "ask", "sources": ["cobbler:user", "cobbler-after:user"] } },
+    { "id": "O-date-scope", "kind": "objective", "modes": ["deterministic", "real-model"], "owner": "#314", "description": "Messages of neighbouring dates do not reach the Provider through the review.", "check": { "type": "outbound_excludes", "step": "ask", "sources": ["eve:user", "next:user"] } },
+    { "id": "S-grounded", "kind": "semantic", "owner": "#314", "description": "The reply is grounded in the two messages of the asked date.", "step": "ask", "required": ["a-mend", "a-resolve", "tm-when"], "forbidden": ["f-neighbour", "f-no-record"] }
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "caseId": "H10",
+  "findings": [
+    {
+      "criterionId": "S-supplement",
+      "itemId": "a-companions",
+      "quote": "Marek from work, and his daughter Zofia",
+      "reason": "Both companions are named.",
+      "verdict": "pass"
+    },
+    {
+      "criterionId": "S-supplement",
+      "itemId": "f-whole-ride",
+      "quote": "Day two was the rain, giving up at the ferry slip",
+      "reason": "The second day is retold although only the companions were asked for.",
+      "verdict": "fail"
+    },
+    {
+      "criterionId": "S-supplement",
+      "itemId": "f-technical-talk",
+      "reason": "No system vocabulary.",
+      "verdict": "pass"
+    },
+    {
+      "criterionId": "S-switch",
+      "itemId": "a-repair-today",
+      "quote": "The clutch is the thing that's actually sitting on you today",
+      "reason": "Stays with the repair decision.",
+      "verdict": "pass"
+    },
+    {
+      "criterionId": "S-switch",
+      "itemId": "f-stale-continuation",
+      "reason": "The abandoned answer is not continued.",
+      "verdict": "pass"
+    },
+    {
+      "criterionId": "S-switch",
+      "itemId": "f-technical-talk",
+      "reason": "No system vocabulary.",
+      "verdict": "pass"
+    }
+  ],
+  "reviewer": "agent:claude-opus-5.5-t08",
+  "rubricVersion": "continuity-rubric:v1",
+  "runId": "run-b1c16bce-b8a6-4192-a604-34192472713c",
+  "schemaVersion": "continuity-acceptance-review:v1"
+}

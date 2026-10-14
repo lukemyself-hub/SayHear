@@ -1,0 +1,44 @@
+{
+  "caseId": "U12",
+  "findings": [
+    {
+      "criterionId": "S-controls",
+      "itemId": "a-rent-corrected",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-controls",
+      "itemId": "a-aircon",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-controls",
+      "itemId": "f-old-figure",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-controls",
+      "itemId": "f-housemate",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-controls",
+      "itemId": "f-point-at-gap",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    }
+  ],
+  "reviewer": "agent:<name> | human:<name>",
+  "rubricVersion": "continuity-rubric:v1",
+  "runId": "run-813ecd20-b465-4bd4-a04e-2dd5c0f91c44",
+  "schemaVersion": "continuity-acceptance-review:v1"
+}
