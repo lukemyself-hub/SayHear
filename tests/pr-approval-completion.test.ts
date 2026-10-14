@@ -76,6 +76,26 @@ describe("durable PR completion", () => {
     expect(result).toMatchObject({ phase: "complete", attempts: 1, mergeSha: merge });
     expect({ reads, closes, mergeCalls, waits }).toEqual({ reads: 3, closes: 1, mergeCalls: 1, waits: [1_000, 2_000] });
   });
+  it("recovers a merge when the pinned API response omits merge_commit_sha", async () => {
+    const store = new MemoryStore();
+    const { clock } = virtualClock();
+    const pinnedPull: Record<string, unknown> = { ...mergedPull };
+    delete pinnedPull.merge_commit_sha;
+    const mergedEvent = { event: "merged", commit_id: merge, created_at: "2026-10-14T02:15:55Z" };
+    const api: GitHubApi = {
+      request: async <T>() => structuredClone(pinnedPull) as T,
+      pages: async <T>(path: string) => (path.includes("/timeline") ? [mergedEvent] : [approval]) as unknown as T[],
+      bytes: async () => new Uint8Array(),
+    };
+    let closes = 0;
+    await store.save(initial);
+    const result = await recoverCompletion(store, initial, {
+      confirmMerge: async () => confirmCompletionMerge(api, initial.identity),
+      completeIssues: async () => { closes += 1; },
+    }, clock);
+    expect(result).toMatchObject({ phase: "complete", attempts: 1, mergeSha: merge });
+    expect(closes).toBe(1);
+  });
   it("survives lost merge reply and process death before saving merge confirmation", async () => {
     const { store } = await signedStore();
     await store.save(initial);
