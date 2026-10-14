@@ -5,7 +5,7 @@ import { promisify } from "node:util";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { build } from "esbuild";
+import { build, version as esbuildVersion } from "esbuild";
 
 const execFileAsync = promisify(execFile);
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -25,7 +25,11 @@ if (process.platform !== "darwin" || process.arch !== "arm64") {
 }
 
 await mkdir(outputDirectory, { recursive: true, mode: 0o700 });
-await build({
+const sourceCommit = (await execFileAsync("git", ["rev-parse", "HEAD"], { cwd: repositoryRoot })).stdout.trim();
+const buildInfo = { sourceCommit, nodeVersion: process.version, esbuildVersion };
+const bundle = await build({
+  metafile: true,
+  define: { __PR_APPROVAL_BUILD_INFO__: JSON.stringify(buildInfo) },
   entryPoints: [resolve(repositoryRoot, "scripts/pr-approval-controller.ts")],
   bundle: true,
   platform: "node",
@@ -61,7 +65,10 @@ for (const launcher of launchers) {
 const digest = async (path) =>
   createHash("sha256").update(await readFile(path)).digest("hex");
 const manifest = {
-  version: 1,
+  version: 2,
+  ...buildInfo,
+  inputs: await Promise.all(Object.keys(bundle.metafile.inputs).filter((path) => !path.startsWith("<")).sort().map(async (path) => ({ path, sha256: await digest(resolve(repositoryRoot, path)) }))),
+  clangVersion: (await execFileAsync("/usr/bin/clang", ["--version"])).stdout.split("\n")[0],
   nodeVersion: process.version,
   architecture: process.arch,
   controllerSha256: await digest(controllerPath),
