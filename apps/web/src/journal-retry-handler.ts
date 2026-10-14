@@ -8,7 +8,9 @@ export function createJournalRetryHandler(dependencies: {
   return async (request) => {
     const principal = await dependencies.authenticate(request);
     if (!principal) return Response.json({ error: "unauthorized" }, { status: 401 });
-    if (request.headers.get("origin") !== new URL(request.url).origin) return Response.json({ error: "invalid_origin" }, { status: 403 });
+    const sameOrigin = request.headers.get("origin") === new URL(request.url).origin
+      && request.headers.get("sec-fetch-site") !== "cross-site";
+    if (!sameOrigin) return Response.json({ error: "invalid_origin" }, { status: 403 });
     let body: unknown;
     try { body = await request.json(); } catch { return Response.json({ error: "invalid_request" }, { status: 400 }); }
     if (typeof body !== "object" || body === null || !("logicalDate" in body) || typeof body.logicalDate !== "string" || Object.keys(body).some((key) => key !== "logicalDate") || !/^\d{4}-\d{2}-\d{2}$/.test(body.logicalDate)) {
