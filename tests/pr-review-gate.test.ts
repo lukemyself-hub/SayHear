@@ -785,25 +785,145 @@ describe("PR review gate", () => {
     expect(report.requiredEvidenceIds).toContain("ui:portal-smoke");
   });
 
-  it("requires old-schema compatibility evidence for migrations", () => {
-    const report = evaluatePrReviewGate(
-      input({
+  const migrationCheckId = "migration:upgrade-compatibility";
+
+  function migrationInput(): PrReviewGateInput {
+    return input({
+      review: { declaredImpacts: [] },
+      pullRequest: {
+        changedFiles: [{
+          path: "packages/data/migrations/0099_add_column.sql",
+          status: "added",
+        }],
+      },
+      evidence: [
+        ...FIXED_PR_CI_BASELINE.map((id) => makeEvidence(id)),
+        ...["purge:full-restore-drill", migrationCheckId].map((checkId) =>
+          makeEvidence(checkId, {
+            artifactSha256: "e".repeat(64),
+            coveredCheckIds: [checkId],
+          }),
+        ),
+      ],
+    });
+  }
+
+  it.each(["migrations", "migrations-purge-marker"])(
+    "requires trusted old-schema compatibility evidence for %s",
+    (directory) => {
+      const candidate = migrationInput();
+      const report = evaluatePrReviewGate({
+        ...candidate,
         pullRequest: {
-          changedFiles: [
-            {
-              path: "packages/data/migrations/0099_add_column.sql",
-              status: "added",
-            },
-          ],
+          ...candidate.pullRequest,
+          changedFiles: [{
+            path: `packages/data/${directory}/0099_add_column.sql`,
+            status: "added",
+          }],
         },
-      }),
+        evidence: candidate.evidence.filter(
+          (entry) => entry.checkId !== migrationCheckId,
+        ),
+      }, policy);
+
+      expect(report.outcome).toBe("awaiting_verification");
+      expect(report.reasons[0]?.code).toBe("required_evidence_missing");
+      expect(report.reasons[0]?.message).toContain(migrationCheckId);
+      expect(report.requiredEvidenceIds).toContain(migrationCheckId);
+      expect(report.requiredEvidenceIds).toContain("purge:full-restore-drill");
+    },
+  );
+
+  it("accepts a trusted migration drill on the same workflow run and artifact", () => {
+    const report = evaluatePrReviewGate(migrationInput(), policy);
+
+    expect(report.outcome).toBe("merge_candidate");
+    expect(report.acceptedEvidenceIds).toEqual(report.requiredEvidenceIds);
+    expect(report.acceptedEvidenceIds).toContain(migrationCheckId);
+  });
+
+  it.each(["failed", "skipped", "planned", "cancelled", "neutral", "out-of-scope"] as const)(
+    "keeps a %s migration drill blocked",
+    (result) => {
+      const candidate = migrationInput();
+      const report = evaluatePrReviewGate({
+        ...candidate,
+        evidence: candidate.evidence.map((entry) =>
+          entry.checkId === migrationCheckId ? { ...entry, result } : entry,
+        ),
+      }, policy);
+
+      expect(report.outcome).toBe("awaiting_verification");
+      expect(report.reasons[0]?.message).toContain(migrationCheckId);
+    },
+  );
+
+  it.each([
+    { artifactSha256: null },
+    { coveredCheckIds: [] },
+    { source: { ...makeEvidence(migrationCheckId).source, headSha: "9".repeat(40) } },
+    { source: { ...makeEvidence(migrationCheckId).source, baseSha: "9".repeat(40) } },
+    { source: { ...makeEvidence(migrationCheckId).source, mergeSha: "9".repeat(40) } },
+    { source: { ...makeEvidence(migrationCheckId).source, workflowBlobSha: "9".repeat(40) } },
+    { source: { ...makeEvidence(migrationCheckId).source, appId: 1 } },
+    { source: { ...makeEvidence(migrationCheckId).source, repositoryId: 1 } },
+    { source: { ...makeEvidence(migrationCheckId).source, runId: 4321 } },
+    { source: { ...makeEvidence(migrationCheckId).source, runAttempt: 2 } },
+  ] satisfies readonly Partial<PrReviewGateInput["evidence"][number]>[])(
+    "rejects migration evidence with incomplete coverage or mismatched identity %j",
+    (override) => {
+      const candidate = migrationInput();
+      const report = evaluatePrReviewGate({
+        ...candidate,
+        evidence: candidate.evidence.map((entry) =>
+          entry.checkId === migrationCheckId ? { ...entry, ...override } : entry,
+        ),
+      }, policy);
+
+      expect(report.outcome).toBe("awaiting_verification");
+      expect(report.reasons[0]?.message).toContain(migrationCheckId);
+    },
+  );
+
+  it("keeps Purge evidence required after an upgrade drill passes", () => {
+    const candidate = migrationInput();
+    const report = evaluatePrReviewGate(
+      {
+        ...candidate,
+        evidence: candidate.evidence.filter(
+          (entry) => entry.checkId !== "purge:full-restore-drill",
+        ),
+      },
       policy,
     );
 
     expect(report.outcome).toBe("awaiting_verification");
-    expect(report.reasons[0]?.code).toBe(
-      "migration_compatibility_evidence_required",
-    );
+    expect(report.reasons[0]?.message).toContain("purge:full-restore-drill");
+  });
+
+  it("rejects duplicate migration records even if both report a pass", () => {
+    const candidate = migrationInput();
+    const report = evaluatePrReviewGate({
+      ...candidate,
+      evidence: [...candidate.evidence, makeEvidence(migrationCheckId, {
+        artifactSha256: "e".repeat(64),
+        coveredCheckIds: [migrationCheckId],
+      })],
+    }, policy);
+
+    expect(report.outcome).toBe("awaiting_verification");
+    expect(report.reasons[0]?.message).toContain("duplicate");
+    expect(report.acceptedEvidenceIds).toEqual([]);
+  });
+
+  it.each(["v4", "v5", "v6"])("invalidates %s policy reviews while keeping the report schema unchanged", (version) => {
+    const report = evaluatePrReviewGate(input({
+      review: { policyVersion: `sayhear-pr-review-gate:${version}` },
+    }), policy);
+
+    expect(PR_REVIEW_GATE_POLICY_VERSION).toBe("sayhear-pr-review-gate:v7");
+    expect(PR_REVIEW_REPORT_VERSION).toBe("sayhear-pr-review-report:v3");
+    expect(report.reasons[0]?.code).toBe("policy_version_mismatch");
   });
 
   it("routes capability acceptance and contradictory findings away from auto approval", () => {

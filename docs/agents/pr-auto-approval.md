@@ -2,6 +2,32 @@
 
 ## 状态
 
+### 迁移专项证据候选
+
+#350 的独立候选将策略标识更新为 `sayhear-pr-review-gate:v7`，报告结构保持
+`sayhear-pr-review-report:v3`。该候选从 main 构建，尚未完成受控安装。
+v5、v6 保留给其他审批工具改动，安装顺序须协调，不能用此候选覆盖独立浏览器审批能力。
+源码保留 `sayhear-pr-diff:v2`、`sayhear-pr-base-sync:v1` 和可恢复合并收尾。
+安装完成与否须回读固定 status、bundle 哈希及实际功能，不能根据源码版本判断。
+
+两种迁移目录 `packages/data/migrations/` 与 `packages/data/migrations-purge-marker/`
+强制选择 `migration:upgrade-compatibility`。专项由统一 release planner 注册，
+gate 和 collector 都读取该 planner；窄影响声明不能删掉它。现有
+`purge:full-restore-drill` 继续必需。
+
+collector 从同一次可信 PR Validate 的 `vitest-report.json` 收集专项。
+报告须实际覆盖 `tests/ci/migration-upgrade-compatibility.test.ts`，测试文件及其非空
+assertion 列表必须全部 passed。空报告、空 assertion、缺失、失败、跳过、身份不符、
+重复记录或 artifact 覆盖不符都不能批准。证据继续绑定 repository、App、workflow
+版本、head/base/merge SHA、run/attempt 和 artifact digest。
+
+此候选只开放上述证据核验路径，替换 v4 的无条件迁移终止。真实 PostgreSQL drill
+将在 #349 接续新 main 后实现，须覆盖 base 迁移后升级 head、既有数据约束、
+升级后 schema 与 fresh head 安装的比较，并说明新旧程序兼容和 forward-fix 边界。
+缺少该测试时迁移 PR 继续待验证。本候选的协议回归测试不代表真实迁移兼容性已通过。
+审批策略本身仍须人工审核；破坏性迁移、产品及权限边界仍转人工。
+Provider/配置专项的证据限制继续有效，没有新增 deferral 或豁免。
+
 ### 可恢复合并收尾
 
 #339 将合并意图与 Issue 收尾分开持久保存。签名意图在请求合并前落盘，绑定已审
@@ -224,7 +250,7 @@ pnpm pr:review-gate:dry-run -- --input <snapshot.json>
 - PR Validate 的证据必须对应当前 head、base 和 merge SHA，并匹配可信 workflow 文件摘要、GitHub Actions App、仓库和 `pull_request` 事件。
 - 每项必要证据都必须显式为 `passed`。`skipped`、`cancelled`、`neutral`、`planned` 和 `out-of-scope` 均阻断。
 - `scripts/daily-release-validation.ts` 决定行为专项；gate 不使用它的退出码代替验收结果。
-- 涉及审批规则、CI、产品定义、删除测试、完整能力验收或生产新能力启用时转人工。UI 变化按 Luke 确认的标准，追加 `ui:portal-smoke`（`tests/portal-integration.test.ts` 与 `tests/portal-conversation-status.test.ts` 两个模块级行为测试），不再要求设计稿所述的桌面与移动端交互证据；仓库当前没有接入 PR CI 的浏览器 E2E runner。该降级是产品决定，不是测试通过，等真实浏览器 E2E 落地后可恢复。当前所有数据库迁移都返回 `awaiting_verification`；gate 尚未接入旧 schema、既有数据约束和新旧程序兼容证据。
+- 涉及审批规则、CI、产品定义、删除测试、完整能力验收或生产新能力启用时转人工。UI 变化按 Luke 确认的标准，追加 `ui:portal-smoke`（`tests/portal-integration.test.ts` 与 `tests/portal-conversation-status.test.ts` 两个模块级行为测试），不再要求设计稿所述的桌面与移动端交互证据；仓库当前没有接入 PR CI 的浏览器 E2E runner。该降级是产品决定，不是测试通过，等真实浏览器 E2E 落地后可恢复。v4 对数据库迁移无条件返回 `awaiting_verification`；迁移专项证据候选的核验规则与安装边界见本文件顶部。
 - 只有可读的 main 保护规则、最新 base、过期 review 失效、管理员强制执行、恰好一个审批名额、没有绕过 actor，以及精确匹配来源的 `validate` 和 `pr-review-gate` 两项 required checks 同时成立时，才会生成 `merge_candidate`。
 - 所有必要证据必须来自同一个 PR Validate workflow run 和 attempt。快照采集器仍须证明它们是当前最新 run；gate 本身不连接 GitHub，也不提供全仓合入锁。
 
