@@ -23,6 +23,13 @@ const PROFILES = {
   local: { clock: "fixed", provider: "deterministic", oauth: "inert", session: "fixture", owner: "synthetic" },
   live: { clock: "real", provider: "deterministic", oauth: "inert", session: "fixture", owner: "synthetic" },
   provider: { clock: "real", provider: "opencode-go", oauth: "inert", session: "fixture", owner: "synthetic" },
+  // `timeline` keeps the deterministic Provider and swaps the fixed clock for a
+  // file the driver advances between requests, so one instance can produce more
+  // than one logical date without editing session rows.
+  timeline: { clock: "controllable", provider: "deterministic", oauth: "inert", session: "fixture", owner: "synthetic" },
+  // `fault` adds the existing deterministic fault injection as a file the
+  // driver turns on for one request and off again for the retry.
+  fault: { clock: "controllable", provider: "deterministic", providerFault: "file", oauth: "inert", session: "fixture", owner: "synthetic" },
   oauth: { clock: "real", provider: "deterministic", oauth: "github", session: "none", owner: "configured" },
   "oauth-stranger": { clock: "real", provider: "deterministic", oauth: "github", session: "none", owner: "synthetic" },
 };
@@ -188,7 +195,19 @@ async function launch() {
   mkdirSync(evidence, { recursive: true });
   const scratch = mkdtempSync(join(tmpdir(), "sayhear-verify-"));
   const state = { runId, root, scratch, ...prepared, profile, standIns, sessionToken: randomBytes(32).toString("hex"), scannerSecret: randomBytes(32).toString("hex"), ownerId: "01984477-31e1-7595-92c6-06889cb0fdde", cleaned: false };
-  if (standIns.clock === "real") state.inactivityTimeoutMs = SHORT_INACTIVITY_MS;
+  if (standIns.clock === "real" || standIns.clock === "controllable") state.inactivityTimeoutMs = SHORT_INACTIVITY_MS;
+  if (standIns.clock === "controllable") {
+    // The driver rewrites this file between requests; the runtime re-reads it
+    // per configuration load. `SAYHEAR_TEST_NOW` stays the launch fallback.
+    state.testNowInitial = FIXED_NOW;
+    state.testNowFile = join(evidence, "test-clock.txt");
+    writeFileSync(state.testNowFile, `${FIXED_NOW}\n`);
+  }
+  if (standIns.providerFault === "file") {
+    // A missing or empty file means no fault injection; the journey writes a
+    // chunk ceiling to interrupt one response and empties it before the retry.
+    state.providerFaultFile = join(evidence, "provider-fault.txt");
+  }
   save("instance.json", state);
   try {
     const source = join(scratch, "source");
@@ -212,12 +231,21 @@ async function launch() {
       NEXTAUTH_URL: state.origin, NEXTAUTH_SECRET: randomBytes(32).toString("hex"), SAYHEAR_AUTH_SECRET_SOURCE: "managed", SAYHEAR_DEPLOYMENT: "test",
       SAYHEAR_BACKUP_CONFIGURATION_FINGERPRINT: "sha256:local-verification-fixture", SAYHEAR_BACKUP_POLICY_VERSION: "local-verification:v1",
       SAYHEAR_CONTEXT_HMAC_SECRET: randomBytes(32).toString("hex"), CRON_SECRET: state.scannerSecret, SAYHEAR_EPISODE_BUILD_ENABLED: "false", SAYHEAR_REFLECTION_ENABLED: "false",
-      ...(standIns.clock === "fixed"
+      ...(standIns.clock === "real" || standIns.clock === "controllable"
+        ? { SAYHEAR_INACTIVITY_TIMEOUT_MS: String(SHORT_INACTIVITY_MS), SAYHEAR_INACTIVITY_POLICY_VERSION: "continuous-exchange-inactivity:verify-short" }
+        : {}),
+      ...(standIns.clock === "fixed" || standIns.clock === "controllable"
         ? { SAYHEAR_TEST_NOW: FIXED_NOW }
-        : { SAYHEAR_INACTIVITY_TIMEOUT_MS: String(SHORT_INACTIVITY_MS), SAYHEAR_INACTIVITY_POLICY_VERSION: "continuous-exchange-inactivity:verify-short" }),
+        : {}),
+      ...(standIns.clock === "controllable"
+        ? { SAYHEAR_TEST_NOW_FILE: state.testNowFile }
+        : {}),
       ...(standIns.provider === "deterministic"
         ? { SAYHEAR_PROVIDER_ADAPTER: "deterministic", SAYHEAR_CONVERSATION_TEXT_MODEL: "gpt-5.4", SAYHEAR_CONVERSATION_TEXT_MODEL_SNAPSHOT: "gpt-5.4", SAYHEAR_TEST_PROVIDER_CHUNKS: JSON.stringify(["Synthetic verification reply. ", "Your message was received."]) }
         : { SAYHEAR_PROVIDER_ADAPTER: standIns.provider }),
+      ...(standIns.providerFault === "file"
+        ? { SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS_FILE: state.providerFaultFile }
+        : {}),
       ...credentials,
     };
     // Next 16 flushes telemetry in a detached process even when disabled. Debug

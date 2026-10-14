@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import {
   verifyOneA3bG1ReleaseManifest,
   type OneA3bG1ReleaseManifest,
@@ -151,8 +153,10 @@ export function assertSafeRuntimeConfiguration(
     (environment.SAYHEAR_PROVIDER_ADAPTER === "deterministic" ||
       environment.SAYHEAR_TEST_PROVIDER_CHUNKS ||
       environment.SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS ||
+      environment.SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS_FILE ||
       environment.SAYHEAR_TEST_PROVIDER_FAIL_AFTER_COMPLETION ||
       environment.SAYHEAR_TEST_NOW ||
+      environment.SAYHEAR_TEST_NOW_FILE ||
       environment.SAYHEAR_TEST_PRINCIPAL_SUBJECT) &&
     deployment !== "test"
   ) {
@@ -249,6 +253,15 @@ export function loadRuntimeConfiguration(environment: Environment) {
   if (testNow && Number.isNaN(testNow.getTime())) {
     throw new Error("SAYHEAR_TEST_NOW must be a valid ISO timestamp.");
   }
+  // The verify driver advances a controlled clock between HTTP requests by
+  // rewriting this file; every runtime-configuration load re-reads it, so no
+  // server restart is needed. `SAYHEAR_TEST_NOW` stays the fallback the fixture
+  // used at launch. Test deployment only, enforced above.
+  const controlledTestNow =
+    environment.SAYHEAR_TEST_NOW_FILE === undefined
+      ? null
+      : readTestNowFile(environment.SAYHEAR_TEST_NOW_FILE);
+  const effectiveTestNow = controlledTestNow ?? testNow;
 
   const adapter = resolveProviderAdapter(environment.SAYHEAR_PROVIDER_ADAPTER);
   const deterministicChunks =
@@ -257,9 +270,14 @@ export function loadRuntimeConfiguration(environment: Environment) {
           required(environment, "SAYHEAR_TEST_PROVIDER_CHUNKS"),
         )
       : [];
-  const failAfterChunks = environment.SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS
-    ? Number(environment.SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS)
-    : undefined;
+  const failAfterChunks =
+    environment.SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS_FILE === undefined
+      ? environment.SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS
+        ? Number(environment.SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS)
+        : undefined
+      : readProviderFaultChunksFile(
+          environment.SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS_FILE,
+        );
   const failAfterCompletionValue =
     environment.SAYHEAR_TEST_PROVIDER_FAIL_AFTER_COMPLETION;
   if (
@@ -475,7 +493,9 @@ export function loadRuntimeConfiguration(environment: Environment) {
       environment,
       "SAYHEAR_BACKUP_POLICY_VERSION",
     ),
-    clock: testNow ? () => new Date(testNow) : () => new Date(),
+    clock: effectiveTestNow
+      ? () => new Date(effectiveTestNow)
+      : () => new Date(),
     databaseUrl,
     deployment,
     ownerPurge: Object.freeze({
@@ -553,6 +573,61 @@ function parseDeterministicChunks(value: string): readonly string[] {
     parsed.some((item) => typeof item !== "string" || item.length === 0)
   ) {
     throw new Error("SAYHEAR_TEST_PROVIDER_CHUNKS must be a JSON string array.");
+  }
+  return parsed;
+}
+
+/**
+ * The verify driver's controllable test clock: the file content is the frozen
+ * "now" for every runtime-configuration load. It must be readable and hold one
+ * ISO timestamp, because a silent fallback to wall time would fake a real
+ * clock. Test deployment only, enforced by assertSafeRuntimeConfiguration.
+ */
+function readTestNowFile(path: string): Date {
+  if (path.trim().length === 0) {
+    throw new Error("SAYHEAR_TEST_NOW_FILE must name a file.");
+  }
+  let content: string;
+  try {
+    content = readFileSync(path, "utf8");
+  } catch {
+    throw new Error(
+      "SAYHEAR_TEST_NOW_FILE must point to a readable timestamp file.",
+    );
+  }
+  const value = content.trim();
+  const parsed = new Date(value);
+  if (value.length === 0 || Number.isNaN(parsed.getTime())) {
+    throw new Error("SAYHEAR_TEST_NOW_FILE must contain a valid ISO timestamp.");
+  }
+  return parsed;
+}
+
+/**
+ * The verify driver's toggleable deterministic fault: a missing or empty file
+ * means no fault, a non-negative integer is the chunk ceiling where the stream
+ * fails, and anything else fails loudly rather than silently faking a clean
+ * run. Test deployment only, enforced by assertSafeRuntimeConfiguration.
+ */
+function readProviderFaultChunksFile(path: string): number | undefined {
+  if (path.trim().length === 0) {
+    throw new Error("SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS_FILE must name a file.");
+  }
+  let content: string;
+  try {
+    content = readFileSync(path, "utf8");
+  } catch {
+    return undefined;
+  }
+  const value = content.trim();
+  if (value.length === 0) {
+    return undefined;
+  }
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new Error(
+      "SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS_FILE must contain a non-negative integer.",
+    );
   }
   return parsed;
 }

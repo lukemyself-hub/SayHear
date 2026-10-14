@@ -1,4 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { afterEach, describe, expect, it } from "vitest";
 
 import {
   buildOneA3bG1ReleaseManifest,
@@ -11,6 +15,38 @@ import {
   loadRuntimeConfiguration,
   resolveOneA3bG1ReleaseManifest,
 } from "../apps/web/src/runtime-config";
+
+const temporaryDirectories: string[] = [];
+
+function temporaryDirectory(): string {
+  const directory = mkdtempSync(join(tmpdir(), "sayhear-runtime-config-"));
+  temporaryDirectories.push(directory);
+  return directory;
+}
+
+afterEach(() => {
+  for (const directory of temporaryDirectories.splice(0)) {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+/** The smallest environment that satisfies loadRuntimeConfiguration. */
+function testRuntimeEnvironment(): Record<string, string> {
+  return {
+    CRON_SECRET: "cron",
+    DATABASE_URL: "postgres://test",
+    GITHUB_CLIENT_ID: "id",
+    GITHUB_CLIENT_SECRET: "secret",
+    NEXTAUTH_SECRET: "auth",
+    PURGE_MARKER_DATABASE_URL: "postgres://test-marker",
+    SAYHEAR_BACKUP_CONFIGURATION_FINGERPRINT: "fingerprint",
+    SAYHEAR_BACKUP_POLICY_VERSION: "backup:v1",
+    SAYHEAR_CONTEXT_HMAC_SECRET: "context",
+    SAYHEAR_DEPLOYMENT: "test",
+    SAYHEAR_PROVIDER_ADAPTER: "deterministic",
+    SAYHEAR_TEST_PROVIDER_CHUNKS: '["ok"]',
+  };
+}
 
 function buildActiveG1Manifest(gitCommit: string) {
   return buildOneA3bG1ReleaseManifest({
@@ -170,6 +206,116 @@ describe("runtime safety configuration", () => {
         SAYHEAR_TEST_PROVIDER_FAIL_AFTER_COMPLETION: "true",
       }),
     ).toBe("test");
+  });
+
+  it("keeps file-backed provider faults test-only", () => {
+    expect(() =>
+      assertSafeRuntimeConfiguration({
+        SAYHEAR_DEPLOYMENT: "production",
+        SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS_FILE: "/tmp/fault.txt",
+      }),
+    ).toThrow("only in the test environment");
+
+    expect(
+      assertSafeRuntimeConfiguration({
+        SAYHEAR_DEPLOYMENT: "test",
+        SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS_FILE: "/tmp/fault.txt",
+      }),
+    ).toBe("test");
+  });
+
+  it("keeps the file-backed test clock test-only", () => {
+    expect(() =>
+      assertSafeRuntimeConfiguration({
+        SAYHEAR_DEPLOYMENT: "production",
+        SAYHEAR_TEST_NOW_FILE: "/tmp/clock.txt",
+      }),
+    ).toThrow("only in the test environment");
+
+    expect(
+      assertSafeRuntimeConfiguration({
+        SAYHEAR_DEPLOYMENT: "test",
+        SAYHEAR_TEST_NOW_FILE: "/tmp/clock.txt",
+      }),
+    ).toBe("test");
+  });
+
+  it("reads a controlled clock from SAYHEAR_TEST_NOW_FILE on every load", () => {
+    const file = join(temporaryDirectory(), "clock.txt");
+    writeFileSync(file, "2026-07-27T16:00:00.000Z");
+    const environment = {
+      ...testRuntimeEnvironment(),
+      SAYHEAR_TEST_NOW: "2026-07-01T00:00:00.000Z",
+      SAYHEAR_TEST_NOW_FILE: file,
+    };
+    // The file is authoritative and is re-read per load, so a driver can
+    // advance time between requests without restarting the server.
+    expect(loadRuntimeConfiguration(environment).clock().toISOString()).toBe(
+      "2026-07-27T16:00:00.000Z",
+    );
+    writeFileSync(file, "2026-07-28T16:30:00.000Z\n");
+    expect(loadRuntimeConfiguration(environment).clock().toISOString()).toBe(
+      "2026-07-28T16:30:00.000Z",
+    );
+    writeFileSync(file, "  \n");
+    expect(() => loadRuntimeConfiguration(environment)).toThrow(
+      "SAYHEAR_TEST_NOW_FILE must contain a valid ISO timestamp.",
+    );
+    writeFileSync(file, "not-a-time");
+    expect(() => loadRuntimeConfiguration(environment)).toThrow(
+      "SAYHEAR_TEST_NOW_FILE must contain a valid ISO timestamp.",
+    );
+  });
+
+  it("resolves the controlled clock from SAYHEAR_TEST_NOW_FILE, not the environment timestamp", () => {
+    const file = join(temporaryDirectory(), "clock.txt");
+    writeFileSync(file, "2026-08-01T00:00:00.000Z");
+    const configuration = loadRuntimeConfiguration({
+      ...testRuntimeEnvironment(),
+      SAYHEAR_TEST_NOW: "2026-07-27T16:00:00.000Z",
+      SAYHEAR_TEST_NOW_FILE: file,
+    });
+    expect(configuration.clock().toISOString()).toBe("2026-08-01T00:00:00.000Z");
+  });
+
+  it("toggles the deterministic chunk fault through SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS_FILE", () => {
+    const file = join(temporaryDirectory(), "provider-fault.txt");
+    const environment = {
+      ...testRuntimeEnvironment(),
+      SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS_FILE: file,
+    };
+    // A missing file means no fault injection.
+    expect(loadRuntimeConfiguration(environment).provider.failAfterChunks).toBe(
+      undefined,
+    );
+    writeFileSync(file, "1\n");
+    expect(loadRuntimeConfiguration(environment).provider.failAfterChunks).toBe(
+      1,
+    );
+    // An empty file turns the fault off again for the next request.
+    writeFileSync(file, "");
+    expect(loadRuntimeConfiguration(environment).provider.failAfterChunks).toBe(
+      undefined,
+    );
+    writeFileSync(file, "-1");
+    expect(() => loadRuntimeConfiguration(environment)).toThrow(
+      "SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS_FILE must contain a non-negative integer.",
+    );
+    writeFileSync(file, "not-a-count");
+    expect(() => loadRuntimeConfiguration(environment)).toThrow(
+      "SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS_FILE must contain a non-negative integer.",
+    );
+  });
+
+  it("lets the fault file override the static chunk fault", () => {
+    const file = join(temporaryDirectory(), "provider-fault.txt");
+    writeFileSync(file, "3");
+    const configuration = loadRuntimeConfiguration({
+      ...testRuntimeEnvironment(),
+      SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS: "5",
+      SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS_FILE: file,
+    });
+    expect(configuration.provider.failAfterChunks).toBe(3);
   });
 
   it("requires an exact G1 release artifact before opening a G1 write switch", () => {
