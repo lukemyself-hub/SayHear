@@ -469,7 +469,7 @@ pnpm pr:review-gate:dry-run -- --input <snapshot.json>
 - 每项必要证据都必须显式为 `passed`。`skipped`、`cancelled`、`neutral`、`planned` 和 `out-of-scope` 均阻断。
 - `scripts/daily-release-validation.ts` 决定行为专项；gate 不使用它的退出码代替验收结果。
 - 涉及审批规则、CI、产品定义、删除测试、完整能力验收或生产新能力启用时转人工。UI 变化按 Luke 确认的标准，追加 `ui:portal-smoke`（`tests/portal-integration.test.ts` 与 `tests/portal-conversation-status.test.ts` 两个模块级行为测试），不再要求设计稿所述的桌面与移动端交互证据；仓库当前没有接入 PR CI 的浏览器 E2E runner。该降级是产品决定，不是测试通过，等真实浏览器 E2E 落地后可恢复。数据库迁移要求可信、无 skip 的升级兼容专项证据。
-- 只有可读的 main 保护规则、base 满足当前集成模式（`up-to-date-base` 要求等于最新 main；`merge-queue` 暂不可激活；`serialized-merge` 要求无冲突、main 已关闭 `requiresUpToDate`，且 main 的写入守卫正好只给审批 App 一个 bypass）、过期 review 失效、管理员强制执行、恰好一个审批名额、绕过 actor 符合当前模式（`up-to-date-base`/`merge-queue` 除审批 App 外不得有别的 bypass actor；`serialized-merge` 要求实时 bypass 名单恰好等于 `[reviewAppId]`，名单不可读时要求见证指纹相符且见证断言恰好等于 `[reviewAppId]`），以及精确匹配来源的 `validate` 和 `pr-review-gate` 两项 required checks 同时成立时，才会生成 `merge_candidate`。
+- 只有可读的 main 保护规则、base 满足当前集成模式（`up-to-date-base` 要求等于最新 main；`merge-queue` 暂不可激活；`serialized-merge` 要求无冲突、main 已关闭 `requiresUpToDate`，且 main 的写入守卫正好只给审批 App 一个 bypass）、过期 review 失效、管理员强制执行、恰好一个审批名额、绕过 actor 符合当前模式（`up-to-date-base`/`merge-queue` 除审批 App 外不得有别的 bypass actor；`serialized-merge` 要求实时 bypass 名单恰好等于 `[reviewAppId]`，名单不可读时要求见证指纹相符且见证断言恰好等于 `[reviewAppId]`；一旦存在限制 main 写入的 ruleset，这条 App-only 证明在所有模式下都要过，不只轻量模式），以及精确匹配来源的 `validate` 和 `pr-review-gate` 两项 required checks 同时成立时，才会生成 `merge_candidate`。
 - 所有必要证据必须来自同一个 PR Validate workflow run 和 attempt。快照采集器仍须证明它们是当前最新 run；gate 本身不连接 GitHub，也不提供全仓合入锁。
 
 ## Issue 标签交接
