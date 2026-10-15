@@ -27,7 +27,9 @@ PR 审查要求修改后，对应 Issue 使用 `ready-for-agent` 接续已有 PR
 依赖、执行占用或自动修改暂停；接续前读取
 [`实现与 PR 审核交接`](issue-tracker.md#实现与-pr-审核交接)。
 
-PR base 落后当前 main 时，由 App 先回写同步要求，再交回 `ready-for-agent`，解除
+当前生产启用 `serialized-merge`，PR 不要求与最新 main 对齐，main 前进本身不使批准失效，
+没有代码冲突时不需要同步提交。下面这段同步交接只适用于回退到 `up-to-date-base` 的部署：
+此时 PR base 落后当前 main，由 App 先回写同步要求，再交回 `ready-for-agent`，解除
 `ongoing`；人工分诊标签只接收提醒，保持原状态。明确保持开放的 Issue 与暂停项排除，
 同步不计入三轮代码失败，已完成的同一轮交接不释放后续 Agent 新认领。
 

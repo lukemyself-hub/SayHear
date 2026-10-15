@@ -123,6 +123,11 @@ GitHub 标签更新不是原子操作；交接时可先写入 `ready-for-agent`�
 
 ### PR 落后当前 main 时
 
+本节只适用于回退到 `up-to-date-base` 的部署。当前生产启用 `serialized-merge`：PR 不要求
+与最新 main 对齐，main 前进本身不使批准失效，没有代码冲突时不需要同步提交。controller
+在最新 main 的组合上验证可信 CI，真实代码冲突才交回原 PR。见
+[`pr-auto-approval.md`](pr-auto-approval.md#pr-落后-main)。
+
 这类状态需要实现 Agent 同步基线，不能只无限等待。自动审核通过固定 App scan 将 PR、
 head/base/当前 main SHA 与同步复验要求写回未排除的开放 Issue。确认评论后恢复
 `ready-for-agent`、清理 `ongoing` 并回读；人工分诊状态只收到提醒，保留标签等待决定。
