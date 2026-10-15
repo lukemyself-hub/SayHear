@@ -77,7 +77,7 @@ import {
 
 export { SignedCompletionStore, recoverCompletion, parseCompletionRecord, CompletionMismatch, CompletionUnavailable, COMPLETION_RETRY_POLICY } from "./pr-approval/completion.ts";
 export { collectPullRequestDiff, readPullRequestFileManifest, gitBlobSha } from "./pr-approval/diff.ts";
-export { PR_REVIEW_GATE_POLICY_VERSION, PR_REVIEW_GATE_LEGACY_POLICY_VERSION, PR_REVIEW_GATE_PREVIOUS_POLICY_VERSION, PR_REVIEW_GATE_INSTALLED_POLICY_VERSION, PR_REVIEW_GATE_OLDER_INSTALLED_POLICY_VERSION, PR_REVIEW_REPORT_VERSION, PR_VALIDATE_WORKFLOW_PATH,
+export { MAIN_WRITER_ATTESTATION_VERSION, PR_REVIEW_GATE_POLICY_VERSION, PR_REVIEW_GATE_LEGACY_POLICY_VERSION, PR_REVIEW_GATE_PREVIOUS_POLICY_VERSION, PR_REVIEW_GATE_INSTALLED_POLICY_VERSION, PR_REVIEW_GATE_OLDER_INSTALLED_POLICY_VERSION, PR_REVIEW_REPORT_VERSION, PR_VALIDATE_WORKFLOW_PATH,
   SAYHEAR_REPOSITORY_ID, SAYHEAR_REPOSITORY_NAME, evaluatePrReviewGate, parsePrReviewGateInput, integrationModeOf, parseIntegrationMode, type IntegrationMode,
   requirementDigest, parseIssueClosureExclusions, closingKeywordIssueNumbers, protectedReviewPaths } from "./pr-review-gate.ts";
 export { FIXED_PR_CI_BASELINE, RELEASE_CHECKS, preMergeDeferralFor } from "./daily-release-validation.ts";
