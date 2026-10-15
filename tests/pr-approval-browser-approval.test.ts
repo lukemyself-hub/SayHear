@@ -626,8 +626,21 @@ describe("channel routing in the controller", () => {
     expect(mergeActionFor(humanBinding("legacy-root"), { mergeable: true, mergeable_state: "behind" }, "serialized-merge")).toBe("merge-now");
     expect(mergeActionFor(humanBinding("legacy-root"), { mergeable: true, mergeable_state: "clean" }, "serialized-merge")).toBe("merge-now");
     expect(mergeActionFor(browser, { mergeable: false, mergeable_state: "dirty" }, "serialized-merge")).toBe("wait");
-    expect(mergeActionFor(humanBinding("legacy-root"), { mergeable: true, mergeable_state: "blocked" }, "serialized-merge")).toBe("wait");
     expect(mergeActionFor(browser, { mergeable: null, mergeable_state: "unknown" }, "serialized-merge")).toBe("wait");
+  });
+
+  it.each(["browser", "legacy-root"] as const)("allows confirmed blocked mergeability only for serialized merge on %s", (channel) => {
+    const binding = humanBinding(channel);
+    expect(mergeActionFor(binding, { mergeable: true, mergeable_state: "blocked" }, "serialized-merge")).toBe("merge-now");
+    expect(mergeActionFor(binding, { mergeable: true, mergeable_state: "blocked" }, "merge-queue")).toBe("wait");
+    expect(mergeActionFor(binding, { mergeable: true, mergeable_state: "blocked" }, "up-to-date-base"))
+      .toBe(channel === "browser" ? "wait" : "arm-auto-merge");
+    for (const mergeable of [null, false, undefined]) {
+      expect(mergeActionFor(binding, { mergeable, mergeable_state: "blocked" }, "serialized-merge")).toBe("wait");
+    }
+    for (const state of ["unknown", "dirty", "unstable", "draft", "has_hooks", undefined]) {
+      expect(mergeActionFor(binding, { mergeable: true, mergeable_state: state }, "serialized-merge")).toBe("wait");
+    }
   });
 
   it("performs the browser merge at the call site without ever arming deferred auto-merge", async () => {
