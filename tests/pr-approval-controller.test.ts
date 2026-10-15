@@ -1557,6 +1557,24 @@ describe("PR approval controller", () => {
     expect(() => fingerprintRuleset({ ...detail, updated_at: undefined })).toThrow();
   });
 
+  it("hashes the updated_at instant, not its per-caller string form", () => {
+    // GitHub renders the same instant as UTC `Z` for the App token and with
+    // a local offset for a user token. The attestation (gh-shaped) and the
+    // controller (App-shaped) must converge on one fingerprint or they can
+    // never match.
+    const utc = {
+      id: 25142474,
+      target: "branch",
+      enforcement: "active",
+      conditions: { ref_name: { include: ["~DEFAULT_BRANCH"], exclude: [] } },
+      rules: [{ type: "update" }],
+      updated_at: "2026-10-15T06:41:11.603Z",
+    };
+    const offset = { ...utc, updated_at: "2026-10-14T23:41:11.603-07:00" };
+    expect(fingerprintRuleset(offset)).toBe(fingerprintRuleset(utc));
+    expect(() => fingerprintRuleset({ ...utc, updated_at: "not-a-time" })).toThrow();
+  });
+
   it("honors only the maintainer's latest pause command", () => {
     const comments = [
       {
