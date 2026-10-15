@@ -10,6 +10,7 @@ export type BrowserContext = Readonly<{
   author: Actor; reviewer: Actor; headSha: string; baseSha: string;
   diffDigest: string; requirementDigest: string; protectedPaths: readonly string[];
   validateWorkflowBlobSha: string;
+  reviewBinding?: "head-v2";
 }>;
 type Watermark = Readonly<{ id: number; submittedAt: number }>;
 export type BrowserChallenge = Readonly<{ epoch: string; context: BrowserContext; frozenAt: number; watermark: Watermark }>;
@@ -55,16 +56,25 @@ export function parseBrowserContext(value: unknown): BrowserContext {
   if (paths.some((path) => path.startsWith("/") || path.includes("\\") || path.split("/").some((part) => ["", ".", ".."].includes(part)))) {
     throw new Error("browser_paths_invalid");
   }
+  if (value.reviewBinding !== undefined && value.reviewBinding !== "head-v2") {
+    throw new Error("browser_binding_invalid");
+  }
   return {
     repositoryId: integer(value.repositoryId), repositoryNodeId: text(value.repositoryNodeId),
     pullRequestNumber: integer(value.pullRequestNumber), pullRequestNodeId: text(value.pullRequestNodeId),
     author: AGENT_IDENTITY, reviewer: LUKE_IDENTITY, headSha: hex(value.headSha, 40), baseSha: hex(value.baseSha, 40),
     diffDigest: hex(value.diffDigest, 64), requirementDigest: hex(value.requirementDigest, 64),
     protectedPaths: [...new Set(paths)].sort(), validateWorkflowBlobSha: hex(value.validateWorkflowBlobSha, 40),
+    ...(value.reviewBinding === "head-v2" ? { reviewBinding: "head-v2" as const } : {}),
   };
 }
 export function browserContextDigest(context: BrowserContext): string {
-  return createHash("sha256").update(JSON.stringify(parseBrowserContext(context))).digest("hex");
+  const parsed = parseBrowserContext(context);
+  // The controller separately proves that main changes are safe before passing
+  // a head-v2 context. Old challenges retain their exact-base interpretation.
+  const identity = parsed.reviewBinding === "head-v2"
+    ? { ...parsed, baseSha: null } : parsed;
+  return createHash("sha256").update(JSON.stringify(identity)).digest("hex");
 }
 function parseChallenge(value: unknown): BrowserChallenge {
   if (!record(value) || !record(value.watermark)) throw new Error("browser_challenge_invalid");

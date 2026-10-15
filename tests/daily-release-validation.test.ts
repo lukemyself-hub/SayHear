@@ -294,6 +294,8 @@ describe("unknown impact is located, never escalated", () => {
       "docs/agents/pr-auto-approval.md",
       "scripts/daily-release-validation.ts",
       "scripts/pr-approval-controller.ts",
+      "scripts/pr-approval/integration-refresh.ts",
+      "tests/pr-approval-integration-refresh.test.ts",
       "scripts/pr-review-gate.ts",
       "tests/pr-review-gate.test.ts",
     ];

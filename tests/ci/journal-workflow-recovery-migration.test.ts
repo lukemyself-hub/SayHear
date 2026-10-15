@@ -9,18 +9,11 @@
  * the new ownership columns from the Evidence snapshot and its owner, and
  * recover a legacy `retryable_failed` Journal outcome.
  *
- * The base migration bytes come from the base commit's tree
- * (`SAYHEAR_MIGRATION_BASE_SHA`, else `GITHUB_EVENT_PATH`'s
- * `pull_request.base.sha`, else the `origin/main` merge base) rather than the
- * working tree. Deriving the prefix from the head tree would fold an edited or
- * unregistered migration into the prefix and let the drill agree with itself.
- *
  * This file never skips. A missing `TEST_DATABASE_URL`, like a missing base
  * commit, fails the run rather than reporting a vacuous pass.
  */
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -95,6 +88,8 @@ const DATA_EPOCH = 1;
 const TEXT = "Synthetic migration evidence sentence about the garden fence.";
 
 const RECOVERY_MIGRATION_NAME = "0082_journal_workflow_recovery.sql";
+const RECOVERY_MIGRATION_PRE_0082_BASE_COMMIT =
+  "f79626fe17a908aeda955d3cd68ab7ac97a6273a";
 const RECOVERY_MIGRATION_SHA256 =
   "86392dc6d5f98b8d50f637eb4c31762a3678b8bfa4cb5ed1ce4071c0dc407b6f";
 
@@ -130,52 +125,6 @@ function readGitBlob(arguments_: readonly string[]): Buffer {
 
 function sha256Bytes(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex");
-}
-
-function readPullRequestBaseSha(eventPath: string): string | null {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(readFileSync(eventPath, "utf8"));
-  } catch {
-    return null;
-  }
-  if (typeof parsed !== "object" || parsed === null) return null;
-  const sha = (parsed as { pull_request?: { base?: { sha?: unknown } } }).pull_request
-    ?.base?.sha;
-  return typeof sha === "string" && sha.trim().length > 0 ? sha.trim() : null;
-}
-
-function resolveMergeBase(): string | null {
-  for (const reference of ["refs/remotes/origin/main", "origin/main", "main"]) {
-    try {
-      const mergeBase = runGitCommand(["merge-base", "HEAD", reference]);
-      if (mergeBase.length > 0) return mergeBase;
-    } catch {
-      // The reference is absent in this checkout; try the next one.
-    }
-  }
-  return null;
-}
-
-function resolveBaseCommit(): string {
-  const explicit = process.env.SAYHEAR_MIGRATION_BASE_SHA?.trim();
-  if (explicit !== undefined && explicit.length > 0) return explicit;
-
-  const eventPath = process.env.GITHUB_EVENT_PATH?.trim();
-  if (eventPath !== undefined && eventPath.length > 0) {
-    const fromEvent = readPullRequestBaseSha(eventPath);
-    if (fromEvent !== null) return fromEvent;
-  }
-
-  const mergeBase = resolveMergeBase();
-  if (mergeBase !== null) return mergeBase;
-
-  throw new Error(
-    "The journal recovery migration drill cannot resolve a base commit: set " +
-      "SAYHEAR_MIGRATION_BASE_SHA, provide GITHUB_EVENT_PATH with " +
-      "pull_request.base.sha, or check out a branch whose base is reachable " +
-      "from refs/remotes/origin/main.",
-  );
 }
 
 type PinnedMigrationFile = Readonly<{
@@ -545,9 +494,8 @@ describe("Journal workflow recovery migration (issues #340 / #341)", () => {
     "upgrades the base schema in place and recovers legacy Journal state",
     async () => {
       const connectionString = requireTestDatabaseUrl();
-      const baseCommit = resolveBaseCommit();
       const baseFiles = readCommitMigrationFiles(
-        baseCommit,
+        RECOVERY_MIGRATION_PRE_0082_BASE_COMMIT,
         MIGRATIONS_RELATIVE_DIRECTORY,
       );
       expect(baseFiles.length).toBeGreaterThan(0);

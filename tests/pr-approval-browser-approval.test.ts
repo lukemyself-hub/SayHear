@@ -21,7 +21,7 @@ import {
   type BrowserState,
 } from "../scripts/pr-approval/browser-approval.ts";
 import { applyMergeAction, browserAuthorizationRequired, confirmCompletionMerge, controllerBuildIdentity, digestDiscussion,
-  isBrowserApprovalWait, mergeActionFor, readHumanBinding, requirementProjectionFor, reissuePinnedBrowserMerge,
+  isBrowserApprovalWait, mergeActionFor, readHumanBinding, requirementProjectionFor,
   PR_REVIEW_GATE_INSTALLED_POLICY_VERSION,
   verifyCompletionRequirements,
   type GitHubApi, type GitHubComment, type HumanReviewBinding } from "../scripts/pr-approval-controller.ts";
@@ -159,6 +159,51 @@ describe("browser approval channel", () => {
     await readBrowserAuthorization(store, 400, context(), [], true, at);
     const next = await readBrowserAuthorization(store, 400, context({ headSha: NEXT_HEAD }), [lukeReview({ id: 11, commit_id: NEXT_HEAD })], false, at);
     expect(next.receipt).toBeNull();
+  });
+
+  it("preserves a head-v2 approval across cleared base advancement", async () => {
+    const store = new MemoryBrowserStore();
+    const original = context({ reviewBinding: "head-v2" });
+    const next = context({ reviewBinding: "head-v2", baseSha: "2".repeat(40) });
+    const at = Date.parse("2026-10-14T00:00:05Z");
+    await readBrowserAuthorization(store, 400, original, [], true, at);
+    const bound = await readBrowserAuthorization(store, 400, original, [lukeReview()]);
+    const advanced = await readBrowserAuthorization(store, 400, next, [lukeReview()]);
+    expect(bound.receipt?.reviewId).toBe(10);
+    expect(advanced.receipt).toEqual(bound.receipt);
+    expect(browserContextDigest(original)).toBe(browserContextDigest(next));
+    expect(advanced.receipt?.challenge.context.baseSha).toBe(BASE);
+  });
+
+  it("does not promote an exact-base approval into head-v2 authority", async () => {
+    const store = new MemoryBrowserStore();
+    const at = Date.parse("2026-10-14T00:00:05Z");
+    await readBrowserAuthorization(store, 400, context(), [], true, at);
+    expect((await readBrowserAuthorization(store, 400, context(), [lukeReview()])).receipt).not.toBeNull();
+    const next = await readBrowserAuthorization(store, 400, context({ reviewBinding: "head-v2" }), [lukeReview()]);
+    expect(next.receipt).toBeNull();
+    expect(next.challenge).toBeNull();
+  });
+
+  it("invalidates head-v2 after material risk, changed workflow, requirements or head", async () => {
+    for (const next of [
+      null,
+      context({ reviewBinding: "head-v2", headSha: NEXT_HEAD }),
+      context({ reviewBinding: "head-v2", requirementDigest: NEXT_REQUIREMENT }),
+      context({ reviewBinding: "head-v2", diffDigest: "2".repeat(64) }),
+      context({ reviewBinding: "head-v2", validateWorkflowBlobSha: "3".repeat(40) }),
+      context({ reviewBinding: "head-v2", protectedPaths: ["scripts/another.ts"] }),
+    ]) {
+      const store = new MemoryBrowserStore();
+      const original = context({ reviewBinding: "head-v2" });
+      await readBrowserAuthorization(store, 400, original, [], true, Date.parse("2026-10-14T00:00:05Z"));
+      expect((await readBrowserAuthorization(store, 400, original, [lukeReview()])).receipt).not.toBeNull();
+      const invalid = await readBrowserAuthorization(store, 400, next, [lukeReview()]);
+      expect(invalid.receipt).toBeNull();
+      expect(invalid.challenge).toBeNull();
+      expect((await readBrowserAuthorization(store, 400, original, [lukeReview()])).receipt).toBeNull();
+    }
+    expect(() => parseBrowserContext({ ...context(), reviewBinding: "head-v3" })).toThrow("browser_binding_invalid");
   });
 
   it("revokes the receipt when the latest Luke review is not an approval", async () => {
@@ -500,9 +545,15 @@ describe("channel routing in the controller", () => {
   it("refuses to guess a requirement projection for an unknown policy version", () => {
     expect(requirementProjectionFor(PR_REVIEW_GATE_POLICY_VERSION)).toBe("review-exclusive-v5");
     expect(requirementProjectionFor(PR_REVIEW_GATE_INSTALLED_POLICY_VERSION)).toBe("review-exclusive-v5");
+    expect(requirementProjectionFor("sayhear-pr-review-gate:v8")).toBe("review-exclusive-v5");
+    expect(requirementProjectionFor("sayhear-pr-review-gate:v9")).toBe("review-exclusive-v5");
+    expect(requirementProjectionFor("sayhear-pr-review-gate:v10")).toBe("review-exclusive-v5");
+    expect(requirementProjectionFor("sayhear-pr-review-gate:v6")).toBe("review-exclusive-v5");
     expect(requirementProjectionFor("sayhear-pr-review-gate:v5")).toBe("review-exclusive-v5");
     expect(requirementProjectionFor("sayhear-pr-review-gate:v4")).toBe("review-inclusive-v4");
+    // v7 was reviewed on main but never installed, so it never wrote a receipt.
     expect(() => requirementProjectionFor("sayhear-pr-review-gate:v7")).toThrow();
+    expect(() => requirementProjectionFor("sayhear-pr-review-gate:v11")).toThrow();
   });
 
   it("exempts a protected path once the approval names it", () => {
@@ -560,6 +611,22 @@ describe("channel routing in the controller", () => {
     // The root channel keeps its historical deferred auto-merge behavior.
     expect(mergeActionFor(humanBinding("legacy-root"), { mergeable: null, mergeable_state: "unknown" })).toBe("arm-auto-merge");
     expect(mergeActionFor(humanBinding("unknown"), {})).toBe("arm-auto-merge");
+    // Under merge-queue integration the queue performs the merge, so both
+    // channels enter the queue instead of pinning a merge commit.
+    expect(mergeActionFor(browser, { mergeable: true, mergeable_state: "clean" }, "merge-queue")).toBe("enqueue");
+    expect(mergeActionFor(humanBinding("legacy-root"), { mergeable: true, mergeable_state: "clean" }, "merge-queue")).toBe("enqueue");
+    // A not-yet-clean PR is never judged clean just because the queue exists.
+    expect(mergeActionFor(browser, { mergeable: null, mergeable_state: "unknown" }, "merge-queue")).toBe("wait");
+    expect(mergeActionFor(humanBinding("legacy-root"), { mergeable: false, mergeable_state: "dirty" }, "merge-queue")).toBe("wait");
+    // Under serialized merge the controller pins one merge against the current
+    // main, so an out-of-date base that reports `behind` still merges, and the
+    // deferred intent is never armed on either channel.
+    expect(mergeActionFor(browser, { mergeable: true, mergeable_state: "behind" }, "serialized-merge")).toBe("merge-now");
+    expect(mergeActionFor(humanBinding("legacy-root"), { mergeable: true, mergeable_state: "behind" }, "serialized-merge")).toBe("merge-now");
+    expect(mergeActionFor(humanBinding("legacy-root"), { mergeable: true, mergeable_state: "clean" }, "serialized-merge")).toBe("merge-now");
+    expect(mergeActionFor(browser, { mergeable: false, mergeable_state: "dirty" }, "serialized-merge")).toBe("wait");
+    expect(mergeActionFor(humanBinding("legacy-root"), { mergeable: true, mergeable_state: "blocked" }, "serialized-merge")).toBe("wait");
+    expect(mergeActionFor(browser, { mergeable: null, mergeable_state: "unknown" }, "serialized-merge")).toBe("wait");
   });
 
   it("performs the browser merge at the call site without ever arming deferred auto-merge", async () => {
@@ -595,44 +662,49 @@ describe("channel routing in the controller", () => {
     expect(requests.some((call) => call.endsWith("/pulls/400/merge"))).toBe(false);
   });
 
-  it("re-issues the pinned browser merge on recovery but never merges a revoked approval", async () => {
-    const identity: CompletionIdentity = {
-      repositoryId: 1312399710, pullRequestNumber: 400, pullRequestNodeId: "PR_node", headSha: HEAD, approvedBaseSha: BASE,
-      requirementDigest: REQUIREMENT, baseRepositoryId: 1312399710, baseRef: "main", botActorId: 999, reviewId: 9, appId: 123,
-      policyVersion: PR_REVIEW_GATE_POLICY_VERSION, issueNumbers: [1], humanChannel: "browser", humanReviewId: 10, epoch: "epoch-1",
-    };
-    const requests: string[] = [];
-    const pagesReads: string[] = [];
-    function stubApi(reviews: readonly unknown[]): GitHubApi {
+  it("enters the merge queue on the reviewed head instead of pinning a merge", async () => {
+    const calls: Array<{ path: string; body: unknown }> = [];
+    function queueApi(existingEntry: boolean): GitHubApi {
       return {
-        request: async <T>(path: string, options?: { method?: string }) => {
-          requests.push(`${options?.method ?? "GET"} ${path}`);
-          if (path === "/graphql") {
-            return { data: { repository: { autoMergeAllowed: true, mergeCommitAllowed: true, squashMergeAllowed: true, rebaseMergeAllowed: true } } } as T;
-          }
-          return { merged: true } as T;
+        request: async <T>(path: string, options?: { method?: string; body?: unknown }) => {
+          calls.push({ path, body: options?.body });
+          expect(path).toBe("/graphql");
+          const query = String((options?.body as { query?: string } | undefined)?.query ?? "");
+          return (query.includes("EnqueuePullRequestInput")
+            ? { data: { enqueuePullRequest: { mergeQueueEntry: { id: "MQE_1", state: "AWAITING_CHECKS" } } } }
+            : { data: { repository: { pullRequest: { mergeQueueEntry: existingEntry ? { id: "MQE_1" } : null } } } }) as T;
         },
-        pages: async <T>(path: string) => { pagesReads.push(path); return structuredClone(reviews) as unknown as T[]; },
+        pages: async <T>() => [] as T[],
         bytes: async () => new Uint8Array(),
       };
     }
-    // Recovery re-reads the live approval and re-issues the pinned merge itself:
-    // no deferred intent is left behind for a later, unreviewed head to consume.
-    await reissuePinnedBrowserMerge(stubApi([lukeReview()]), identity);
-    expect(pagesReads).toEqual(["/repos/lukemyself-hub/SayHear/pulls/400/reviews"]);
-    expect(requests).toContain(`PUT /repos/lukemyself-hub/SayHear/pulls/400/merge`);
-    requests.length = 0;
-    pagesReads.length = 0;
-    // A dismissal after the receipt was written must stop the merge outright.
-    await expect(reissuePinnedBrowserMerge(
-      stubApi([lukeReview({ id: 11, state: "DISMISSED", submitted_at: "2026-10-14T00:00:20Z" })]), identity,
-    )).rejects.toThrow(CompletionMismatch);
-    expect(requests).toEqual([]);
+    const report = { pullRequestNumber: 400, headSha: HEAD };
+
+    await applyMergeAction(
+      bindingConfig(new MemoryBrowserStore(), [], queueApi(false)), report, { allow_merge_commit: true },
+      pullRequestFixture(AUTHOR), "enqueue",
+    );
+
+    const mutations = calls.filter((call) => String((call.body as { query?: string }).query).includes("EnqueuePullRequestInput"));
+    expect(mutations).toHaveLength(1);
+    expect((mutations[0]!.body as { variables?: unknown }).variables).toEqual({
+      input: { pullRequestId: "PR_node", expectedHeadOid: HEAD },
+    });
+
+    // Idempotent: an entry that already exists is left alone, and nothing is
+    // ever sent to the pinned merge endpoint on this path.
+    calls.length = 0;
+    await applyMergeAction(
+      bindingConfig(new MemoryBrowserStore(), [], queueApi(true)), report, { allow_merge_commit: true },
+      pullRequestFixture(AUTHOR), "enqueue",
+    );
+    expect(calls).toHaveLength(1);
+    expect(calls.every((call) => call.path === "/graphql")).toBe(true);
   });
 
-  it("exposes the v8 policy and unchanged browser capability in the build identity", () => {
+  it("exposes the v10 policy and unchanged browser capability in the build identity", () => {
     const identity = controllerBuildIdentity();
-    expect(identity.policyVersion).toBe("sayhear-pr-review-gate:v8");
+    expect(identity.policyVersion).toBe("sayhear-pr-review-gate:v10");
     expect(PR_REVIEW_REPORT_VERSION).toBe("sayhear-pr-review-report:v4");
     expect(identity.browserApprovalVersion).toBe("sayhear-pr-browser-approval:v1");
   });

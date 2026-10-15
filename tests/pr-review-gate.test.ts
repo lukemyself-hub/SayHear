@@ -13,6 +13,7 @@ import {
   SAYHEAR_REPOSITORY_ID,
   SAYHEAR_REPOSITORY_NAME,
   evaluatePrReviewGate,
+  integrationModeOf,
   parsePrReviewGateInput,
   requirementDigest,
   parseIssueClosureExclusions,
@@ -49,6 +50,20 @@ const policy: TrustedPrReviewPolicy = {
   validateWorkflowBlobSha: WORKFLOW_BLOB_SHA,
 };
 
+/**
+ * The default-branch writer guard `serialized-merge` needs: one active branch
+ * ruleset covering main that restricts updates and lets only the approval App
+ * bypass it.
+ */
+const APP_ONLY_MAIN_WRITER_GUARD = {
+  readable: true,
+  restrictsDefaultBranchUpdates: true,
+  bypassActorIds: [REVIEW_APP_ID],
+  bypassActorsEnumerated: true,
+  appBypassMode: "always",
+  rulesetIds: [7],
+} as const;
+
 function makeEvidence(
   checkId: string,
   overrides: Partial<WorkflowEvidenceRecord> = {},
@@ -78,6 +93,17 @@ function makeDeferral(checkId: string): PreMergeDeferralRecord {
   const policy = preMergeDeferralFor(checkId);
   if (policy === null) throw new Error(`${checkId} is not a deferrable check`);
   return { kind: "deferred-before-merge", checkId, policy };
+}
+
+function rebindEvidence(
+  record: WorkflowEvidenceRecord,
+  headSha: string,
+  mergeSha: string,
+): WorkflowEvidenceRecord {
+  return makeEvidence(record.checkId, {
+    ...record,
+    source: { ...record.source, headSha, mergeSha },
+  });
 }
 
 type InputOverrides = Omit<
@@ -173,6 +199,7 @@ function input(
       }),
       decision: "approve",
       diffComplete: true,
+      baseReviewSafe: true,
       reviewerAppId: REVIEW_APP_ID,
       reviewerActorId: 303,
       declaredImpacts,
@@ -242,7 +269,11 @@ function input(
             ...overrides.branchProtection,
           },
     runtime: { ...base.runtime, ...overrides.runtime },
-    evidence: overrides.evidence ?? base.evidence,
+    evidence: overrides.evidence ?? base.evidence.map((entry) =>
+      overrides.runtime?.integrationMode === "serialized-merge"
+        ? { ...entry, source: { ...entry.source,
+            baseSha: overrides.repository?.defaultBranchSha ?? BASE_SHA } }
+        : entry),
   };
 }
 
@@ -505,6 +536,500 @@ describe("PR review gate", () => {
 
     expect(report.outcome).toBe("awaiting_verification");
     expect(report.reasons[0]?.code).toBe("base_or_merge_ref_changed");
+  });
+
+  it("refuses native queue activation until all merge-group checks have producers", () => {
+    const report = evaluatePrReviewGate(
+      input({
+        repository: { defaultBranchSha: "f".repeat(40) },
+        pullRequest: { mergeable: true, mergeableState: "clean" },
+        runtime: { integrationMode: "merge-queue", mergeQueueAvailable: true },
+      }),
+      policy,
+    );
+
+    expect(report.outcome).toBe("human_decision");
+    expect(report.reasons[0]?.code).toBe("merge_queue_not_supported");
+  });
+
+  it("keeps two PRs on the same older main as independent merge candidates", () => {
+    const otherHead = "9".repeat(40);
+    const otherMerge = "8".repeat(40);
+    const staleMain = { defaultBranchSha: "f".repeat(40) };
+    const queue = {
+      integrationMode: "serialized-merge" as const,
+      mainWriterGuard: APP_ONLY_MAIN_WRITER_GUARD,
+    };
+    const first = evaluatePrReviewGate(
+      input({
+        repository: staleMain,
+        pullRequest: { mergeable: true, mergeableState: "clean" },
+        branchProtection: { requiresUpToDate: false },
+        runtime: queue,
+      }),
+      policy,
+    );
+    const second = evaluatePrReviewGate(
+      input({
+        repository: staleMain,
+        branchProtection: { requiresUpToDate: false },
+        pullRequest: {
+          number: 322,
+          headSha: otherHead,
+          mergeSha: otherMerge,
+          mergeable: true,
+          mergeableState: "clean",
+        },
+        review: {
+          pullRequestNumber: 322,
+          headSha: otherHead,
+          requirementDigest: requirementDigest(input().issues, {
+            number: 322,
+            title: "Fix the ordinary server path",
+            body: "Fixes #42",
+            updatedAt: "2026-10-10T12:00:00.000Z",
+            discussionDigest: "1".repeat(64),
+          }),
+        },
+        evidence: (
+          [
+            ...FIXED_PR_CI_BASELINE.map((checkId) => makeEvidence(checkId)),
+            makeEvidence("server:deterministic-behavior", {
+              artifactSha256: "e".repeat(64),
+              coveredCheckIds: ["server:deterministic-behavior"],
+            }),
+          ] satisfies WorkflowEvidenceRecord[]
+        ).map((record) => {
+          const rebound = rebindEvidence(record, otherHead, otherMerge);
+          return { ...rebound, source: { ...rebound.source, baseSha: staleMain.defaultBranchSha } };
+        }),
+        runtime: queue,
+      }),
+      policy,
+    );
+
+    // Two different heads, one shared older base, and no serialization between
+    // them: neither PR blocks the other while main has already moved on.
+    expect(first.outcome).toBe("merge_candidate");
+    expect(second.outcome).toBe("merge_candidate");
+    expect(first.headSha).not.toBe(second.headSha);
+    expect(first.baseSha).toBe(BASE_SHA);
+    expect(second.baseSha).toBe(BASE_SHA);
+  });
+
+  it("keeps the up-to-date rule unless the runtime opts into the queue", () => {
+    const report = evaluatePrReviewGate(
+      input({
+        repository: { defaultBranchSha: "f".repeat(40) },
+        pullRequest: { mergeable: true, mergeableState: "clean" },
+        runtime: { integrationMode: "up-to-date-base", mergeQueueAvailable: true },
+      }),
+      policy,
+    );
+
+    expect(report.outcome).toBe("awaiting_verification");
+    expect(report.reasons[0]?.code).toBe("base_or_merge_ref_changed");
+  });
+
+  it("blocks a merge-queue candidate that conflicts with main", () => {
+    const report = evaluatePrReviewGate(
+      input({
+        pullRequest: { mergeable: false, mergeableState: "dirty" },
+        runtime: { integrationMode: "merge-queue", mergeQueueAvailable: true },
+      }),
+      policy,
+    );
+
+    expect(report.outcome).toBe("awaiting_verification");
+    expect(report.reasons[0]?.code).toBe("pull_request_conflict");
+  });
+
+  it("waits rather than approving while mergeability is unreported", () => {
+    const unreported = [
+      { mergeable: null as boolean | null },
+      {},
+    ];
+    for (const pullRequest of unreported) {
+      const report = evaluatePrReviewGate(
+        input({
+          pullRequest,
+          runtime: { integrationMode: "merge-queue", mergeQueueAvailable: true },
+        }),
+        policy,
+      );
+
+      expect(report.outcome).toBe("awaiting_verification");
+      expect(report.reasons[0]?.code).toBe("mergeability_unknown");
+    }
+  });
+
+  it("refuses merge-queue integration while main serves no merge queue", () => {
+    for (const runtime of [
+      { integrationMode: "merge-queue" as const },
+      { integrationMode: "merge-queue" as const, mergeQueueAvailable: false },
+      { integrationMode: "merge-queue" as const, mergeQueueAvailable: null },
+    ]) {
+      const report = evaluatePrReviewGate(
+        input({
+          pullRequest: { mergeable: true, mergeableState: "clean" },
+          runtime,
+        }),
+        policy,
+      );
+
+      expect(report.outcome).toBe("human_decision");
+      expect(report.reasons[0]?.code).toBe("merge_queue_unavailable");
+    }
+  });
+
+  it("approves a serialized-merge candidate whose base is behind main", () => {
+    const report = evaluatePrReviewGate(
+      input({
+        repository: { defaultBranchSha: "f".repeat(40) },
+        pullRequest: { mergeable: true, mergeableState: "behind" },
+        branchProtection: { requiresUpToDate: false },
+        runtime: {
+          integrationMode: "serialized-merge",
+          mainWriterGuard: APP_ONLY_MAIN_WRITER_GUARD,
+        },
+      }),
+      policy,
+    );
+
+    expect(report.outcome).toBe("merge_candidate");
+    expect(report.reasons.map((reason) => reason.code)).not.toContain(
+      "base_or_merge_ref_changed",
+    );
+  });
+
+  it("does not demand a served merge queue for serialized-merge", () => {
+    for (const runtime of [
+      {
+        integrationMode: "serialized-merge" as const,
+        mainWriterGuard: APP_ONLY_MAIN_WRITER_GUARD,
+      },
+      {
+        integrationMode: "serialized-merge" as const,
+        mergeQueueAvailable: false,
+        mainWriterGuard: APP_ONLY_MAIN_WRITER_GUARD,
+      },
+      {
+        integrationMode: "serialized-merge" as const,
+        mergeQueueAvailable: null,
+        mainWriterGuard: APP_ONLY_MAIN_WRITER_GUARD,
+      },
+    ]) {
+      const report = evaluatePrReviewGate(
+        input({
+          repository: { defaultBranchSha: "f".repeat(40) },
+          pullRequest: { mergeable: true, mergeableState: "behind" },
+          branchProtection: { requiresUpToDate: false },
+          runtime,
+        }),
+        policy,
+      );
+
+      expect(report.outcome).toBe("merge_candidate");
+      expect(report.reasons.map((reason) => reason.code)).not.toContain(
+        "merge_queue_unavailable",
+      );
+    }
+  });
+
+  it("reuses a historical review only after clearing main changes and validating the current integration", () => {
+    const currentMain = "f".repeat(40);
+    const candidate = input({
+      repository: { defaultBranchSha: currentMain },
+      pullRequest: { baseSha: currentMain, mergeable: true, mergeableState: "clean" },
+      branchProtection: { requiresUpToDate: false },
+      runtime: { integrationMode: "serialized-merge", mainWriterGuard: APP_ONLY_MAIN_WRITER_GUARD },
+      review: { baseSha: BASE_SHA, baseReviewSafe: true },
+    });
+    expect(evaluatePrReviewGate(candidate, policy).outcome).toBe("merge_candidate");
+    const { baseReviewSafe: _baseReviewSafe, ...unverifiedReview } = candidate.review;
+    for (const review of [{ ...unverifiedReview, baseReviewSafe: false }, unverifiedReview]) {
+      const blocked = evaluatePrReviewGate({
+        ...candidate, review,
+      }, policy);
+      expect(blocked.reasons[0]?.code).toBe("stale_base_review_risk");
+    }
+    const oldEvidence = candidate.evidence.map((entry) =>
+      entry.kind === "deferred-before-merge" ? entry :
+        { ...entry, source: { ...entry.source, baseSha: BASE_SHA } });
+    expect(evaluatePrReviewGate({ ...candidate, evidence: oldEvidence }, policy).reasons[0]?.code)
+      .toBe("required_evidence_missing");
+    expect(evaluatePrReviewGate({
+      ...candidate, pullRequest: { ...candidate.pullRequest, headSha: "9".repeat(40) },
+    }, policy).reasons[0]?.code).toBe("stale_review");
+  });
+
+  it("refuses serialized-merge while main still requires an up-to-date branch", () => {
+    const report = evaluatePrReviewGate(
+      input({
+        repository: { defaultBranchSha: "f".repeat(40) },
+        pullRequest: { mergeable: true, mergeableState: "clean" },
+        branchProtection: { requiresUpToDate: true },
+        runtime: {
+          integrationMode: "serialized-merge",
+          mainWriterGuard: APP_ONLY_MAIN_WRITER_GUARD,
+        },
+      }),
+      policy,
+    );
+
+    expect(report.outcome).toBe("human_decision");
+    expect(report.reasons[0]?.code).toBe("requires_up_to_date_still_enabled");
+  });
+
+  it("blocks serialized-merge candidates that conflict or report no mergeability", () => {
+    const conflicted = evaluatePrReviewGate(
+      input({
+        pullRequest: { mergeable: false, mergeableState: "dirty" },
+        branchProtection: { requiresUpToDate: false },
+        runtime: {
+          integrationMode: "serialized-merge",
+          mainWriterGuard: APP_ONLY_MAIN_WRITER_GUARD,
+        },
+      }),
+      policy,
+    );
+    expect(conflicted.outcome).toBe("awaiting_verification");
+    expect(conflicted.reasons[0]?.code).toBe("pull_request_conflict");
+
+    for (const pullRequest of [
+      { mergeable: null as boolean | null },
+      {},
+    ]) {
+      const report = evaluatePrReviewGate(
+        input({
+          pullRequest,
+          branchProtection: { requiresUpToDate: false },
+          runtime: {
+            integrationMode: "serialized-merge",
+            mainWriterGuard: APP_ONLY_MAIN_WRITER_GUARD,
+          },
+        }),
+        policy,
+      );
+
+      expect(report.outcome).toBe("awaiting_verification");
+      expect(report.reasons[0]?.code).toBe("mergeability_unknown");
+    }
+  });
+
+  it("approves a head-bound candidate whose own required check still blocks GitHub", () => {
+    // This check run is one of main's required checks, so GitHub reports
+    // `blocked` for the whole review window, and `unknown`/`unstable` while it
+    // recomputes. Requiring `clean` here would deadlock every PR: the check can
+    // only turn green once this branch approves. The clean/behind state is
+    // therefore enforced at merge time, where it is actually observable.
+    for (const mergeableState of [
+      "blocked",
+      "unknown",
+      "unstable",
+      "dirty",
+      "behind",
+    ]) {
+      const report = evaluatePrReviewGate(
+        input({
+          repository: { defaultBranchSha: "f".repeat(40) },
+          pullRequest: { mergeable: true, mergeableState },
+          branchProtection: { requiresUpToDate: false },
+          runtime: {
+            integrationMode: "serialized-merge",
+            mainWriterGuard: APP_ONLY_MAIN_WRITER_GUARD,
+          },
+        }),
+        policy,
+      );
+
+      expect(report.outcome).toBe("merge_candidate");
+    }
+  });
+
+  it("refuses serialized-merge until main is updatable only by the approval App", () => {
+    const cases: readonly [
+      Exclude<PrReviewGateInput["runtime"]["mainWriterGuard"], undefined>,
+      string,
+    ][] = [
+      [null, "main_writer_guard_unreadable"],
+      [
+        { ...APP_ONLY_MAIN_WRITER_GUARD, readable: false },
+        "main_writer_guard_unreadable",
+      ],
+      [
+        { ...APP_ONLY_MAIN_WRITER_GUARD, restrictsDefaultBranchUpdates: false },
+        "main_writer_guard_missing",
+      ],
+      // GitHub hides `bypass_actors` from callers without administration
+      // access. An unreadable bypass set is unproven, never "nobody".
+      [
+        { ...APP_ONLY_MAIN_WRITER_GUARD, bypassActorsEnumerated: false },
+        "main_writer_guard_bypass_actors_unreadable",
+      ],
+      [
+        {
+          ...APP_ONLY_MAIN_WRITER_GUARD,
+          bypassActorIds: [],
+          bypassActorsEnumerated: false,
+        },
+        "main_writer_guard_bypass_actors_unreadable",
+      ],
+      [
+        { ...APP_ONLY_MAIN_WRITER_GUARD, bypassActorIds: [] },
+        "main_writer_guard_bypass_actors",
+      ],
+      [
+        { ...APP_ONLY_MAIN_WRITER_GUARD, bypassActorIds: [REVIEW_APP_ID, 42] },
+        "main_writer_guard_bypass_actors",
+      ],
+      [
+        { ...APP_ONLY_MAIN_WRITER_GUARD, bypassActorIds: [42] },
+        "main_writer_guard_bypass_actors",
+      ],
+    ];
+
+    for (const [mainWriterGuard, code] of cases) {
+      const report = evaluatePrReviewGate(
+        input({
+          pullRequest: { mergeable: true, mergeableState: "clean" },
+          branchProtection: { requiresUpToDate: false },
+          runtime: { integrationMode: "serialized-merge", mainWriterGuard },
+        }),
+        policy,
+      );
+
+      expect(report.outcome).toBe("human_decision");
+      expect(report.reasons[0]?.code).toBe(code);
+    }
+  });
+
+  it("fails closed when serialized-merge omits the main writer guard", () => {
+    const report = evaluatePrReviewGate(
+      input({
+        pullRequest: { mergeable: true, mergeableState: "clean" },
+        branchProtection: { requiresUpToDate: false },
+        runtime: { integrationMode: "serialized-merge" },
+      }),
+      policy,
+    );
+
+    expect(report.outcome).toBe("human_decision");
+    expect(report.reasons[0]?.code).toBe("main_writer_guard_unreadable");
+  });
+
+  it("rules out branch-protection bypass actors other than the approval App", () => {
+    // Any second bypass actor can move main outside this controller, so it is a
+    // human decision.
+    const bypassed = input({
+      branchProtection: {
+        requiresUpToDate: true,
+        bypassActorIds: [42],
+      },
+    });
+    const report = evaluatePrReviewGate(bypassed, policy);
+    expect(report.outcome).toBe("human_decision");
+    expect(report.reasons[0]?.code).toBe("branch_protection_incomplete");
+
+    const mixed = input({
+      branchProtection: {
+        requiresUpToDate: true,
+        bypassActorIds: [REVIEW_APP_ID, 42],
+      },
+    });
+    expect(evaluatePrReviewGate(mixed, policy).reasons[0]?.code).toBe(
+      "branch_protection_incomplete",
+    );
+  });
+
+  it("accepts the approval App itself as a branch-protection bypass actor", () => {
+    // The App has to merge, so Luke's ruleset legitimately grants it a bypass.
+    const report = evaluatePrReviewGate(
+      input({
+        branchProtection: {
+          requiresUpToDate: true,
+          bypassActorIds: [REVIEW_APP_ID],
+        },
+      }),
+      policy,
+    );
+
+    expect(report.outcome).toBe("merge_candidate");
+  });
+
+  it("validates the main writer guard at the input boundary", () => {
+    const candidate = input();
+    const parsed = parsePrReviewGateInput({
+      ...candidate,
+      runtime: {
+        ...candidate.runtime,
+        integrationMode: "serialized-merge",
+        mainWriterGuard: APP_ONLY_MAIN_WRITER_GUARD,
+      },
+    });
+
+    expect(parsed.runtime.mainWriterGuard).toEqual(APP_ONLY_MAIN_WRITER_GUARD);
+    expect(
+      parsePrReviewGateInput(candidate).runtime.mainWriterGuard,
+    ).toBeUndefined();
+    expect(() =>
+      parsePrReviewGateInput({
+        ...candidate,
+        runtime: {
+          ...candidate.runtime,
+          mainWriterGuard: { ...APP_ONLY_MAIN_WRITER_GUARD, readable: "yes" },
+        },
+      }),
+    ).toThrow(/mainWriterGuard/);
+    // A snapshot that never says whether the bypass set was enumerable cannot
+    // be read as an App-only main.
+    expect(() =>
+      parsePrReviewGateInput({
+        ...candidate,
+        runtime: {
+          ...candidate.runtime,
+          mainWriterGuard: {
+            readable: true,
+            restrictsDefaultBranchUpdates: true,
+            bypassActorIds: [REVIEW_APP_ID],
+            rulesetIds: [7],
+          },
+        },
+      }),
+    ).toThrow(/bypassActorsEnumerated/);
+    expect(() =>
+      parsePrReviewGateInput({
+        ...candidate,
+        runtime: { ...candidate.runtime, mainWriterGuard: 7 },
+      }),
+    ).toThrow(/mainWriterGuard/);
+  });
+
+  it("validates the integration mode at the input boundary", () => {
+    const candidate = input();
+    expect(() =>
+      parsePrReviewGateInput({
+        ...candidate,
+        runtime: { ...candidate.runtime, integrationMode: "fast-lane" },
+      }),
+    ).toThrow(/integrationMode/);
+
+    const parsed = parsePrReviewGateInput(candidate);
+    expect(parsed.runtime.integrationMode).toBeUndefined();
+    expect(parsed.runtime.mergeQueueAvailable).toBeUndefined();
+    expect(integrationModeOf(parsed)).toBe("up-to-date-base");
+    expect(
+      integrationModeOf({
+        ...parsed,
+        runtime: { ...parsed.runtime, integrationMode: "merge-queue" },
+      }),
+    ).toBe("merge-queue");
+    expect(
+      integrationModeOf({
+        ...parsed,
+        runtime: { ...parsed.runtime, integrationMode: "serialized-merge" },
+      }),
+    ).toBe("serialized-merge");
   });
 
   it("does not accept a same-named check from an untrusted app", () => {
@@ -929,12 +1454,12 @@ describe("PR review gate", () => {
     expect(report.acceptedEvidenceIds).toEqual([]);
   });
 
-  it.each(["v4", "v5", "v6"])("invalidates %s policy reviews while keeping the report schema unchanged", (version) => {
+  it.each(["v4", "v5", "v6", "v7", "v8", "v9"])("invalidates %s policy reviews while keeping the report schema unchanged", (version) => {
     const report = evaluatePrReviewGate(input({
       review: { policyVersion: `sayhear-pr-review-gate:${version}` },
     }), policy);
 
-    expect(PR_REVIEW_GATE_POLICY_VERSION).toBe("sayhear-pr-review-gate:v8");
+    expect(PR_REVIEW_GATE_POLICY_VERSION).toBe("sayhear-pr-review-gate:v10");
     expect(PR_REVIEW_REPORT_VERSION).toBe("sayhear-pr-review-report:v4");
     expect(report.reasons[0]?.code).toBe("policy_version_mismatch");
   });
@@ -999,6 +1524,23 @@ describe("PR review gate", () => {
     for (const entry of report.deferredEvidence) {
       expect(entry.followUp.stage).toBe("acceptance");
       expect(entry.followUp.command.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("refuses deferred auto-merge for serialized integration on either human channel", () => {
+    const candidate = deferralInput();
+    const serialized: PrReviewGateInput = {
+      ...candidate,
+      pullRequest: { ...candidate.pullRequest, mergeable: true, mergeableState: "clean" },
+      branchProtection: { ...input().branchProtection!, requiresUpToDate: false },
+      runtime: { ...candidate.runtime, integrationMode: "serialized-merge",
+        mainWriterGuard: APP_ONLY_MAIN_WRITER_GUARD },
+    };
+    for (const humanApprovalChannel of ["browser", "legacy-root"] as const) {
+      const report = evaluatePrReviewGate(serialized, { ...policy, humanApprovalChannel });
+      expect(report.outcome).toBe("human_decision");
+      expect(report.reasons[0]?.code).toBe("serialized_deferred_merge_not_supported");
+      expect(report.deferredEvidence).toEqual([]);
     }
   });
 
@@ -1202,6 +1744,11 @@ describe("PR review gate", () => {
     ["sayhear-pr-review-report:v4", "sayhear-pr-review-gate:v4"],
     ["sayhear-pr-review-report:v4", "sayhear-pr-review-gate:v5"],
     ["sayhear-pr-review-report:v3", "sayhear-pr-review-gate:v6"],
+    ["sayhear-pr-review-report:v4", "sayhear-pr-review-gate:v6"],
+    ["sayhear-pr-review-report:v3", "sayhear-pr-review-gate:v7"],
+    ["sayhear-pr-review-report:v4", "sayhear-pr-review-gate:v7"],
+    ["sayhear-pr-review-report:v3", "sayhear-pr-review-gate:v8"],
+    ["sayhear-pr-review-report:v4", "sayhear-pr-review-gate:v8"],
   ])("rejects a new report with incompatible identity %s / %s", (version, policyVersion) => {
     const report = evaluatePrReviewGate(
       input({
@@ -1210,7 +1757,7 @@ describe("PR review gate", () => {
       policy,
     );
 
-    expect(PR_REVIEW_GATE_POLICY_VERSION).toBe("sayhear-pr-review-gate:v8");
+    expect(PR_REVIEW_GATE_POLICY_VERSION).toBe("sayhear-pr-review-gate:v10");
     expect(PR_REVIEW_REPORT_VERSION).toBe("sayhear-pr-review-report:v4");
     expect(report.outcome).toBe("awaiting_verification");
     expect(report.reasons[0]?.code).toBe("policy_version_mismatch");
