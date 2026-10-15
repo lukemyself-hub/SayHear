@@ -321,6 +321,21 @@ describe("runtime safety configuration", () => {
     );
   });
 
+  it("fails loudly when the provider fault file cannot be read", () => {
+    // A directory path is unreadable as a file (EISDIR, not ENOENT): it must
+    // throw instead of silently disabling fault injection and faking a clean
+    // run for the interruption journey.
+    const directory = temporaryDirectory();
+    expect(() =>
+      loadRuntimeConfiguration({
+        ...testRuntimeEnvironment(),
+        SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS_FILE: directory,
+      }),
+    ).toThrow(
+      "SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS_FILE could not be read.",
+    );
+  });
+
   it("lets the fault file override the static chunk fault", () => {
     const file = join(temporaryDirectory(), "provider-fault.txt");
     writeFileSync(file, "3");

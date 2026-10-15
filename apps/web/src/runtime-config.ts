@@ -662,8 +662,16 @@ function readProviderFaultChunksFile(path: string): number | undefined {
   try {
     const { readFileSync } = process.getBuiltinModule("node:fs");
     content = readFileSync(path, "utf8");
-  } catch {
-    return undefined;
+  } catch (error) {
+    // Only a missing file means "no fault". Anything else (unreadable file,
+    // directory path, permission error, ...) must fail loudly instead of
+    // silently running the interruption journey without a fault injected.
+    if ((error as NodeJS.ErrnoException)?.code === "ENOENT") {
+      return undefined;
+    }
+    throw new Error(
+      "SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS_FILE could not be read.",
+    );
   }
   const value = content.trim();
   if (value.length === 0) {
