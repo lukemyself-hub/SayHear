@@ -133,7 +133,7 @@
     "scripts/verify-fixture.mjs": "fa4d9f22a7afc36c5c56d24e7d296d4f983036b0076ac39131eeae255a134dd6",
     "scripts/verify-browser.mjs": "bdafca2dd78030df700577fc9fefe2945b5a7eabfcc09b0a309a851718cf1a08",
     "apps/web/src/runtime-config.ts": "0dc332f6e9482b60ca836ea9d6037522feabc28aa7c6fd0d46b1850633b4b6e9",
-    "tests/runtime-config.test.ts": "fcdf1516b203d9e0d78caed0845e1c7c82dfbc994f2a1472d31cd39d78ea99ab"
+    "tests/runtime-config.test.ts": "9de335efd89082c7a741e50c51b8705d3af29be16aaa1caafa82ec1e734372f9"
   },
   "evidenceDocumentSha256": {
     ".agents/skills/verify/features/conversation.md": "53ddf550909028a944d656ffdc8fb88dea28d1ddea6ed96c0840d4a9d4a3faad",
@@ -146,7 +146,13 @@
     "node": "24.18.0",
     "postgres": "17.10, two disposable test databases",
     "tests": {"filesPassed": 209, "testsPassed": 2990},
-    "checks": ["check:runtime", "check:boundaries", "check:purge-surfaces", "check:schema-extensions", "typecheck", "test:ci", "production build", "browser bundle credential check"]
+    "checks": ["check:runtime", "check:boundaries", "check:purge-surfaces", "check:schema-extensions", "typecheck", "test:ci", "production build", "browser bundle credential check"],
+    "postReviewFollowup": {
+      "command": "pnpm exec vitest run tests/runtime-config.test.ts",
+      "passed": true,
+      "testsPassed": 26,
+      "change": "Restored exact invalid clock error assertions after independent review."
+    }
   },
   "mergedMain": {
     "mergeCommit": "527afb99a9f2e0f2c086e47d3eeb71484a97cc3d",

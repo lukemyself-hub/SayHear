@@ -216,9 +216,13 @@ describe("runtime safety configuration", () => {
     // Blank and invalid instants never silently fall back to wall time, and
     // the static and file-backed clocks cannot both be configured.
     writeFileSync(clockFile, "  \n");
-    expect(() => configuration.clock()).toThrow("SAYHEAR_TEST_NOW_FILE");
+    expect(() => configuration.clock()).toThrow(
+      "SAYHEAR_TEST_NOW_FILE must contain a valid ISO timestamp.",
+    );
     writeFileSync(clockFile, "not-a-date");
-    expect(() => configuration.clock()).toThrow("SAYHEAR_TEST_NOW_FILE");
+    expect(() => configuration.clock()).toThrow(
+      "SAYHEAR_TEST_NOW_FILE must contain a valid ISO timestamp.",
+    );
     expect(() =>
       loadRuntimeConfiguration({
         ...environment,
