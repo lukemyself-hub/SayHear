@@ -1,4 +1,5 @@
 import {
+  asUserId,
   createMemoryRetrievalService,
   createInternalOwnerAccessService,
   createInternalInspectionService,
@@ -32,6 +33,8 @@ import {
   type JournalEligibilityRepository,
   MEMORY_TRUST_ACTIONS_CONVERSATION_ACTION_CATALOG,
   CATALOG_V2_CONVERSATION_HARNESS_POLICY,
+  createHistoryRecallGateway,
+  HISTORY_RECALL_CONVERSATION_HARNESS_POLICY,
   planTrustActionTargetResolution,
   RETRIEVAL_BROAD_TERM_STOP_LIST,
   normalizeRetrievalTerm,
@@ -47,6 +50,7 @@ import {
   loadPredicateRegistrySnapshot,
   PREDICATE_REGISTRY_RUNTIME_VERSION,
   RECENT_CONTEXT_DEFAULT_POLICY,
+  TIME_AWARE_CONTEXT_COMPILER_VERSION,
   createMemoryConsolidationScanService,
   createEpisodeBuilderScanService,
   createReflectionSchedulerScanService,
@@ -99,6 +103,7 @@ import {
   PostgresMemoryConsolidationRepository,
   PostgresMemoryRetrievalRepository,
   PostgresJournalRepository,
+  PostgresJournalWorkflowRecovery,
   PostgresOutboxDispatcherRepository,
   PostgresOwnerPurgeRepository,
   PostgresPurgeMarkerRepository,
@@ -116,7 +121,11 @@ import {
   selectPendingRemapCandidates,
   PostgresNarrativeValidationRepository,
   PostgresReflectionRepository,
+  PostgresHistoryRecallPolicyRepository,
   PostgresRecentContextPolicyRepository,
+  PostgresHistoryRecallRepository,
+  PostgresExperienceSearchSource,
+  PostgresHistoryRecallSource,
   PostgresRecentContextSource,
 } from "@sayhear/data";
 
@@ -214,7 +223,7 @@ export function createServerComposition() {
     roles,
   });
   const evidenceConfiguration = journalRoleRegistry.configuration("evidence.extract");
-  const evidenceRepository = new PostgresEvidenceRepository(pool, journalRoleRegistry.evidenceExtractor);
+  const evidenceRepository = new PostgresEvidenceRepository(pool, journalRoleRegistry.evidenceExtractor, async (userId) => { await recoveryGate.requireOpen(asUserId(userId)); }, Math.max(300_000, configuration.provider.timeoutMs + 60_000));
   const evidenceService = createEvidenceService({
     clock: configuration.clock,
     extractionPolicyVersion: evidenceConfiguration.policyVersion,
@@ -229,6 +238,7 @@ export function createServerComposition() {
     recoveryGate,
     writesEnabled: configuration.writeSwitches.evidenceExtractionEnabled,
   });
+  const journalWorkflowRecovery = new PostgresJournalWorkflowRecovery(pool, Math.max(300_000, configuration.provider.timeoutMs * 3 + 60_000));
   const journalRepository = new PostgresJournalRepository(pool);
   const entityRepository = new PostgresEntityRepository(pool);
   const entityService = createEntityService({
@@ -634,7 +644,9 @@ export function createServerComposition() {
       freshnessPolicy: "source_valid:v1",
       chineseLocalePackVersion: CHINESE_LOCALE_PACK_VERSION,
       englishLocalePackVersion: ENGLISH_LOCALE_PACK_VERSION,
-      harnessPolicyVersion: CATALOG_V2_CONVERSATION_HARNESS_POLICY.version,
+      harnessPolicyVersion: configuration.writeSwitches.historyRecallEnabled
+        ? HISTORY_RECALL_CONVERSATION_HARNESS_POLICY.version
+        : CATALOG_V2_CONVERSATION_HARNESS_POLICY.version,
       conversationActionCatalogVersion:
         MEMORY_TRUST_ACTIONS_CONVERSATION_ACTION_CATALOG.version,
       model: configuration.provider.champion.model,
@@ -673,7 +685,7 @@ export function createServerComposition() {
     : undefined;
   const contextCompiler = createContextCompiler({
     clock: configuration.clock,
-    compilerVersion: "context-compiler:v1",
+    compilerVersion: TIME_AWARE_CONTEXT_COMPILER_VERSION,
     contentHmacSecret: configuration.contextHmacSecret,
     rawEventTokenBudget: 4_000,
     // #294: the seven-local-day bounded recent source. It is wired into the
@@ -711,13 +723,15 @@ export function createServerComposition() {
         : configuration.provider.adapter === "opencode-go"
           ? {
               apiKey: configuration.provider.apiKey!,
-              timeoutMs: configuration.provider.timeoutMs,
+              // The chat path's own Provider timeout (issue #319), never the
+              // background roles' shared one.
+              timeoutMs: configuration.conversationRequest.providerTimeoutMs,
               type: "opencode-go",
             }
           : {
               apiKey: configuration.provider.apiKey!,
               baseUrl: configuration.provider.baseUrl!,
-              timeoutMs: configuration.provider.timeoutMs,
+              timeoutMs: configuration.conversationRequest.providerTimeoutMs,
               type: "responses-api",
             },
     champion: configuration.provider.champion,
@@ -857,8 +871,23 @@ export function createServerComposition() {
       entityIdentityCorrectionTargetSource,
     trustActionTargetResolver,
   });
+  // Issue #314: the controlled read-only history review. Wired only when the
+  // explicit switch is on; otherwise the Harness never offers the function and
+  // the response service keeps the Catalog v2 policy exactly as before.
+  const historyRecallGovernanceRepository =
+    new PostgresHistoryRecallPolicyRepository(pool);
+  const historyRecallGateway = configuration.writeSwitches.historyRecallEnabled
+    ? createHistoryRecallGateway({
+        clock: configuration.clock,
+        governance: historyRecallGovernanceRepository,
+        repository: new PostgresHistoryRecallRepository(pool),
+        experienceSource: new PostgresExperienceSearchSource(pool),
+        source: new PostgresHistoryRecallSource(pool),
+      })
+    : undefined;
   const conversationAgentHarness = createConversationAgentHarness({
     actionGateway,
+    ...(historyRecallGateway ? { historyRecall: historyRecallGateway } : {}),
     clock: configuration.clock,
     egressPort,
     contextCompiler,
@@ -901,6 +930,7 @@ export function createServerComposition() {
       repository: purgeRepository,
     }),
     authOptions: createAuthOptions({ configuration, pool }),
+    conversationRequestBudgetMs: configuration.conversationRequest.budgetMs,
     clock: configuration.clock,
     journalEligibilityRepository,
     actionRepository,
@@ -911,6 +941,7 @@ export function createServerComposition() {
     evidenceService,
     journalService,
     journalRepository,
+    journalWorkflowRecovery,
     journalGenerationPolicyVersion: draftConfiguration.policyVersion,
     recoveryGate,
     recoveryReapplyService: createRecoveryReapplyService({
@@ -938,9 +969,13 @@ export function createServerComposition() {
       contextCompiler,
       conversationService,
       harness: conversationAgentHarness,
-      harnessPolicy: CATALOG_V2_CONVERSATION_HARNESS_POLICY,
+      harnessPolicy: historyRecallGateway
+        ? HISTORY_RECALL_CONVERSATION_HARNESS_POLICY
+        : CATALOG_V2_CONVERSATION_HARNESS_POLICY,
+      ...(historyRecallGateway ? { historyRecall: historyRecallGateway } : {}),
       repository: responseRepository,
       recoveryGate,
+      requestBudgetMs: configuration.conversationRequest.budgetMs,
     }),
     continuousExchangeService: createContinuousExchangeService({
       clock: configuration.clock,
@@ -975,6 +1010,8 @@ export function createServerComposition() {
     oneA3bG1ReleaseManifest: configuration.oneA3bG1.releaseManifest,
     dedupeFingerprintSecret: configuration.contextHmacSecret,
     recentContextGovernanceRepository,
+    historyAnswerDrain: responseRepository,
+    historyRecallGovernanceRepository,
     recoveryScannerSecret: configuration.recoveryScannerSecret,
   };
 }

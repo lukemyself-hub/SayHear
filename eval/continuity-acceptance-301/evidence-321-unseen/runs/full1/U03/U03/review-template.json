@@ -1,0 +1,72 @@
+{
+  "caseId": "U03",
+  "findings": [
+    {
+      "criterionId": "S-midnight",
+      "itemId": "a-before",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-midnight",
+      "itemId": "a-after",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-midnight",
+      "itemId": "tm-split",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-midnight",
+      "itemId": "f-all-one-day",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-repeated-hour",
+      "itemId": "tm-leftover-first",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-repeated-hour",
+      "itemId": "f-wall-clock-order",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-travel",
+      "itemId": "tm-arrival",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-travel",
+      "itemId": "f-arrival-unlabelled",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-travel",
+      "itemId": "f-invented-zone",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    }
+  ],
+  "reviewer": "agent:<name> | human:<name>",
+  "rubricVersion": "continuity-rubric:v1",
+  "runId": "run-a3db9622-6cd5-458d-87c6-c9411326bdf1",
+  "schemaVersion": "continuity-acceptance-review:v1"
+}

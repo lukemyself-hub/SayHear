@@ -1,0 +1,33 @@
+{
+  "schemaVersion": "continuity-acceptance-fixture:v1",
+  "id": "C02",
+  "fixtureVersion": "dev-2",
+  "stage": "development",
+  "languageVariant": "zh",
+  "defaults": { "locale": "zh-CN", "timezone": "Asia/Shanghai" },
+  "history": [
+    {
+      "key": "park",
+      "at": "2026-09-16T12:05:00.000Z",
+      "user": "上周日带我爸去了趟滨江公园，他非要自己推轮椅上那个小坡，推到一半还是我接的手。",
+      "assistant": "他想自己上那个坡，你在后面跟着，最后还是接了过来。"
+    },
+    {
+      "key": "cabinet",
+      "at": "2026-09-16T12:12:00.000Z",
+      "user": "今天下班回来把厨房吊柜那扇歪了半年的门修好了，其实就是铰链松了，拧了两颗螺丝。",
+      "assistant": "歪了半年，两颗螺丝就解决了。"
+    },
+    {
+      "key": "classmate",
+      "at": "2026-09-16T12:20:00.000Z",
+      "user": "对了，最近还见了一回大学同屋阿澈，他胖了好多，聊了一晚上以前宿舍的事。",
+      "assistant": "聊了一整晚宿舍的旧事，看来没有生分。"
+    }
+  ],
+  "steps": [
+    { "id": "said", "type": "say", "at": "2026-09-17T11:30:00.000Z", "historyReview": {"startDate": "2026-09-16", "endDate": "2026-09-16"}, "text": "我昨天都跟你聊了些什么？" },
+    { "id": "happened", "type": "say", "at": "2026-09-17T11:32:00.000Z", "historyReview": {"startDate": "2026-09-16", "endDate": "2026-09-16", "timeBasis": "experienced_date"}, "text": "那昨天我自己实际做了什么事？" },
+    { "id": "when", "type": "say", "at": "2026-09-17T11:34:00.000Z", "historyReview": {"startDate": "2026-09-16", "endDate": "2026-09-16", "timeBasis": "experienced_date"}, "text": "我是哪天见的阿澈来着？" }
+  ]
+}

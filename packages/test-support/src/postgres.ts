@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { asUserId } from "@sayhear/domain";
-import { Pool } from "pg";
+import { Client, Pool } from "pg";
 
 export type IsolatedPostgresSchema = Readonly<{
   connectionString: string;
@@ -54,5 +54,22 @@ export async function createIsolatedPostgresSchema(
       await adminPool.query(`DROP SCHEMA ${schema} CASCADE`);
       await adminPool.end();
     },
+  };
+}
+
+/**
+ * Where the PostgreSQL driver would really connect for this connection
+ * string. The driver's own parser is asked, because a query parameter such as
+ * `?host=` or `?port=` replaces what the URL shows before the path, and a URL
+ * with no host falls back to the process environment. Nothing is connected.
+ */
+export function resolvePostgresConnectionTarget(
+  connectionString: string,
+): Readonly<{ database: string; host: string; port: string }> {
+  const client = new Client({ connectionString });
+  return {
+    database: String(client.database ?? ""),
+    host: String(client.host ?? ""),
+    port: String(client.port ?? ""),
   };
 }

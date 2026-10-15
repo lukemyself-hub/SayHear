@@ -1,0 +1,49 @@
+{
+  "schemaVersion": "continuity-acceptance-fixture:v1",
+  "id": "C13",
+  "fixtureVersion": "dev-1",
+  "stage": "development",
+  "languageVariant": "zh",
+  "defaults": { "locale": "zh-CN", "timezone": "Asia/Shanghai" },
+  "history": [
+    {
+      "key": "eve",
+      "at": "2026-08-19T12:10:00.000Z",
+      "user": "晚上在楼下遛了一圈，看到有人在路灯底下练太极，动作慢得像在水里。",
+      "assistant": "路灯底下慢慢打拳，画面还挺安静的。"
+    },
+    {
+      "key": "cobbler",
+      "at": "2026-08-20T10:30:00.000Z",
+      "user": "路过巷口的修鞋摊，老师傅教我用蜡线把开了线的帆布包缝了一遍，针脚歪歪扭扭的，他还夸我手稳。",
+      "assistant": "自己缝完一遍，还被老师傅夸手稳，这份得意是真的。"
+    },
+    {
+      "key": "cobbler-after",
+      "at": "2026-08-20T11:20:00.000Z",
+      "user": "回家以后越看那个包越顺眼，打算以后东西坏了先自己试着补。",
+      "assistant": "补过一次就更舍不得扔了。"
+    },
+    {
+      "key": "next",
+      "at": "2026-08-21T12:40:00.000Z",
+      "user": "今天把阳台那排花盆挪了位置，给最里面那盆茉莉腾出了点太阳。",
+      "assistant": "茉莉有了太阳，应该会更精神。"
+    },
+    {
+      "key": "recent",
+      "at": "2026-09-14T13:00:00.000Z",
+      "user": "周末去超市排队的时候，前面的大爷一直在跟收银员聊他孙子。",
+      "assistant": "排队时的闲聊有时候反而最暖。"
+    }
+  ],
+  "steps": [
+    {
+      "id": "ask",
+      "type": "say",
+      "at": "2026-09-15T02:10:00.000Z",
+      "text": "八月二十号那天，我都跟你说了些什么？",
+      "historyReview": { "startDate": "2026-08-20", "endDate": "2026-08-20" }
+    }
+  ]
+}

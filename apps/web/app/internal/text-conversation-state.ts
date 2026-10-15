@@ -19,8 +19,8 @@ export type SendDecision = "ignore" | "newline" | "send";
 /**
  * Decides what an Enter keypress on the composer should do. IME composition
  * Enter here only confirms the candidate (`"ignore"`), Shift+Enter inserts a
- * newline, blank content never sends, and a submission already in flight is
- * never restarted.
+ * newline, and blank content never sends. A message may be sent while an
+ * earlier reply is still being prepared; it supersedes that reply.
  */
 export function decideSend(input: {
   composing: boolean;
@@ -38,9 +38,9 @@ export function decideSend(input: {
   if (input.shiftKey) {
     return "newline";
   }
-  if (input.submitting) {
-    return "ignore";
-  }
+  // `submitting` no longer blocks a send (issue #319): a message sent while a
+  // reply is still being prepared adds to the question or changes the subject,
+  // and the newer message retires the older answer.
   if (input.text.trim().length === 0) {
     return "ignore";
   }
@@ -53,6 +53,7 @@ export type WaitPhase =
   | "awaiting"
   | "streaming"
   | "settled"
+  | "stopped"
   | "failed";
 
 export type WaitState = Readonly<{ phase: WaitPhase; text: string }>;
@@ -66,6 +67,7 @@ export type WaitEvent =
   | Readonly<{ type: "response_interrupted" }>
   | Readonly<{ type: "response_failed" }>
   | Readonly<{ type: "stream_error" }>
+  | Readonly<{ type: "stop" }>
   | Readonly<{ type: "reset" }>;
 
 export const INITIAL_WAIT_STATE: WaitState = Object.freeze({
@@ -100,6 +102,8 @@ export function reduceWaitState(
     case "response_failed":
     case "stream_error":
       return { phase: "failed", text: "" };
+    case "stop":
+      return { phase: "stopped", text: "" };
     case "reset":
       return INITIAL_WAIT_STATE;
   }
@@ -138,6 +142,8 @@ export function waitAnnouncement(state: WaitState): string {
       return "正在生成回复";
     case "settled":
       return "回复完成";
+    case "stopped":
+      return "已停止";
     case "failed":
       return "回复失败";
     case "idle":
@@ -265,4 +271,50 @@ export function reduceScrollFollow(
     return state;
   }
   return { following: false, showJumpToLatest: true };
+}
+
+/**
+ * Client-side stop condition (issue #319, ADR-0152). The server ends a request
+ * at 60 seconds; the client waits two seconds longer so it normally hears the
+ * server's own terminal event, and gives up on its own after that even if the
+ * connection is silent.
+ */
+export const CLIENT_REQUEST_DEADLINE_MS = 62_000;
+
+export type RequestEndedBy = "stop" | "superseded" | "timeout";
+
+export type RequestEndedPlan = Readonly<{
+  hasPartialText: boolean;
+  kind: "stopped" | "superseded" | "timeout";
+  preserveDraft: boolean;
+  preservesSubmissionIdentity: boolean;
+  /** Whether the person should see an error notice for this ending. */
+  showError: boolean;
+}>;
+
+/**
+ * What the composer does when the person ends a request (stop, or a newer
+ * message replacing it) or the client deadline passes. Words already shown
+ * stay as a read-only interrupted partial with the explicit Retry; a stop is
+ * not an error; a request that ended before the message was confirmed keeps
+ * its idempotent identity so sending again cannot create a second message.
+ */
+export function requestEndedPlan(input: {
+  endedBy: RequestEndedBy;
+  hasPartialText: boolean;
+  userCommitted: boolean;
+}): RequestEndedPlan {
+  const restorable = !input.userCommitted && input.endedBy !== "superseded";
+  return {
+    hasPartialText: input.userCommitted && input.hasPartialText,
+    kind:
+      input.endedBy === "stop"
+        ? "stopped"
+        : input.endedBy === "superseded"
+          ? "superseded"
+          : "timeout",
+    preserveDraft: restorable,
+    preservesSubmissionIdentity: restorable,
+    showError: input.endedBy === "timeout",
+  };
 }

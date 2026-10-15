@@ -1,0 +1,47 @@
+{
+  "acceptancePack": {
+    "caseCount": 18,
+    "fixtureDigest": "0d36a0de6530ed42029a4a00412f2b6cb9cb1b25525d97deb4de1203dfbbc260"
+  },
+  "database": {
+    "migrationCount": 83,
+    "migrationDigest": "a66b971ae8d68dde3485f25be1d09818014d1eac040936bc89004f7920d9b0ea",
+    "newestMigration": "0081_history_recall_governance.sql"
+  },
+  "fingerprint": "fce5456324f2708f4243c3a20987ea4e72bb38665cf57fb8e1c9aaa5215705ac",
+  "git": {
+    "commit": "a4c02ed1e51de85b9bb62db2134152231977699b",
+    "dirty": true
+  },
+  "path": {
+    "canonicalPersona": "canonical-persona:v2",
+    "contextCompilerHistoryAnswer": "context-compiler:history-time:v1",
+    "contextCompilerOrdinary": "context-compiler:time:v3",
+    "conversationOutput": "conversation-output:v2",
+    "decisionTask": "task-instruction-decision:v4",
+    "historyAnswerTask": "task-instruction-history-answer:v1",
+    "historyContinuationAnswerTask": "task-instruction-history-answer:v2",
+    "historyExperienceSearch": "history-experience-search:v1",
+    "historyHarnessPolicy": "conversation-harness:v4",
+    "historyReadingRules": "history-reading:v2",
+    "historyRecallPolicy": "history-recall:v4",
+    "personaBehaviorAnchors": "persona-behavior-anchors:v2",
+    "personaContractInvariant": "persona-contract-invariant:v1",
+    "recentContextSelection": "recent-context-selection-policy:v1"
+  },
+  "product": {
+    "fingerprint": "3b84caaae250156c1d8f0ef1527a5a693e58b6ca518da4167f3576c89b087902",
+    "trees": {
+      "apps": "a473c327404867cab1f63f2e3238a783343de12a",
+      "lockfile": "54719980168e6dfe15f77daec7895f6733990ca7",
+      "packages": "9897347a25ac8153ca4aff6bb539891b8e8f714c"
+    },
+    "uncommittedChanges": false
+  },
+  "schemaVersion": "continuity-combined-version:v1",
+  "switches": {
+    "deployment": "SAYHEAR_HISTORY_RECALL_ENABLED (explicit, default false; also selects conversation-harness policy)",
+    "independentGovernance": "history_recall_policies (versioned, one active row; operator route /api/internal/operator/history-recall enable|disable)",
+    "recentBackground": "recent_context_policies (separate switch; closing history never touches it)"
+  }
+}

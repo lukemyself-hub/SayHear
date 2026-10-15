@@ -435,6 +435,39 @@ const HOMOPHONE_CLASS_BY_CHARACTER: Readonly<Record<string, number>> =
     ),
   );
 
+/** Traditional → simplified over the curated map only (no homophone classes). */
+export function foldTraditionalToSimplified(text: string): string {
+  let folded = "";
+  for (const character of text) {
+    folded += TRADITIONAL_TO_SIMPLIFIED[character] ?? character;
+  }
+  for (const [traditional, simplified] of Object.entries(
+    TRADITIONAL_TO_SIMPLIFIED,
+  )) {
+    if (traditional.length > 1 && folded.includes(traditional)) {
+      folded = folded.replaceAll(traditional, simplified);
+    }
+  }
+  return folded;
+}
+
+const SIMPLIFIED_TO_TRADITIONAL: Readonly<Record<string, string>> = Object.freeze(
+  Object.fromEntries(
+    Object.entries(TRADITIONAL_TO_SIMPLIFIED)
+      .filter(([traditional]) => traditional.length === 1)
+      .map(([traditional, simplified]) => [simplified, traditional] as const),
+  ),
+);
+
+/** Simplified → traditional over the same curated map (single characters). */
+export function expandSimplifiedToTraditional(text: string): string {
+  let expanded = "";
+  for (const character of text) {
+    expanded += SIMPLIFIED_TO_TRADITIONAL[character] ?? character;
+  }
+  return expanded;
+}
+
 export function homophoneFoldKey(label: string): string {
   const normalized = normalizeEntityLabel(label);
   let folded = "";

@@ -1,0 +1,69 @@
+{
+  "schemaVersion": "continuity-acceptance-fixture:v1",
+  "id": "U07",
+  "fixtureVersion": "final-2",
+  "stage": "final",
+  "languageVariant": "en",
+  "defaults": {
+    "locale": "en-GB",
+    "timezone": "Europe/London"
+  },
+  "history": [
+    {
+      "key": "old-job",
+      "at": "2026-07-14T21:30:00.000Z",
+      "user": "Six years on the line at the Calloway Hotel now. Split shifts, home after midnight five nights a week, and I have not sat down to a Sunday dinner with my own kids since the spring.",
+      "assistant": "Six years of split shifts and no Sunday dinners since spring. That adds up."
+    },
+    {
+      "key": "contract",
+      "at": "2026-08-11T15:20:00.000Z",
+      "user": "Signed the contract today. Kitchen manager at Oakfield Primary, term time only, finished by half past three every day. I start on the first of September, and I am handing in my notice at the hotel tomorrow.",
+      "assistant": "From midnight finishes to half past three. That is a different life on paper already."
+    },
+    {
+      "key": "drinks-plan",
+      "at": "2026-08-11T15:27:00.000Z",
+      "user": "The Friday before I start, I am going to take the whole kitchen crew out for leaving drinks at the Anchor, my shout.",
+      "assistant": "Your shout at the Anchor. They will remember that."
+    },
+    {
+      "key": "date-fix",
+      "at": "2026-08-20T10:10:00.000Z",
+      "user": "I need to put something right. I told you I start on the first of September, and that is wrong now. The school rang, my background check has not come back yet, so my first day has been moved to the eighth.",
+      "assistant": "Understood. Your first day is the eighth of September, not the first."
+    },
+    {
+      "key": "drinks-off",
+      "at": "2026-08-27T22:15:00.000Z",
+      "user": "The leaving drinks are off. A pipe burst above the hotel kitchen on Tuesday and the whole crew is on double shifts cleaning it up, so nobody can get away. I told them in the group chat that we would leave it.",
+      "assistant": "A burst pipe and double shifts. Nobody could have got to the Anchor through that."
+    },
+    {
+      "key": "first-week",
+      "at": "2026-09-12T16:40:00.000Z",
+      "user": "First week at the school done. I still reach for a pan that is not there, and I have burnt nothing. I ate dinner with the kids every single night.",
+      "assistant": "Dinner with the kids every night. That was the whole point, and you have had five of them already."
+    }
+  ],
+  "steps": [
+    {
+      "id": "where",
+      "type": "say",
+      "at": "2026-09-21T18:05:00.000Z",
+      "text": "My head is all over the place tonight. Where is it I work now, and what day did I actually start?"
+    },
+    {
+      "id": "drinks",
+      "type": "say",
+      "at": "2026-09-21T18:08:00.000Z",
+      "text": "And that send-off I said I was going to throw, what became of it?"
+    },
+    {
+      "id": "july",
+      "type": "say",
+      "at": "2026-09-21T18:11:00.000Z",
+      "text": "Come to think of it, what was work like for me back in July? And how does that compare with now?"
+    }
+  ]
+}

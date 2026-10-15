@@ -1,0 +1,57 @@
+{
+  "schemaVersion": "continuity-acceptance-oracle:v1",
+  "id": "C03",
+  "title": "C03 One session across midnight, a repeated daylight-saving hour, a travel timezone and a missing timezone",
+  "capability": "A single conversation runs from 23:50 on 31 October to 01:40 on 1 November Pacific time, through the hour that occurs twice when clocks go back. It stays one Daily Session, yet a look back is organised by when each message was actually expressed and by the timezone of the question, not by the session's date. An earlier message was sent from Tokyo, and another has no recorded timezone. Session ownership is preserved, real instants decide order, and what is genuinely unknown stays unknown.",
+  "spec": ["#301 R1", "#307", "ADR-0012", "ADR-0152"],
+  "ownerTickets": ["#314", "#315"],
+  "language": "en",
+  "fixture": { "version": "dev-1", "sha256": "520f77e5dae0fb0a8c2896902207aa8e0dad8aa5ccc78490ec57e98ff5577310" },
+  "facts": {
+    "allowed": [
+      { "id": "a-before", "statement": "Before midnight: the visiting children had just gone, four bags of sweets were used up, and the person sat outside with the empty dish.", "sources": ["h1:user"] },
+      { "id": "a-after", "statement": "After midnight: a neighbour brought a warm apple drink, said she will sell her home in spring, went back, and the person put out the lanterns and stayed up thinking about it.", "sources": ["h2:user", "h3:user", "h4:user", "h6:user"] }
+    ],
+    "forbidden": [
+      { "id": "f-all-one-day", "statement": "Treating the whole conversation as said on 31 October because it belongs to that Daily Session.", "sources": ["h2:user", "h7:user"] },
+      { "id": "f-wall-clock-order", "statement": "Ordering the sweet found at the sink after the remark about the clocks because 1:25 reads later than 1:15.", "sources": ["h5:user", "h7:user"] },
+      { "id": "f-invented-zone", "statement": "Stating a definite local hour or place for the message about returning to the pet, whose timezone was never recorded.", "sources": ["legacy:user"] }
+    ]
+  },
+  "topics": [],
+  "time": [
+    { "id": "tm-split", "statement": "The first message was expressed at 23:50 on 31 October Pacific time; every later one in that conversation was expressed on 1 November.", "sources": ["h1:user", "h2:user"] },
+    { "id": "tm-candy-first", "statement": "The leftover sweet was mentioned at 01:25 daylight time, fifty minutes of real time before the clocks remark at 01:15 standard time.", "sources": ["h5:user", "h7:user"] },
+    { "id": "tm-tokyo", "statement": "Arrival at the hotel was expressed at 00:30 on 28 October in Tokyo, which is the morning of 27 October in the timezone of the question; either is correct only if its timezone is made clear.", "sources": ["tokyo:user"] }
+  ],
+  "expectedBehavior": [
+    "Split the night at the real midnight, not at the session boundary.",
+    "Say the sweet came first, by real elapsed time.",
+    "Give the hotel arrival with its timezone made explicit.",
+    "Do not invent a local time for the message without a recorded timezone."
+  ],
+  "failureSignals": [
+    "Everything is reported as 31 October.",
+    "The clocks remark is placed before the sweet.",
+    "The hotel arrival is given as a bare date with the wrong implied timezone."
+  ],
+  "sourceEligibility": [
+    { "source": "tokyo:user", "eligibility": "allowed", "reason": "Retained original expression inside the default background." },
+    { "source": "legacy:user", "eligibility": "allowed", "reason": "Retained original expression; only its timezone is unknown." },
+    { "source": "h1:user", "eligibility": "allowed", "reason": "Retained original expression." },
+    { "source": "h2:user", "eligibility": "allowed", "reason": "Retained original expression." },
+    { "source": "h5:user", "eligibility": "allowed", "reason": "Retained original expression." },
+    { "source": "h7:user", "eligibility": "allowed", "reason": "Retained original expression." },
+    { "source": "h8:user", "eligibility": "allowed", "reason": "Retained original expression." }
+  ],
+  "criteria": [
+    { "id": "O-commit", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The first question streams and commits.", "check": { "type": "turn_committed", "step": "night" } },
+    { "id": "O-one-session", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The conversation that crossed midnight and the repeated hour is one Daily Session owned by 31 October.", "check": { "type": "session_ownership", "expect": [ { "source": "h1:user", "logicalDate": "2026-10-31" }, { "source": "h2:user", "logicalDate": "2026-10-31" }, { "source": "h7:user", "logicalDate": "2026-10-31" }, { "source": "h8:user", "logicalDate": "2026-10-31" } ] } },
+    { "id": "O-travel-ownership", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The message sent from Tokyo is filed under its own local date there.", "check": { "type": "session_ownership", "expect": [ { "source": "tokyo:user", "logicalDate": "2026-10-28" } ] } },
+    { "id": "O-sources", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "Messages from both sides of midnight and both passes of the repeated hour reach the Provider.", "check": { "type": "outbound_includes", "step": "order", "sources": ["h1:user", "h2:user", "h5:user", "h7:user"] } },
+    { "id": "O-travel-source", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The Tokyo message and the message without a timezone reach the Provider.", "check": { "type": "outbound_includes", "step": "trip", "sources": ["tokyo:user", "legacy:user"] } },
+    { "id": "S-midnight", "kind": "semantic", "owner": "#315", "description": "The night is split at the real midnight.", "step": "night", "required": ["a-before", "a-after", "tm-split"], "forbidden": ["f-all-one-day"] },
+    { "id": "S-repeated-hour", "kind": "semantic", "owner": "#314", "description": "Order within the repeated hour follows real instants.", "step": "order", "required": ["tm-candy-first"], "forbidden": ["f-wall-clock-order"] },
+    { "id": "S-travel", "kind": "semantic", "owner": "#314", "description": "The travel date is given with its timezone and nothing is invented for the unknown one.", "step": "trip", "required": ["tm-tokyo"], "forbidden": ["f-invented-zone"] }
+  ]
+}

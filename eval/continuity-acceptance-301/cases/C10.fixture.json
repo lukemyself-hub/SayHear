@@ -1,0 +1,67 @@
+{
+  "schemaVersion": "continuity-acceptance-fixture:v1",
+  "id": "C10",
+  "fixtureVersion": "dev-1",
+  "stage": "development",
+  "languageVariant": "en",
+  "defaults": { "locale": "en-US", "timezone": "America/Denver" },
+  "history": [
+    {
+      "key": "trip-a",
+      "at": "2026-09-08T01:20:00.000Z",
+      "user": "We did the two-day kayak trip on the reservoir this weekend. Priya and her brother Kiran came, and Kiran flipped his boat within the first ten minutes.",
+      "assistant": "Ten minutes in and already swimming. I hope he took it well."
+    },
+    {
+      "key": "trip-b",
+      "at": "2026-09-08T01:26:00.000Z",
+      "user": "He laughed it off. The second night the wind picked up so hard that we packed the tents at dawn and paddled back a day early.",
+      "assistant": "Packing up at dawn in that wind sounds like the right call, even if it cut things short."
+    },
+    {
+      "key": "lease",
+      "at": "2026-09-10T15:05:00.000Z",
+      "user": "My landlord wants an answer on renewing the lease by the end of the month and I keep putting it off.",
+      "assistant": "An end-of-month deadline that keeps sliding. It sounds like it is sitting in the back of your mind."
+    }
+  ],
+  "steps": [
+    {
+      "id": "ask",
+      "type": "say",
+      "at": "2026-09-12T16:00:00.000Z",
+      "text": "What did I tell you about the kayak trip?",
+      "providerFault": { "delayBetweenChunksMs": 600 },
+      "abortAfterDeltas": 1
+    },
+    {
+      "id": "supplement",
+      "type": "say",
+      "at": "2026-09-12T16:00:20.000Z",
+      "text": "Sorry, I cut that off. I only want the part about who came along."
+    },
+    {
+      "id": "ask-again",
+      "type": "say",
+      "at": "2026-09-12T16:02:00.000Z",
+      "text": "And how did the second night go?",
+      "providerFault": { "delayBetweenChunksMs": 600 },
+      "abortAfterDeltas": 1
+    },
+    {
+      "id": "switch",
+      "type": "say",
+      "at": "2026-09-12T16:02:15.000Z",
+      "text": "Never mind the trip. The lease thing is what is actually bothering me today."
+    },
+    { "id": "resend", "type": "resend", "at": "2026-09-12T16:02:40.000Z", "of": "switch" },
+    { "id": "restart", "type": "restart", "at": "2026-09-12T16:03:00.000Z" },
+    { "id": "reconnect", "type": "resend", "at": "2026-09-12T16:03:10.000Z", "of": "switch" },
+    {
+      "id": "after",
+      "type": "say",
+      "at": "2026-09-12T16:04:00.000Z",
+      "text": "I think I will just tell him yes this week."
+    }
+  ]
+}

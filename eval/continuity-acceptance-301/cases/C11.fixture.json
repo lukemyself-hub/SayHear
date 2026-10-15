@@ -1,0 +1,54 @@
+{
+  "schemaVersion": "continuity-acceptance-fixture:v1",
+  "id": "C11",
+  "fixtureVersion": "dev-2",
+  "stage": "development",
+  "languageVariant": "zh",
+  "defaults": { "locale": "zh-CN", "timezone": "Asia/Shanghai" },
+  "history": [
+    {
+      "key": "aug-a",
+      "at": "2026-08-25T12:30:00.000Z",
+      "user": "今天把租了三年的那间小画室退了，钥匙交给房东的时候手都有点抖。",
+      "assistant": "三年的画室，交钥匙那一下肯定不好受。"
+    },
+    {
+      "key": "aug-b",
+      "at": "2026-08-27T13:15:00.000Z",
+      "user": "画架和那箱没用完的丙烯颜料暂时堆在我姐家的阳台上，她倒是没说什么。",
+      "assistant": "东西有了落脚的地方，她也没催你。"
+    },
+    {
+      "key": "sep-a",
+      "at": "2026-09-10T12:40:00.000Z",
+      "user": "周四晚上去上了第一节夜校的版画课，刻刀比我想的难控制，划了手一道小口子。",
+      "assistant": "第一节课就见了血，刻刀是在给你下马威。"
+    },
+    {
+      "key": "sep-b",
+      "at": "2026-09-12T08:20:00.000Z",
+      "user": "周六下午在家试着印了第一张，墨上得太厚，糊成一片，不过轮廓还认得出来。",
+      "assistant": "糊是糊了，轮廓在就说明刻的那部分是对的。"
+    }
+  ],
+  "steps": [
+    {
+      "id": "empty",
+      "type": "say",
+      "at": "2026-09-15T12:00:00.000Z",
+      "historyReview": {"startDate": "2026-09-11", "endDate": "2026-09-11"}, "text": "上周五，就是十一号那天，我跟你聊过什么吗？"
+    },
+    {
+      "id": "older",
+      "type": "say",
+      "at": "2026-09-15T12:03:00.000Z",
+      "historyReview": {"startDate": "2026-08-25", "endDate": "2026-08-31"}, "text": "那八月底那几天呢，我们聊了些什么？"
+    },
+    {
+      "id": "earliest",
+      "type": "say",
+      "at": "2026-09-15T12:06:00.000Z",
+      "historyReview": {"startDate": "2026-07-01", "endDate": "2026-09-12"}, "text": "我第一次跟你提画画相关的事是什么时候？"
+    }
+  ]
+}

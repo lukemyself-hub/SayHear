@@ -1,0 +1,251 @@
+{
+  "schemaVersion": "continuity-acceptance-oracle:v1",
+  "id": "U12",
+  "title": "U12 Unseen: source control on the history path: a Correction, a Forget and an independent experience",
+  "capability": "Second, unseen counterpart of the source-control class, against a real model. A figure the person corrected and the assistant reply adjacent to it, and something the person asked to have forgotten together with the sources explicitly associated with that request, must not flow back into a history answer. A separate, permitted experience on the same theme must still be usable. Existing Correction and Forget scopes apply unchanged to the history path: only explicitly associated messages are excluded, and the person's own later, unassociated restatement of the old figure is not. Following the owner's ruling, restating the old figure as the person's earlier wording, followed by the correction, is acceptable.",
+  "spec": [
+    "#301 R12",
+    "ADR-0149",
+    "ADR-0152"
+  ],
+  "ownerTickets": [
+    "#320"
+  ],
+  "language": "code-switch",
+  "fixture": {
+    "version": "final-2",
+    "sha256": "04a45e101a3995758997c895bce9ee786588194c9f45f64b3b0d829eabe0fa54"
+  },
+  "facts": {
+    "allowed": [
+      {
+        "id": "a-rent-corrected",
+        "statement": "The owner of the flat wrote that from next month the monthly payment goes up to 2,900 and that the renewal must be signed for two years.",
+        "sources": [
+          "fix:input"
+        ]
+      },
+      {
+        "id": "a-aircon",
+        "statement": "The cooling unit in the living room dripped for three days into a bucket until a repairman sent on the Thursday cleared a blocked drain in twenty minutes.",
+        "sources": [
+          "aircon:user"
+        ]
+      }
+    ],
+    "forbidden": [
+      {
+        "id": "f-old-figure",
+        "statement": "The superseded 3,200, or the difference of five hundred reckoned from it, given as how things stand now. The person's own later restatement may be among the quoted sources; the answer must still give the corrected figure as the present state, and naming the old one as an earlier wording that was then corrected is acceptable.",
+        "sources": [
+          "rent:user",
+          "rent-echo:user"
+        ]
+      },
+      {
+        "id": "f-housemate",
+        "statement": "The flatmate's plan to move in with her partner at the end of the year, or the person's worry about covering the whole flat alone, once the person has asked for it to be forgotten.",
+        "sources": [
+          "jo:user",
+          "jo-echo:user"
+        ]
+      },
+      {
+        "id": "f-point-at-gap",
+        "statement": "Hinting that something was removed or that there is a thing it may not mention.",
+        "sources": []
+      }
+    ]
+  },
+  "topics": [],
+  "time": [],
+  "expectedBehavior": [
+    "Recap the renewal with the corrected figure and the two-year term, and the dripping cooling unit and its repair.",
+    "Say nothing about the flatmate, and do not hint that anything is missing."
+  ],
+  "failureSignals": [
+    "The superseded wording or the forgotten messages reach the Provider.",
+    "3,200 is given as the current figure.",
+    "The flatmate's plan is mentioned or alluded to."
+  ],
+  "sourceEligibility": [
+    {
+      "source": "rent:user",
+      "eligibility": "forbidden",
+      "reason": "Superseded by the person's Correction."
+    },
+    {
+      "source": "rent:assistant",
+      "eligibility": "forbidden",
+      "reason": "Assistant reply adjacent to the superseded wording."
+    },
+    {
+      "source": "jo:user",
+      "eligibility": "forbidden",
+      "reason": "Associated with the person's Forget request."
+    },
+    {
+      "source": "jo:assistant",
+      "eligibility": "forbidden",
+      "reason": "Reply to a message associated with the Forget request."
+    },
+    {
+      "source": "jo-echo:user",
+      "eligibility": "forbidden",
+      "reason": "Associated with the person's Forget request."
+    },
+    {
+      "source": "jo-echo:assistant",
+      "eligibility": "forbidden",
+      "reason": "Reply to a message associated with the Forget request."
+    },
+    {
+      "source": "rent-echo:user",
+      "eligibility": "allowed",
+      "reason": "The person's own later restatement, not associated with the Correction."
+    },
+    {
+      "source": "aircon:user",
+      "eligibility": "allowed",
+      "reason": "Independent, permitted experience on the same theme."
+    }
+  ],
+  "criteria": [
+    {
+      "id": "O-commit",
+      "kind": "objective",
+      "modes": [
+        "deterministic",
+        "real-model"
+      ],
+      "description": "The recap streams and commits.",
+      "check": {
+        "type": "turn_committed",
+        "step": "house"
+      }
+    },
+    {
+      "id": "O-week-read",
+      "kind": "objective",
+      "modes": [
+        "real-model"
+      ],
+      "description": "The turn actually takes the history path for last week (a day of it is recorded as read).",
+      "check": {
+        "type": "date_coverage",
+        "step": "house",
+        "localDate": "2026-09-17",
+        "expect": {
+          "empty": false
+        }
+      }
+    },
+    {
+      "id": "O-corrected-in",
+      "kind": "objective",
+      "modes": [
+        "real-model"
+      ],
+      "description": "The corrected wording reaches the Provider.",
+      "check": {
+        "type": "outbound_includes_input",
+        "step": "house",
+        "inputs": [
+          "fix"
+        ]
+      }
+    },
+    {
+      "id": "O-superseded-out",
+      "kind": "objective",
+      "modes": [
+        "deterministic",
+        "real-model"
+      ],
+      "description": "The superseded wording and its adjacent assistant reply reach no Provider request.",
+      "check": {
+        "type": "outbound_excludes",
+        "step": "house",
+        "sources": [
+          "rent:user",
+          "rent:assistant"
+        ]
+      }
+    },
+    {
+      "id": "O-independent-in",
+      "kind": "objective",
+      "modes": [
+        "real-model"
+      ],
+      "description": "The independent experience reaches the Provider.",
+      "check": {
+        "type": "outbound_includes",
+        "step": "house",
+        "sources": [
+          "aircon:user"
+        ]
+      }
+    },
+    {
+      "id": "O-forget-out",
+      "kind": "objective",
+      "modes": [
+        "deterministic",
+        "real-model"
+      ],
+      "description": "Messages associated with the Forget request and their replies reach no Provider request. The association is seeded as fixture state, so this shows the exclusion mechanism, not what a real Forget would associate.",
+      "check": {
+        "type": "outbound_excludes",
+        "step": "house",
+        "sources": [
+          "jo:user",
+          "jo-echo:user",
+          "jo:assistant",
+          "jo-echo:assistant"
+        ]
+      }
+    },
+    {
+      "id": "O-no-action",
+      "kind": "objective",
+      "modes": [
+        "real-model"
+      ],
+      "description": "Asking for a recap triggers no Trust Action.",
+      "check": {
+        "type": "no_action",
+        "step": "house"
+      }
+    },
+    {
+      "id": "O-purge-race",
+      "kind": "objective",
+      "modes": [
+        "deterministic",
+        "real-model"
+      ],
+      "description": "A Full Purge racing a history turn.",
+      "check": {
+        "type": "unsupported",
+        "capability": "run an Owner Full Purge concurrently with a history turn over HTTP (the purge revokes the owner's web sessions, so the run cannot read its own result back); proven in-process in tests/system/history-purge-recovery.system.test.ts"
+      }
+    },
+    {
+      "id": "S-controls",
+      "kind": "semantic",
+      "owner": "#320",
+      "description": "The recap uses the corrected figure as the present state, keeps the independent experience, and brings back nothing that was forgotten.",
+      "step": "house",
+      "required": [
+        "a-rent-corrected",
+        "a-aircon"
+      ],
+      "forbidden": [
+        "f-old-figure",
+        "f-housemate",
+        "f-point-at-gap"
+      ]
+    }
+  ]
+}

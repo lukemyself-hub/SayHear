@@ -1,0 +1,47 @@
+[
+  {
+    "appState": "warm",
+    "caseId": "HL1",
+    "committedMs": null,
+    "firstVisibleTextMs": null,
+    "kind": "history",
+    "liveRequests": 1,
+    "outcome": "response_failed",
+    "outputTokens": 4836,
+    "reasoningTokens": 4727,
+    "runId": "run-a0a3e0f0-88a0-4a27-9837-6e91b56d1f47",
+    "stepId": "ask",
+    "streamClosedMs": 30028.763582999934,
+    "withinContract": false
+  },
+  {
+    "appState": "warm",
+    "caseId": "HL1",
+    "committedMs": 8941.413166000042,
+    "firstVisibleTextMs": 8876.310375000001,
+    "kind": "ordinary",
+    "liveRequests": 1,
+    "outcome": "assistant_committed",
+    "outputTokens": 245,
+    "reasoningTokens": 212,
+    "runId": "run-a0a3e0f0-88a0-4a27-9837-6e91b56d1f47",
+    "stepId": "supplement",
+    "streamClosedMs": 8941.471790999989,
+    "withinContract": false
+  },
+  {
+    "appState": "warm",
+    "caseId": "HL1",
+    "committedMs": 10797.572166999918,
+    "firstVisibleTextMs": 10302.176749999984,
+    "kind": "ordinary",
+    "liveRequests": 1,
+    "outcome": "assistant_committed",
+    "outputTokens": 1369,
+    "reasoningTokens": 1277,
+    "runId": "run-a0a3e0f0-88a0-4a27-9837-6e91b56d1f47",
+    "stepId": "after",
+    "streamClosedMs": 10797.629624999943,
+    "withinContract": false
+  }
+]

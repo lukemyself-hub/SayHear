@@ -142,6 +142,8 @@ function ownerPredicate(
   switch (resolution.kind) {
     case "direct_user_id":
       return `${resolution.column} = $1`;
+    case "evidence_attempt_owner":
+      return `(user_id = $1 OR evidence_source_snapshot_id IN (SELECT evidence_source_snapshot_id FROM evidence_source_snapshots WHERE user_id = $1))`;
     case "daily_session_id":
       return `${resolution.column} IN (
         SELECT daily_session_id FROM daily_sessions WHERE user_id = $1
@@ -205,6 +207,8 @@ function verificationPredicate(
   tableAlias: string,
 ): string {
   switch (resolution.kind) {
+    case "evidence_attempt_owner":
+      return `(${tableAlias}.user_id = $1 OR EXISTS (SELECT 1 FROM evidence_source_snapshots verification_snapshot WHERE verification_snapshot.user_id = $1 AND verification_snapshot.evidence_source_snapshot_id = ${tableAlias}.evidence_source_snapshot_id))`;
     case "direct_user_id":
       return `${tableAlias}.user_id = $1`;
     case "daily_session_id":
@@ -695,9 +699,9 @@ async function captureOwnerPurgeOperationalMetadata(
       'evidence.extract', attempt.status, attempt.extraction_policy_version,
       attempt.provider, attempt.role, '', 0, attempt.created_at
     FROM evidence_model_run_attempts attempt
-    INNER JOIN evidence_source_snapshots snapshot
+    LEFT JOIN evidence_source_snapshots snapshot
       ON snapshot.evidence_source_snapshot_id = attempt.evidence_source_snapshot_id
-    WHERE snapshot.user_id = $1
+    WHERE COALESCE(attempt.user_id, snapshot.user_id) = $1
   `);
   await insert(`
     SELECT gen_random_uuid(), $2, $1, 'rolling_summary_commands',

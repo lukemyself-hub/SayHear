@@ -12,6 +12,7 @@ import type {
   ContextPolicyVersions,
 } from "./context-compiler";
 import type { CurrentDialogueState } from "./dialogue-state";
+import type { HistoryQueryPlan, HistoryRecallCoverage } from "./history-recall";
 import type { MemorySectionKey } from "./memory-retrieval/memory-compilation";
 import type {
   RankComponents,
@@ -100,6 +101,75 @@ export type RetrievalCandidateInspection = Readonly<{
   trustFenceResults: readonly TrustFenceResult[];
 }>;
 
+/**
+ * Issue #314: the minimal, content-free account of a controlled history
+ * review, readable from either the Decision command (which branch it took) or
+ * the History Answer command (what it was compiled from). No message text.
+ */
+export type HistorySearchPlanInspection = Readonly<{
+  endDate: string | null;
+  kind: "search_experience";
+  personGroups: number;
+  searchPolicyVersion: string;
+  startDate: string | null;
+  termGroups: number;
+  timezone: string;
+  variants: number;
+}>;
+
+export type HistoryRecallInspection = Readonly<{
+  answerCommandId: string;
+  coverage: HistoryRecallCoverage;
+  decisionCommandId: string;
+  failureCode: string | null;
+  plan: HistoryQueryPlan | HistorySearchPlanInspection | null;
+  policyVersion: string;
+  /** Which end of the review this inspected command is. */
+  role: "answer" | "decision";
+  sources: readonly Readonly<{
+    actor: "user" | "assistant";
+    expressedAt: string;
+    group?: number;
+    revisionId: string;
+    role?: "match" | "context";
+  }>[];
+  status: "completed" | "failed" | "partial";
+}>;
+
+/**
+ * Issue #320: one Turn seen as a whole, content-free. It joins every command of
+ * the Turn (Decision, History Answer, Finalization) with its attempt, Provider
+ * Egress disposition and the Provider's own request id, and states how the
+ * Turn finally ended. The request id is the join key to what was actually
+ * sent: it names the Provider call whose payload this Context produced.
+ */
+export type TurnInspectionCommand = Readonly<{
+  attemptStatus: string | null;
+  commandStatus: string;
+  completedAt: string | null;
+  egressDisposition: string | null;
+  errorCategory: string | null;
+  firstTokenAt: string | null;
+  generationCommandId: string;
+  providerRequestId: string | null;
+  stage: string;
+}>;
+
+export type TurnFinalDisposition =
+  | "committed"
+  | "failed"
+  | "in_progress"
+  | "interrupted"
+  | "settled_without_reply";
+
+export type TurnInspection = Readonly<{
+  assistantEventCommitted: boolean;
+  commands: readonly TurnInspectionCommand[];
+  finalDisposition: TurnFinalDisposition;
+  interactionTurnId: string;
+  turnStatus: string;
+}>;
+
 export type CompiledContextInspection = Readonly<{
   compilerVersion: string;
   degradedReason: CompiledContextDegradedReason;
@@ -127,7 +197,8 @@ export type CompiledContextInspection = Readonly<{
     section:
       | "committed_raw_events"
       | "current_user_input"
-      | "recent_conversation_context";
+      | "recent_conversation_context"
+      | "history_recall_context";
     selectionOrder: number | null;
     selectionReason: string | null;
     sequence: number;
@@ -167,7 +238,13 @@ export type GenerationInspectionMetadata = Readonly<{
   disposition: string;
   freshnessPolicy: string;
   generationCommandId: GenerationCommandId;
+  /** The GenerationCommand stage this command executed (issue #314). */
+  generationStage: string;
   harnessPolicyVersion: string;
+  /** Set when this command is either end of a controlled history review. */
+  historyRecall: HistoryRecallInspection | null;
+  /** The whole Turn this command belongs to (issue #320). */
+  turn: TurnInspection | null;
   inputTokens: number | null;
   model: string;
   modelRunAttemptId: ModelRunAttemptId;
@@ -213,6 +290,19 @@ export type SensitiveInspectionDenialReason =
   | "recent_step_up_required";
 
 export type ConversationContentInspection = Readonly<{
+  /**
+   * Issue #320: the original words a controlled history review put in front of
+   * the model, in the order it did, limited to what is still allowed (a source
+   * a Correction, Forget or Purge has since excluded is not returned). Empty
+   * for commands that carried no history review.
+   */
+  historySources: readonly Readonly<{
+    actor: "assistant" | "user";
+    expressedAt: string | null;
+    revisionId: ConversationEventRevisionId;
+    selectionOrder: number;
+    text: string;
+  }>[];
   events: readonly Readonly<{
     actor: "assistant" | "system" | "user";
     revisionId: ConversationEventRevisionId;

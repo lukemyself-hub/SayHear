@@ -122,9 +122,17 @@ async function sendThroughComposer(text, options = {}) {
   action("Choose 发送; wait for the real NDJSON response and the settled assistant reply.");
   await page.getByRole("button", { name: "发送", exact: true }).click();
   await response;
-  // The composer stays disabled while a reply is in flight.
-  await page.waitForFunction(() => document.getElementById("user-text")?.disabled === false, null, { timeout: 120_000 });
-  await page.locator(".assistantMessage:not(.waitingMessage)").last().waitFor();
+  // The composer stays enabled while a reply is in flight (ADR-0152 lets new
+  // input supersede), and the reply bubble exists before its first delta. Wait
+  // for the in-flight marker to clear and the last reply to carry text, so the
+  // assertions below read the settled timeline rather than a placeholder.
+  await page.waitForFunction(() => {
+    if (document.querySelector(".composerStop") !== null) return false;
+    const replies = document.querySelectorAll(".assistantMessage");
+    const last = replies[replies.length - 1];
+    if (!last || last.classList.contains("waitingMessage")) return false;
+    return (last.textContent ?? "").trim().length > 0;
+  }, null, { timeout: 120_000 });
   assert.equal(await input.inputValue(), "");
 }
 

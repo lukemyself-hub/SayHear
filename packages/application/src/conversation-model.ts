@@ -13,6 +13,7 @@ import type {
   ConversationFunctionDefinition,
 } from "./conversation-action-catalog";
 import type { CuriosityStopSignalProposal } from "./curiosity-stop-signal";
+import type { HistoryQueryProposal } from "./history-recall";
 
 /**
  * The Provider identity recorded on a Conversation Text Champion and frozen on
@@ -126,6 +127,10 @@ export type ProviderEgressStreamEvent =
   | Readonly<{
       proposals: readonly CuriosityStopSignalProposal[];
       type: "stop_signal_proposal";
+    }>
+  | Readonly<{
+      proposal: HistoryQueryProposal;
+      type: "history_query_proposal";
     }>;
 
 export type ProviderEgressPort = Readonly<{
@@ -303,4 +308,15 @@ export type ProviderEgressRepository = Readonly<{
     modelRunAttemptId: ModelRunAttemptId;
     now: Date;
   }): Promise<boolean>;
+  /**
+   * Records the spend a Provider reported for a call that did NOT complete
+   * normally (cut off, timed out, aborted, fenced). The Provider billed it
+   * either way, so the ledger keeps it (issue #319). Unknown counters stay
+   * unknown; nothing here ever writes a zero the Provider did not report.
+   */
+  recordProviderUsage?(input: {
+    modelRunAttemptId: ModelRunAttemptId;
+    now: Date;
+    usage: ModelRoleCallUsage;
+  }): Promise<void>;
 }>;

@@ -1,0 +1,37 @@
+{
+  "caseId": "U05",
+  "findings": [
+    {
+      "criterionId": "S-cued",
+      "itemId": "a-flat-reply",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-cued",
+      "itemId": "f-cued-job",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-cued",
+      "itemId": "f-retell",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-cued",
+      "itemId": "f-outcome",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    }
+  ],
+  "reviewer": "agent:<name> | human:<name>",
+  "rubricVersion": "continuity-rubric:v1",
+  "runId": "run-ab7268ee-7217-4517-a327-f30d569bb72c",
+  "schemaVersion": "continuity-acceptance-review:v1"
+}

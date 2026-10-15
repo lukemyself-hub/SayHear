@@ -1,0 +1,308 @@
+{
+  "budget": {
+    "blockers": [
+      "Real-model mode must be explicitly enabled with SAYHEAR_ACCEPTANCE_REAL_MODEL=enabled in addition to --mode real-model."
+    ],
+    "capUsdMicros": 10000000,
+    "estimatedCostUsdMicros": 230400,
+    "inputTokenUpperBound": 192000,
+    "mode": "real-model",
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "outputTokenUpperBound": 144000,
+    "paidRequestUpperBound": 12,
+    "remainingUsdMicros": 9155596,
+    "requestsPerStepUpperBound": 4,
+    "shape": {
+      "generationSteps": 2,
+      "scheduledScans": 2,
+      "seedTurns": 2
+    },
+    "status": "blocked",
+    "unknownCostEntries": 0,
+    "waivedPreconditions": [
+      {
+        "by": "Luke",
+        "date": "2026-10-11",
+        "statement": "Relayed to the T08 agent by the coordinating agent as Luke's words: \"#307 的遗留问题,应当在 T01–T07 开发期间解决了(包括耗时问题和回忆历史消息等),因此 T08 可以正常启动\" and \"授权 T08 调用 OpenCode Go 跑真实 DeepSeek V4.1 Flash 模型\". This is a decision to proceed. It is not a record that the #307 online acceptance was completed: #307 was closed with its online acceptance not passed.",
+        "id": "issue-307-online-acceptance"
+      }
+    ]
+  },
+  "case": {
+    "caseId": "S02",
+    "criteria": [
+      {
+        "description": "Seeded history is read back verbatim through the normal history API.",
+        "evidence": [],
+        "id": "INV-seed-readback",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "All 2 seeded turns are present exactly once.",
+        "status": "pass"
+      },
+      {
+        "description": "No oracle text, scenario title or expected answer appears in any Provider request.",
+        "evidence": [],
+        "id": "INV-oracle-not-in-outbound",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "Scanned 447 outbound strings; none carries oracle text.",
+        "status": "pass"
+      },
+      {
+        "description": "Authoritative history contains every message exactly once.",
+        "evidence": [],
+        "id": "INV-no-duplicate-messages",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "7 messages, no duplicates.",
+        "status": "pass"
+      },
+      {
+        "description": "The request turn streams and commits.",
+        "evidence": [
+          "steps[forget].chat.httpStatus=200",
+          "steps[forget].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-commit",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "The message the request refers to reaches the Provider, so the request can be resolved.",
+        "evidence": [
+          "brother:user: providerRequest=present, inspector.referencedEvents=present"
+        ],
+        "id": "O-target-available",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Every required source reached the Provider and is recorded by the Inspector.",
+        "status": "pass"
+      },
+      {
+        "description": "A forget request is admitted for the explicit request.",
+        "evidence": [
+          "steps[forget].chat.actions=[\"memory_forget_request\"]"
+        ],
+        "id": "O-forget-admitted",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The memory_forget_request Action was admitted for this turn.",
+        "status": "pass"
+      },
+      {
+        "description": "The ordinary remark commits and history matches the stream.",
+        "evidence": [
+          "finalHistory has 1 message(s) with id 01a0a03a-7220-7226-a1f0-48e5150a622a",
+          "next message: none"
+        ],
+        "id": "O-plain-commit",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Authoritative history does not match what was streamed.",
+        "status": "fail"
+      },
+      {
+        "description": "No Action is admitted for the ordinary remark.",
+        "evidence": [
+          "steps[plain].chat.actions=[]"
+        ],
+        "id": "O-plain-no-action",
+        "kind": "objective",
+        "owner": null,
+        "reason": "No Action was admitted for this turn.",
+        "status": "pass"
+      },
+      {
+        "description": "The Trust Action turn still answers within 3 s first text and 10 s complete (CLI network).",
+        "evidence": [
+          "steps[forget].chat.timing.firstVisibleTextMs=9548.566625 (CLI network, limit 3000)",
+          "steps[forget].chat.timing.committedMs=9731.762041999998 (CLI network, limit 10000)"
+        ],
+        "id": "O-deadline",
+        "kind": "objective",
+        "owner": null,
+        "reason": "CLI-observed timings exceed the limits or the turn never completed.",
+        "status": "fail"
+      },
+      {
+        "description": "The request is acknowledged without restating the content or talking about internals.",
+        "evidence": [],
+        "id": "S-acknowledge",
+        "kind": "semantic",
+        "owner": null,
+        "reason": "No independent review was supplied for this answer.",
+        "status": "needs-review"
+      },
+      {
+        "description": "The remark about the rain is simply received.",
+        "evidence": [
+          "steps[plain].chat.terminalEvent=response_failed"
+        ],
+        "id": "S-plain",
+        "kind": "semantic",
+        "owner": null,
+        "reason": "There is no committed answer to review.",
+        "status": "fail"
+      }
+    ],
+    "mode": "real-model",
+    "pipelineOnly": [],
+    "reviewer": null,
+    "runId": "run-997deb4b-4183-46b9-9c93-c1b8dcecc89a",
+    "status": "fail"
+  },
+  "diagnosis": [
+    {
+      "diagnosis": {
+        "disagreements": [],
+        "payloadReadStatus": null,
+        "readState": "unread",
+        "sources": [
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: no history branch",
+              "provider payload: message 1",
+              "time of message 1: 2026-09-11 (expected 2026-09-11)",
+              "semantic review: none yet; the source reached the model intact, its use is not judged"
+            ],
+            "fault": "undetermined",
+            "source": "brother:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-6",
+              "requestSequence": 6
+            }
+          }
+        ]
+      },
+      "stepId": "forget"
+    }
+  ],
+  "identity": {
+    "fixtureSha256": "dfcf5111f6160079ef2316bf868090406e09e968265956a4fc83272267e47fa7",
+    "fixtureVersion": "dev-1",
+    "gitCommit": "3b85255ef083197381bd669259569b0706c0c086",
+    "gitDirty": true,
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "historyRecallGovernance": "active",
+    "recentContextGovernance": "active",
+    "runId": "run-997deb4b-4183-46b9-9c93-c1b8dcecc89a",
+    "oracleSha256": "bc684432fec62f7f31bf284f18b9a5f867251bee30195111e0473b2cc290502d",
+    "title": "Smoke: a Trust Action that is actually needed"
+  },
+  "remainingRisks": [
+    "This is a development fixture. Final validation needs separately authored fixtures frozen before tuning.",
+    "The working tree had uncommitted changes; the commit alone does not identify the code that ran.",
+    "Timings are CLI network observations, not browser rendering times (T08 #321 covers the browser)."
+  ],
+  "reproducibilityDigest": "4c8ec1134e3eea523edebad02956bd5c57092bbd577762697c987b6508eed6e2",
+  "schemaVersion": "continuity-acceptance-report:v1",
+  "sourceManifest": [
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "brother:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "brother:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "garden:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "garden:assistant"
+        }
+      ],
+      "stepId": "forget"
+    },
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "brother:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "brother:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "garden:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "garden:assistant"
+        }
+      ],
+      "stepId": "plain"
+    }
+  ],
+  "timings": [
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 30.546541999998226,
+      "cliCommittedMs": 9731.762041999998,
+      "cliFirstVisibleTextMs": 9548.566625,
+      "cliStreamClosedMs": 9731.807624999998,
+      "providerLatencyMs": 0,
+      "stepId": "forget"
+    },
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 29.331207999999606,
+      "cliCommittedMs": null,
+      "cliFirstVisibleTextMs": null,
+      "cliStreamClosedMs": 30060.266208,
+      "providerLatencyMs": 0,
+      "stepId": "plain"
+    }
+  ],
+  "transcript": [
+    {
+      "assistant": "I hear you, and I get why you'd want that. But it didn't go through — nothing's changed on my end, so I can't tell you it's gone.",
+      "at": "2026-09-14T14:00:00.000Z",
+      "stepId": "forget",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "Please forget what I told you about my brother's health. It was not mine to share."
+    },
+    {
+      "assistant": "",
+      "at": "2026-09-14T14:03:00.000Z",
+      "stepId": "plain",
+      "terminalEvent": "response_failed",
+      "type": "say",
+      "user": "Anyway. It rained all night here and the gutters are overflowing."
+    }
+  ],
+  "usage": {
+    "inputTokens": null,
+    "outputTokens": null,
+    "paidCostUsdMicros": null,
+    "providerRequests": 3
+  }
+}

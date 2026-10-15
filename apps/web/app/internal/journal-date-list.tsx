@@ -14,6 +14,7 @@ const STATE_LABEL: Readonly<Record<JournalDateEntry["state"], string>> = {
   current: "已发布",
   outdated: "过期",
   updating: "更新中",
+  generation_failed: "生成失败",
   no_journal: "交流内容较少，无日记",
 };
 
@@ -22,6 +23,7 @@ const JOURNAL_DATE_STATES = [
   "outdated",
   "updating",
   "no_journal",
+  "generation_failed",
 ] as const;
 
 type Payload = Readonly<{

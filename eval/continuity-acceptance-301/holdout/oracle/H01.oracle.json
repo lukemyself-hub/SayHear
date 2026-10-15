@@ -1,0 +1,68 @@
+{
+  "schemaVersion": "continuity-acceptance-oracle:v1",
+  "id": "H01",
+  "title": "H01 Holdout: recap of a crowded day whose last subject is very long, then one detail",
+  "capability": "Holdout counterpart of the full-day recap class. Yesterday held five separate subjects from breakfast time to midnight; the final one is a long late-night deliberation that dwarfs the others, the day is longer than one history page and exceeds both the default background budget and the history review budget. Asked to go over yesterday, all five subjects are covered and today's similar timetable problem is kept out; asked a follow-up, the cause of the work problem is given from the original words.",
+  "spec": ["#301 R1", "#301 R2", "ADR-0152"],
+  "ownerTickets": ["#314", "#315"],
+  "language": "zh",
+  "fixture": { "version": "final-1", "sha256": "d40c53fd23474b9924850cf09934248df8ba28f57526caebed73c62e9e7359c0" },
+  "preconditions": [
+    { "description": "yesterday spans more than one history page of 50 messages", "localDate": "2026-11-18", "minMessages": 51 },
+    { "description": "yesterday's user text alone exceeds the 2,000-token default background budget", "localDate": "2026-11-18", "minUserContextTokens": 2001 },
+    { "description": "yesterday's text exceeds the 3,000-token history review budget, so the late long subject cannot fit with the early ones", "localDate": "2026-11-18", "minUserContextTokens": 3001 }
+  ],
+  "facts": {
+    "allowed": [
+      { "id": "a-duplicate", "statement": "The clash came from one physics teacher's lesson-swap form having been entered twice: once by the teacher in the system and once more by a clerk typing in the paper copy.", "sources": ["sched-3:user"] },
+      { "id": "a-colleague", "statement": "A colleague from the records room brought out that week's paper swap forms and checked the signatures, which showed there was only a single original.", "sources": ["sched-4:user"] },
+      { "id": "a-withdrawal", "statement": "A request to withdraw the duplicate record was handed in and awaits the academic director's signature.", "sources": ["sched-5:user"] }
+    ],
+    "forbidden": [
+      { "id": "f-today-lab", "statement": "Presenting the first-year chemistry laboratory clash with the ninth-grade booking as part of yesterday; it was raised today and has not been looked into.", "sources": ["today-1:user"] },
+      { "id": "f-gym-cause", "statement": "Giving the sports hall rotation sheet as the cause; that was checked and found in order.", "sources": ["sched-2:user"] },
+      { "id": "f-decided", "statement": "Stating that the person decided to enrol in, or to give up on, the part-time master's course; she explicitly decided nothing.", "sources": ["grad-28:user", "grad-30:user"] }
+    ]
+  },
+  "topics": [
+    { "id": "t-car", "statement": "A car that would not start in the morning because of a worn-out battery, jump-started by a neighbour, with a replacement booked for the weekend.", "sources": ["car-1:user", "car-3:user", "car-4:user"] },
+    { "id": "t-timetable", "statement": "A morning at school tracking down why one class had two subjects in the same period.", "sources": ["sched-1:user", "sched-3:user"] },
+    { "id": "t-hearing-aid", "statement": "A midday call from the person's younger brother about getting their father hearing aids, and who would pay.", "sources": ["bro-1:user", "bro-3:user", "bro-4:user"] },
+    { "id": "t-exam", "statement": "The son's piano grade examination, which went badly after a slip.", "sources": ["exam-1:user", "exam-2:user", "exam-3:user"] },
+    { "id": "t-study", "statement": "A long late-evening weighing of whether to take a part-time postgraduate degree.", "sources": ["grad-1:user", "grad-5:user", "grad-28:user"] }
+  ],
+  "time": [
+    { "id": "tm-yesterday", "statement": "All five subjects were expressed on 18 November local time; the laboratory clash and the remark about fetching water belong to 19 November.", "sources": ["car-1:user", "grad-30:user", "today-1:user"] }
+  ],
+  "expectedBehavior": [
+    "Name all five subjects; the short early ones must not be dropped because the last one was long.",
+    "Keep yesterday and today apart.",
+    "For the follow-up, give the doubly entered swap form and how it was confirmed, from the original words."
+  ],
+  "failureSignals": [
+    "An early subject (the car, the hearing aids, the piano examination) is missing from what reaches the Provider or from the recap.",
+    "Today's laboratory clash is told as yesterday's.",
+    "The follow-up names a cause that was ruled out or never said."
+  ],
+  "sourceEligibility": [
+    { "source": "car-1:user", "eligibility": "allowed", "reason": "Yesterday's original expression." },
+    { "source": "sched-1:user", "eligibility": "allowed", "reason": "Yesterday's original expression." },
+    { "source": "sched-3:user", "eligibility": "allowed", "reason": "Yesterday's original expression; carries the asked-for detail." },
+    { "source": "sched-4:user", "eligibility": "allowed", "reason": "Yesterday's original expression; carries the asked-for detail." },
+    { "source": "bro-1:user", "eligibility": "allowed", "reason": "Yesterday's original expression." },
+    { "source": "exam-1:user", "eligibility": "allowed", "reason": "Yesterday's original expression." },
+    { "source": "grad-1:user", "eligibility": "allowed", "reason": "Yesterday's original expression." }
+  ],
+  "criteria": [
+    { "id": "O-commit", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The recap request streams and commits.", "check": { "type": "turn_committed", "step": "recap" } },
+    { "id": "O-detail-commit", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The follow-up streams and commits.", "check": { "type": "turn_committed", "step": "detail" } },
+    { "id": "O-ownership", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The first and last of yesterday's messages are filed under 18 November and today's under 19 November.", "check": { "type": "session_ownership", "expect": [ { "source": "car-1:user", "logicalDate": "2026-11-18" }, { "source": "grad-30:user", "logicalDate": "2026-11-18" }, { "source": "today-1:user", "logicalDate": "2026-11-19" } ] } },
+    { "id": "O-day-read", "kind": "objective", "modes": ["real-model"], "description": "Yesterday is read as a non-empty day.", "check": { "type": "date_coverage", "step": "recap", "localDate": "2026-11-18", "expect": { "empty": false } } },
+    { "id": "O-topic-coverage", "kind": "objective", "modes": ["real-model"], "owner": "#315", "description": "At least the opening message of each of the five subjects reaches the Provider for the recap.", "check": { "type": "outbound_includes", "step": "recap", "sources": ["car-1:user", "sched-1:user", "bro-1:user", "exam-1:user", "grad-1:user"] } },
+    { "id": "O-detail-source", "kind": "objective", "modes": ["real-model"], "owner": "#315", "description": "The messages holding the asked-for work detail reach the Provider for the follow-up.", "check": { "type": "outbound_includes", "step": "detail", "sources": ["sched-3:user", "sched-4:user"] } },
+    { "id": "O-recap-deadline", "kind": "objective", "modes": ["real-model"], "owner": "#319", "description": "The recap meets the response-time contract: first meaningful text within 3 seconds, complete and committed within 10.", "check": { "type": "deadline", "step": "recap", "firstVisibleTextMaxMs": 3000, "completeMaxMs": 10000 } },
+    { "id": "O-detail-deadline", "kind": "objective", "modes": ["real-model"], "owner": "#319", "description": "The follow-up meets the response-time contract.", "check": { "type": "deadline", "step": "detail", "firstVisibleTextMaxMs": 3000, "completeMaxMs": 10000 } },
+    { "id": "S-topics", "kind": "semantic", "owner": "#315", "description": "The recap covers all five subjects, on the right day, without today's problem.", "step": "recap", "required": ["t-car", "t-timetable", "t-hearing-aid", "t-exam", "t-study", "tm-yesterday"], "forbidden": ["f-today-lab", "f-decided"] },
+    { "id": "S-detail", "kind": "semantic", "owner": "#315", "description": "The follow-up answer is grounded in the original words.", "step": "detail", "required": ["a-duplicate", "a-colleague"], "forbidden": ["f-today-lab", "f-gym-cause"] }
+  ]
+}

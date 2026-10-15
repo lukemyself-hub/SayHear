@@ -1,0 +1,61 @@
+{
+  "schemaVersion": "continuity-acceptance-oracle:v1",
+  "id": "H11",
+  "title": "H11 Holdout: a day with nothing on it, an older stretch, and the first mention",
+  "capability": "Holdout counterpart of the nothing-there versus not-found class. Situations that must not collapse into one sentence. A date that was fully read and holds nothing may be called empty. An older stretch outside the default background must be read before anything is said about it. 'We never talked about that' and 'that was the first time' are claims that need a verified, complete read of the relevant range. None of this is said in system vocabulary.",
+  "spec": ["#301 R11", "#301 R2", "ADR-0152"],
+  "ownerTickets": ["#315", "#320"],
+  "language": "zh",
+  "fixture": { "version": "final-1", "sha256": "a9172e11797d24d0250329c53fa06033dede10be762e4cad5e1c6c2656863ef0" },
+  "facts": {
+    "allowed": [
+      { "id": "a-nothing-friday", "statement": "Nothing was said on Friday 23 October. (The days either side hold a vaccination visit and a first attempt at ear drops; offering them is optional.)", "sources": ["late-a:user", "late-b:user"] },
+      { "id": "a-adoption", "statement": "At the start of October the person brought home a three-month-old ginger kitten from a shelter; it hid under the sofa for two days while emptying its bowl overnight.", "sources": ["early-a:user", "early-b:user"] }
+    ],
+    "forbidden": [
+      { "id": "f-false-empty", "statement": "Saying nothing was discussed in early October, or that there is no record of it.", "sources": ["early-a:user", "early-b:user"] },
+      { "id": "f-false-first", "statement": "Naming the vaccination visit on 22 October as the first mention of the animal.", "sources": ["late-a:user"] },
+      { "id": "f-internals", "statement": "Mentioning windows, context, retrieval, databases, limits or similar mechanisms as the reason.", "sources": [] },
+      { "id": "f-invent-friday", "statement": "Supplying content for the Friday on which nothing was said.", "sources": [] }
+    ]
+  },
+  "topics": [],
+  "time": [
+    { "id": "tm-first-mention", "statement": "The earliest mention of the animal in the retained history is 2 October, the day it was brought home.", "sources": ["early-a:user"] }
+  ],
+  "expectedBehavior": [
+    "Friday: say plainly that nothing was said that day, optionally offering the days either side.",
+    "Early October: retell the adoption and the hiding, or, if only part can be reached, say which part is remembered and that the rest is hazy.",
+    "First mention: 2 October, and only after the earlier range has actually been checked.",
+    "If a lookup fails: say it cannot be recalled right now, without blaming a mechanism and without claiming there is nothing."
+  ],
+  "failureSignals": [
+    "'No record' is claimed for a range that was never read.",
+    "A within-window date is given as the first mention.",
+    "All three situations get the same 'we have not talked about that' reply.",
+    "Internal mechanism words appear."
+  ],
+  "sourceEligibility": [
+    { "source": "early-a:user", "eligibility": "allowed", "reason": "Retained original expression outside the default background." },
+    { "source": "early-b:user", "eligibility": "allowed", "reason": "Retained original expression outside the default background." },
+    { "source": "late-a:user", "eligibility": "allowed", "reason": "Recent original expression, the day before the empty one." },
+    { "source": "late-b:user", "eligibility": "allowed", "reason": "Recent original expression, the day after the empty one." }
+  ],
+  "criteria": [
+    { "id": "O-commit", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The first question streams and commits.", "check": { "type": "turn_committed", "step": "empty" } },
+    { "id": "O-commit-older", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The second question streams and commits.", "check": { "type": "turn_committed", "step": "older" } },
+    { "id": "O-commit-earliest", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The third question streams and commits.", "check": { "type": "turn_committed", "step": "earliest" } },
+    { "id": "O-empty-verified", "kind": "objective", "modes": ["real-model"], "owner": "#315", "description": "The asked-about Friday is recorded as read completely and empty.", "check": { "type": "date_coverage", "step": "empty", "localDate": "2026-10-23", "expect": { "empty": true, "readBounded": false } } },
+    { "id": "O-neighbours", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The days either side of the empty one reach the Provider.", "check": { "type": "outbound_includes", "step": "empty", "sources": ["late-a:user", "late-b:user"] } },
+    { "id": "O-range-read", "kind": "objective", "modes": ["real-model"], "owner": "#315", "description": "The older stretch is actually read and found non-empty.", "check": { "type": "date_coverage", "step": "older", "localDate": "2026-10-02", "expect": { "empty": false } } },
+    { "id": "O-older-source", "kind": "objective", "modes": ["real-model"], "owner": "#315", "description": "Both early-October messages reach the Provider.", "check": { "type": "outbound_includes", "step": "older", "sources": ["early-a:user", "early-b:user"] } },
+    { "id": "O-earliest-source", "kind": "objective", "modes": ["real-model"], "owner": "#315", "description": "The true first mention reaches the Provider before a 'first time' is named.", "check": { "type": "outbound_includes", "step": "earliest", "sources": ["early-a:user"] } },
+    { "id": "O-read-failure", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "A failed or partial history read for a single turn.", "check": { "type": "unsupported", "capability": "inject a history read failure or a partial read for a single turn" } },
+    { "id": "O-empty-deadline", "kind": "objective", "modes": ["real-model"], "owner": "#319", "description": "Response-time contract for the first question.", "check": { "type": "deadline", "step": "empty", "firstVisibleTextMaxMs": 3000, "completeMaxMs": 10000 } },
+    { "id": "O-older-deadline", "kind": "objective", "modes": ["real-model"], "owner": "#319", "description": "Response-time contract for the second question.", "check": { "type": "deadline", "step": "older", "firstVisibleTextMaxMs": 3000, "completeMaxMs": 10000 } },
+    { "id": "O-earliest-deadline", "kind": "objective", "modes": ["real-model"], "owner": "#319", "description": "Response-time contract for the third question.", "check": { "type": "deadline", "step": "earliest", "firstVisibleTextMaxMs": 3000, "completeMaxMs": 10000 } },
+    { "id": "S-empty", "kind": "semantic", "owner": "#315", "description": "A verified empty day is called empty, without invention.", "step": "empty", "required": ["a-nothing-friday"], "forbidden": ["f-invent-friday", "f-internals"] },
+    { "id": "S-older", "kind": "semantic", "owner": "#315", "description": "The older stretch is retold, not declared empty.", "step": "older", "required": ["a-adoption"], "forbidden": ["f-false-empty", "f-internals"] },
+    { "id": "S-earliest", "kind": "semantic", "owner": "#315", "description": "The first mention is the true earliest one.", "step": "earliest", "required": ["tm-first-mention"], "forbidden": ["f-false-first", "f-internals"] }
+  ]
+}

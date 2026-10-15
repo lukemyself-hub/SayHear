@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
-import { chmod, copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, copyFile, lstat, mkdir, readFile, writeFile } from "node:fs/promises";
 import { promisify } from "node:util";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -26,7 +26,23 @@ if (process.platform !== "darwin" || process.arch !== "arm64") {
 
 await mkdir(outputDirectory, { recursive: true, mode: 0o700 });
 const sourceCommit = (await execFileAsync("git", ["rev-parse", "HEAD"], { cwd: repositoryRoot })).stdout.trim();
-const buildInfo = { sourceCommit, nodeVersion: process.version, esbuildVersion };
+// sourceCommit alone cannot prove this delivery: the v5 source is uncommitted
+// work on top of that commit, so the identity also fingerprints the tree.
+const sourceDiff = (await execFileAsync("git", ["diff", "HEAD", "--binary"], { cwd: repositoryRoot, maxBuffer: 64_000_000 })).stdout;
+const untrackedCandidates = (await execFileAsync("git", ["ls-files", "--others", "--exclude-standard"], { cwd: repositoryRoot })).stdout
+  .split("\n").filter(Boolean)
+  .filter((path) => !path.startsWith(".audit/") && !path.startsWith("artifacts/") && !path.split("/").includes("node_modules"))
+  .sort();
+const sourceHasher = createHash("sha256").update(sourceDiff);
+for (const path of untrackedCandidates) {
+  // Only regular files enter the fingerprint. Symlinks and directories cannot
+  // be read and are not source inputs.
+  const info = await lstat(resolve(repositoryRoot, path)).catch(() => null);
+  if (!info?.isFile()) continue;
+  sourceHasher.update(path).update("\0").update(await readFile(resolve(repositoryRoot, path)));
+}
+const sourceDiffSha256 = sourceHasher.digest("hex");
+const buildInfo = { sourceCommit, sourceDiffSha256, nodeVersion: process.version, esbuildVersion };
 const bundle = await build({
   metafile: true,
   define: { __PR_APPROVAL_BUILD_INFO__: JSON.stringify(buildInfo) },
@@ -65,7 +81,7 @@ for (const launcher of launchers) {
 const digest = async (path) =>
   createHash("sha256").update(await readFile(path)).digest("hex");
 const manifest = {
-  version: 2,
+  version: 3,
   ...buildInfo,
   inputs: await Promise.all(Object.keys(bundle.metafile.inputs).filter((path) => !path.startsWith("<")).sort().map(async (path) => ({ path, sha256: await digest(resolve(repositoryRoot, path)) }))),
   clangVersion: (await execFileAsync("/usr/bin/clang", ["--version"])).stdout.split("\n")[0],

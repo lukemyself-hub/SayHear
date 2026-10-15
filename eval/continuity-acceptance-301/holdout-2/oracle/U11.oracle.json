@@ -1,0 +1,314 @@
+{
+  "schemaVersion": "continuity-acceptance-oracle:v1",
+  "id": "U11",
+  "title": "U11 Unseen: a day with nothing in it, an older stretch, and the first mention, where local and universal dates differ",
+  "capability": "Second, unseen counterpart of the nothing-there versus not-found class, in a timezone far behind universal time. A date that was fully read and holds nothing may be called empty, even though a message sent the evening before carries that date in universal time. An older stretch outside the default background must be read before anything is said about it. 'That was the first time' needs a verified read of the relevant range. None of this is said in system vocabulary.",
+  "spec": [
+    "#301 R11",
+    "#301 R2",
+    "ADR-0152"
+  ],
+  "ownerTickets": [
+    "#315",
+    "#320"
+  ],
+  "language": "en",
+  "fixture": {
+    "version": "final-2",
+    "sha256": "b8f72baa62dec23c93983cfbf925456d46a5f0ec725b6ef1ecccd2f6e5bf4393"
+  },
+  "facts": {
+    "allowed": [
+      {
+        "id": "a-nothing-friday",
+        "statement": "Nothing was said on Friday 25 September. (The days either side hold a first full look through the hive and a first sting; offering them is optional.)",
+        "sources": [
+          "late-a:user",
+          "late-b:user"
+        ]
+      },
+      {
+        "id": "a-early",
+        "statement": "At the start of September the person collected a first small colony from another keeper and drove it home on the back seat, then moved it into its permanent hive two days later, so nervous that the face net went on the wrong way round.",
+        "sources": [
+          "early-a:user",
+          "early-b:user"
+        ]
+      }
+    ],
+    "forbidden": [
+      {
+        "id": "f-false-empty",
+        "statement": "Saying nothing was discussed in early September, or that there is no record of it.",
+        "sources": [
+          "early-a:user",
+          "early-b:user"
+        ]
+      },
+      {
+        "id": "f-false-first",
+        "statement": "Naming the hive check of 24 September as the first mention of the insects.",
+        "sources": [
+          "late-a:user"
+        ]
+      },
+      {
+        "id": "f-internals",
+        "statement": "Mentioning windows, context, retrieval, databases, limits or similar mechanisms as the reason.",
+        "sources": []
+      },
+      {
+        "id": "f-friday-content",
+        "statement": "Supplying content for the Friday on which nothing was said, including placing the hive check or the sighting of the queen on that Friday; that was said on Thursday evening local time.",
+        "sources": [
+          "late-a:user"
+        ]
+      }
+    ]
+  },
+  "topics": [],
+  "time": [
+    {
+      "id": "tm-first-mention",
+      "statement": "The earliest mention of the insects in the retained history is Thursday 3 September local time, the day the colony was collected.",
+      "sources": [
+        "early-a:user"
+      ]
+    }
+  ],
+  "expectedBehavior": [
+    "For the Friday: say nothing was said that day; the Thursday and Saturday may be offered.",
+    "For early September: retell collecting the colony and moving it into the hive.",
+    "For the first mention: 3 September."
+  ],
+  "failureSignals": [
+    "The Thursday evening message is presented as Friday's.",
+    "Early September is declared empty without being read.",
+    "A later message is named as the first mention."
+  ],
+  "sourceEligibility": [
+    {
+      "source": "early-a:user",
+      "eligibility": "allowed",
+      "reason": "Retained original expression; the true first mention."
+    },
+    {
+      "source": "early-b:user",
+      "eligibility": "allowed",
+      "reason": "Retained original expression from the older stretch."
+    },
+    {
+      "source": "late-a:user",
+      "eligibility": "allowed",
+      "reason": "Recent original expression, the evening before the empty day."
+    },
+    {
+      "source": "late-b:user",
+      "eligibility": "allowed",
+      "reason": "Recent original expression, the day after the empty day."
+    }
+  ],
+  "criteria": [
+    {
+      "id": "O-commit",
+      "kind": "objective",
+      "modes": [
+        "deterministic",
+        "real-model"
+      ],
+      "description": "The first question streams and commits.",
+      "check": {
+        "type": "turn_committed",
+        "step": "empty"
+      }
+    },
+    {
+      "id": "O-commit-older",
+      "kind": "objective",
+      "modes": [
+        "deterministic",
+        "real-model"
+      ],
+      "description": "The second question streams and commits.",
+      "check": {
+        "type": "turn_committed",
+        "step": "older"
+      }
+    },
+    {
+      "id": "O-commit-earliest",
+      "kind": "objective",
+      "modes": [
+        "deterministic",
+        "real-model"
+      ],
+      "description": "The third question streams and commits.",
+      "check": {
+        "type": "turn_committed",
+        "step": "earliest"
+      }
+    },
+    {
+      "id": "O-ownership",
+      "kind": "objective",
+      "modes": [
+        "deterministic",
+        "real-model"
+      ],
+      "description": "The Thursday evening message is filed under Thursday, although its universal date is Friday.",
+      "check": {
+        "type": "session_ownership",
+        "expect": [
+          {
+            "source": "late-a:user",
+            "logicalDate": "2026-09-24"
+          },
+          {
+            "source": "early-a:user",
+            "logicalDate": "2026-09-03"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-empty-verified",
+      "kind": "objective",
+      "modes": [
+        "real-model"
+      ],
+      "owner": "#315",
+      "description": "The asked-about Friday is recorded as read completely and empty.",
+      "check": {
+        "type": "date_coverage",
+        "step": "empty",
+        "localDate": "2026-09-25",
+        "expect": {
+          "empty": true,
+          "readBounded": false
+        }
+      }
+    },
+    {
+      "id": "O-neighbours",
+      "kind": "objective",
+      "modes": [
+        "deterministic",
+        "real-model"
+      ],
+      "description": "The days either side of the empty one reach the Provider.",
+      "check": {
+        "type": "outbound_includes",
+        "step": "empty",
+        "sources": [
+          "late-a:user",
+          "late-b:user"
+        ]
+      }
+    },
+    {
+      "id": "O-range-read",
+      "kind": "objective",
+      "modes": [
+        "real-model"
+      ],
+      "owner": "#315",
+      "description": "The older stretch is actually read and found non-empty.",
+      "check": {
+        "type": "date_coverage",
+        "step": "older",
+        "localDate": "2026-09-03",
+        "expect": {
+          "empty": false
+        }
+      }
+    },
+    {
+      "id": "O-older-source",
+      "kind": "objective",
+      "modes": [
+        "real-model"
+      ],
+      "owner": "#315",
+      "description": "Both early-September messages reach the Provider.",
+      "check": {
+        "type": "outbound_includes",
+        "step": "older",
+        "sources": [
+          "early-a:user",
+          "early-b:user"
+        ]
+      }
+    },
+    {
+      "id": "O-earliest-source",
+      "kind": "objective",
+      "modes": [
+        "real-model"
+      ],
+      "owner": "#315",
+      "description": "The true first mention reaches the Provider before a 'first time' is named.",
+      "check": {
+        "type": "outbound_includes",
+        "step": "earliest",
+        "sources": [
+          "early-a:user"
+        ]
+      }
+    },
+    {
+      "id": "O-read-failure",
+      "kind": "objective",
+      "modes": [
+        "deterministic",
+        "real-model"
+      ],
+      "description": "A failed or partial history read for a single turn.",
+      "check": {
+        "type": "unsupported",
+        "capability": "inject a history read failure or a partial read for a single turn"
+      }
+    },
+    {
+      "id": "S-empty",
+      "kind": "semantic",
+      "owner": "#315",
+      "description": "A verified empty day is called empty, without invention.",
+      "step": "empty",
+      "required": [
+        "a-nothing-friday"
+      ],
+      "forbidden": [
+        "f-friday-content",
+        "f-internals"
+      ]
+    },
+    {
+      "id": "S-older",
+      "kind": "semantic",
+      "owner": "#315",
+      "description": "The older stretch is retold, not declared empty.",
+      "step": "older",
+      "required": [
+        "a-early"
+      ],
+      "forbidden": [
+        "f-false-empty",
+        "f-internals"
+      ]
+    },
+    {
+      "id": "S-earliest",
+      "kind": "semantic",
+      "owner": "#315",
+      "description": "The first mention is the true earliest one.",
+      "step": "earliest",
+      "required": [
+        "tm-first-mention"
+      ],
+      "forbidden": [
+        "f-false-first",
+        "f-internals"
+      ]
+    }
+  ]
+}

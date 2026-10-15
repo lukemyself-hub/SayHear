@@ -63,6 +63,12 @@ async function runEligibilityStep(input: {
     recoveryGate: composition.recoveryGate,
   });
   if (eligibility.outcome === "eligible_queued") {
+    const leaseToken = randomUUID();
+    if (!await composition.journalWorkflowRecovery.claim(input, leaseToken)) {
+      return { ...eligibility, outcome: "retryable_failed" as const };
+    }
+    const settle = async (outcome: "published" | "needs_review" | "retryable_failed", reason: string | null) =>
+      composition.journalWorkflowRecovery.settle(input, leaseToken, outcome, reason);
     const evidenceAttemptId = randomUUID();
     let evidence: Awaited<ReturnType<typeof composition.evidenceService.freeze>>;
     try {
@@ -78,21 +84,24 @@ async function runEligibilityStep(input: {
       // failed command without logging Provider bodies or arbitrary errors.
       console.error(
         "[journal-eligibility] evidence freeze threw:",
-        { workflowCommandId: input.workflowCommandId, category: "evidence_provider_failed" },
+        { workflowCommandId: input.workflowCommandId, category: databaseFailure(error) ? "database_failure" : "evidence_provider_failed" },
       );
-      await composition.journalRepository.recordWorkflowOutcome?.({
-        dailySessionId: input.subjectId, userId: null, sourceRevision: input.sourceRevision,
-        expectedDataEpoch: input.expectedDataEpoch, workflowCommandId: input.workflowCommandId,
-        outcome: "retryable_failed", reason: "evidence_provider_failed",
-      });
+      await settle("retryable_failed", databaseFailure(error) ? "database_failure" : "evidence_provider_failed");
+      if (databaseFailure(error)) throw error;
       return { ...eligibility, outcome: "retryable_failed" as const };
     }
     if (evidence.outcome !== "frozen") {
-      await composition.journalRepository.recordWorkflowOutcome?.({
-        dailySessionId: input.subjectId, userId: null, sourceRevision: input.sourceRevision,
-        expectedDataEpoch: input.expectedDataEpoch, workflowCommandId: input.workflowCommandId,
-        outcome: evidence.outcome === "not_eligible" ? "needs_review" : "retryable_failed", reason: evidence.outcome,
-      });
+      // `not_eligible` is not a generation failure: the expression gate
+      // reports a day with nothing eligible to build from as an
+      // insufficient-expression day through `date_outcome`. It keeps its
+      // terminal `needs_review` row and never becomes a failed generation with
+      // a retry action. Every other non-frozen outcome is transient, so it
+      // settles `retryable_failed` and lets the bounded three-attempt budget
+      // converge on the one terminal shape the recovery scan, date list,
+      // notice and retry action all accept (`needs_review` +
+      // `retry_budget_exhausted`). A fresh terminal row carrying a raw reason
+      // would be invisible to every one of them.
+      await settle(evidence.outcome === "not_eligible" ? "needs_review" : "retryable_failed", evidence.outcome);
       return { ...eligibility, outcome: evidence.outcome === "not_eligible" ? "needs_review" as const : "retryable_failed" as const };
     }
     if (evidence.outcome === "frozen") {
@@ -100,7 +109,7 @@ async function runEligibilityStep(input: {
       try {
         journal = await runAutomaticJournal({
           service: composition.journalService,
-          command: { ...input, policyVersion: composition.journalGenerationPolicyVersion },
+          command: { ...input, leaseToken, policyVersion: composition.journalGenerationPolicyVersion },
           generationCommandId: `${input.workflowCommandId}:journal`,
           modelRunAttemptId: randomUUID(),
         });
@@ -109,26 +118,19 @@ async function runEligibilityStep(input: {
           "[journal-eligibility] journal generation threw:",
           { workflowCommandId: input.workflowCommandId, category: "journal_generation_failed" },
         );
-        await composition.journalRepository.recordWorkflowOutcome?.({
-          dailySessionId: input.subjectId, userId: evidence.snapshot.userId, sourceRevision: input.sourceRevision,
-          expectedDataEpoch: input.expectedDataEpoch, workflowCommandId: input.workflowCommandId,
-          outcome: "retryable_failed", reason: "journal_generation_failed",
-        });
+        await settle("retryable_failed", databaseFailure(error) ? "database_failure" : "journal_generation_failed");
+        if (databaseFailure(error)) throw error;
         return { ...eligibility, outcome: "retryable_failed" as const };
       }
       if (journal.outcome !== "published") {
-        await composition.journalRepository.recordWorkflowOutcome?.({
-          dailySessionId: input.subjectId, userId: evidence.snapshot.userId, sourceRevision: input.sourceRevision,
-          expectedDataEpoch: input.expectedDataEpoch, workflowCommandId: input.workflowCommandId,
-          outcome: journal.outcome === "validation_failed" ? "needs_review" : "retryable_failed", reason: journal.reason ?? journal.outcome,
-        });
-        return { ...eligibility, outcome: journal.outcome === "validation_failed" ? "needs_review" as const : "retryable_failed" as const };
+        // No non-published Journal outcome is terminal on its own. Each one is
+        // transient under the bounded budget, so every failure settles
+        // `retryable_failed` and converges on `needs_review` +
+        // `retry_budget_exhausted` once the three attempts are spent.
+        await settle("retryable_failed", journal.reason ?? journal.outcome);
+        return { ...eligibility, outcome: "retryable_failed" as const };
       }
-      await composition.journalRepository.recordWorkflowOutcome?.({
-        dailySessionId: input.subjectId, userId: evidence.snapshot.userId, sourceRevision: input.sourceRevision,
-        expectedDataEpoch: input.expectedDataEpoch, workflowCommandId: input.workflowCommandId,
-        outcome: "published", reason: null,
-      });
+      await settle("published", null);
       return { ...eligibility, outcome: "published" as const };
     }
   }
@@ -154,3 +156,10 @@ export function createJournalEligibilityWorkflowStarter(): WorkflowStarter {
     return { workflowReceiptId: run.runId };
   };
 }
+
+function databaseFailure(error: unknown): boolean {
+  if (typeof error !== "object" || error === null || !("code" in error) || typeof error.code !== "string") return false;
+  return ["40P01", "40001", "55P03", "57014", "ECONNRESET", "ECONNREFUSED"].includes(error.code) || error.code.startsWith("08");
+}
+
+runEligibilityStep.maxRetries = 2;

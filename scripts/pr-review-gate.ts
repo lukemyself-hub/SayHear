@@ -4,16 +4,134 @@ import { readFile } from "node:fs/promises";
 import {
   DAILY_RELEASE_VALIDATION_REQUEST_VERSION,
   FIXED_PR_CI_BASELINE,
+  RELEASE_STAGES,
   planDailyReleaseValidation,
+  preMergeDeferralFor,
+  type PreMergeDeferralPolicy,
+  type PreMergeImpossibleReason,
   type ReleaseImpactKind,
 } from "./daily-release-validation.ts";
 
-export const PR_REVIEW_GATE_POLICY_VERSION = "sayhear-pr-review-gate:v4";
-export const PR_REVIEW_REPORT_VERSION = "sayhear-pr-review-report:v3";
+// Historical installed policies remain readable for signed completion receipts.
+// They do not acquire the head-bound review semantics introduced by v10.
+export const PR_REVIEW_GATE_POLICY_VERSION = "sayhear-pr-review-gate:v11";
+export const PR_REVIEW_GATE_V10_POLICY_VERSION = "sayhear-pr-review-gate:v10";
+export const PR_REVIEW_GATE_V9_POLICY_VERSION = "sayhear-pr-review-gate:v9";
+export const PR_REVIEW_GATE_LEGACY_POLICY_VERSION = "sayhear-pr-review-gate:v4";
+export const PR_REVIEW_GATE_PREVIOUS_POLICY_VERSION = "sayhear-pr-review-gate:v5";
+export const PR_REVIEW_GATE_INSTALLED_POLICY_VERSION = "sayhear-pr-review-gate:v8";
+export const PR_REVIEW_GATE_OLDER_INSTALLED_POLICY_VERSION = "sayhear-pr-review-gate:v6";
+export const PR_REVIEW_REPORT_VERSION = "sayhear-pr-review-report:v4";
 export const SAYHEAR_REPOSITORY_ID = 1312399710;
 export const SAYHEAR_REPOSITORY_NAME = "lukemyself-hub/SayHear";
 export const PR_VALIDATE_WORKFLOW_PATH = ".github/workflows/pr-validate.yml";
 export const PR_REVIEW_GATE_CHECK_NAME = "pr-review-gate";
+
+/**
+ * How a PR proves it integrates with the current main before it merges.
+ *
+ * `up-to-date-base` requires the PR base to equal main.
+ *
+ * `merge-queue` is reserved for historical configuration parsing. Activation
+ * is refused until every required check has a trusted merge-group producer.
+ *
+ * `serialized-merge` separates reusable head review from current-main evidence.
+ * The controller issues the merge under an App-only main writer guard.
+ */
+export type IntegrationMode =
+  | "up-to-date-base"
+  | "merge-queue"
+  | "serialized-merge";
+
+/**
+ * Who is allowed to update the default branch.
+ *
+ * `serialized-merge` merges a stale-base PR against whatever main is at the
+ * moment of the merge request. GitHub recomputes that merge then, so the merge
+ * itself cannot miss intervening commits, but nothing stops another writer from
+ * advancing main in the window between the controller's last read and its merge
+ * request. The repository therefore has to prove that the only actor able to
+ * update main is the approval App.
+ *
+ * Only rulesets that restrict updates to the default branch count. A ruleset
+ * that happens to name the App but governs tags, another branch, or a different
+ * rule cannot satisfy this, and anything unreadable fails closed.
+ */
+export type MainWriterGuard = Readonly<{
+  /** False when the rulesets could not be read; the guard then never passes. */
+  readable: boolean;
+  /** At least one active ruleset restricts updates to the default branch. */
+  restrictsDefaultBranchUpdates: boolean;
+  /** Actor ids that may bypass such a restriction, deduplicated and sorted. */
+  bypassActorIds: readonly number[];
+  /**
+   * False when GitHub withheld the bypass set from this App.
+   *
+   * The list endpoint behind `/rulesets` answers with summaries only, and the
+   * detail endpoint returns `bypass_actors` only to a caller holding
+   * administration access. A missing set is therefore unproven, never empty:
+   * the guard refuses to read "I could not see the bypass actors" as "there are
+   * none".
+   */
+  bypassActorsEnumerated: boolean;
+  /**
+   * GitHub's own `current_user_can_bypass` for the approval App on the
+   * restricting ruleset, kept for the audit trail. Null when GitHub omits it.
+   */
+  appBypassMode: string | null;
+  /** Ids of the rulesets that contributed, for the audit trail. */
+  rulesetIds: readonly number[];
+  /**
+   * Content fingerprints of the covering update rulesets, one per ruleset.
+   *
+   * Optional so snapshots built before fingerprints existed still parse. The
+   * attested path below requires it: without a live fingerprint there is
+   * nothing to compare the attestation against.
+   */
+  rulesetFingerprints?: readonly RulesetFingerprint[];
+}>;
+
+export type RulesetFingerprint = Readonly<{
+  /** The GitHub ruleset id this fingerprint was taken from. */
+  id: number;
+  /** Lowercase hex SHA-256 over the canonical ruleset detail. */
+  fingerprint: string;
+}>;
+
+/** Schema version of the root-owned main writer attestation record. */
+export const MAIN_WRITER_ATTESTATION_VERSION = 1;
+
+/**
+ * A root-owned operator attestation that a ruleset nobody can enumerate
+ * still restricts the default branch to the approval App alone.
+ *
+ * GitHub withholds `bypass_actors` from the approval App token, so live
+ * enumeration can stay impossible forever with the settings exactly right.
+ * The attestation records what the operator saw in the repository settings UI
+ * at a moment when the ruleset fingerprint below was current. Later runs
+ * re-read the live fingerprint: equality means nobody touched the ruleset
+ * since, so the asserted bypass list still holds. Any touch fails closed.
+ *
+ * There is deliberately no expiry field. Re-attestation is driven by change,
+ * not by time: editing the ruleset is rare and intentional, and the live
+ * fingerprint catches it on the next run. A calendar deadline would only buy
+ * recurring maintenance while adding no detection the fingerprint does not
+ * already provide.
+ */
+export type MainWriterAttestation = Readonly<{
+  /** Schema version of this attestation record. */
+  version: typeof MAIN_WRITER_ATTESTATION_VERSION;
+  /** The GitHub ruleset id the operator attested. */
+  rulesetId: number;
+  /** The live ruleset fingerprint at attestation time. */
+  rulesetFingerprint: string;
+  /** The bypass actor ids the operator saw in the settings UI. */
+  assertedBypassAppIds: readonly number[];
+  /** ISO-8601 timestamp of the attestation ceremony. */
+  attestedAt: string;
+  /** Who performed the attestation. Free text for the audit trail. */
+  attestedBy: string;
+}>;
 
 const FIXED_BASELINE_IDS = new Set<string>(FIXED_PR_CI_BASELINE);
 const ENUMERATED_OFFLINE_EVALUATION_PATHS = new Set([
@@ -73,11 +191,58 @@ const REQUIRED_REVIEW_FLAGS = [
 
 export type GateOutcome =
   | "merge_candidate"
+  | "merge_candidate_with_deferrals"
   | "request_changes"
   | "awaiting_verification"
   | "human_decision";
 
 export type GateReason = Readonly<{ code: string; message: string }>;
+
+export type TrustedWorkflowSource = Readonly<{
+  repositoryId: number;
+  appId: number;
+  event: string;
+  workflowPath: string;
+  workflowBlobSha: string;
+  runId: number;
+  runAttempt: number;
+  headSha: string;
+  baseSha: string;
+  mergeSha: string;
+}>;
+
+export type WorkflowEvidenceRecord = Readonly<{
+  kind?: "workflow-evidence";
+  checkId: string;
+  result:
+    | "passed"
+    | "failed"
+    | "skipped"
+    | "cancelled"
+    | "neutral"
+    | "planned"
+    | "out-of-scope";
+  source: TrustedWorkflowSource;
+  artifactSha256: string | null;
+  coveredCheckIds: readonly string[];
+}>;
+
+/**
+ * A required check that structurally cannot produce evidence before merge. It
+ * carries the release-registry policy verbatim and no workflow identity: the
+ * gate re-reads the policy from the registry, so PR text cannot widen the set.
+ */
+export type PreMergeDeferralRecord = Readonly<{
+  kind: "deferred-before-merge";
+  checkId: string;
+  policy: PreMergeDeferralPolicy;
+}>;
+
+export type DeferredEvidence = Readonly<{
+  checkId: string;
+  reason: PreMergeImpossibleReason;
+  followUp: PreMergeDeferralPolicy["followUp"];
+}>;
 
 export type PrReviewIssue = Readonly<{
   number: number;
@@ -114,6 +279,11 @@ export type PrReviewGateInput = Readonly<{
     headSha: string;
     baseSha: string;
     mergeSha: string | null;
+    /**
+     * GitHub's mergeability for this PR against the current base tip.
+     */
+    mergeable?: boolean | null;
+    mergeableState?: string | null;
     baseRef: string;
     headRepositoryId: number | null;
     authorId: number;
@@ -121,6 +291,12 @@ export type PrReviewGateInput = Readonly<{
     linkedIssueNumbers: readonly number[];
     keepOpenIssueNumbers: readonly number[];
     issueClosureAmbiguous: boolean;
+    /**
+     * Issues GitHub itself would close when this PR merges (Development links,
+     * closing keywords in the body, or closing keywords in commit messages).
+     * `null` means the controller could not establish the set.
+     */
+    closingIssueNumbers: readonly number[] | null;
     changedFiles: readonly Readonly<{
       path: string;
       status: "added" | "modified" | "removed" | "renamed" | "copied";
@@ -135,6 +311,9 @@ export type PrReviewGateInput = Readonly<{
     baseSha: string;
     policyVersion: string;
     requirementDigest: string;
+    // Derived by the controller from authenticated base changes, never a model
+    // assertion. Omission cannot authorize reuse across main advancement.
+    baseReviewSafe?: boolean;
     decision:
       | "approve"
       | "request_changes"
@@ -159,31 +338,7 @@ export type PrReviewGateInput = Readonly<{
       evidence: string;
     }>[];
   }>;
-  evidence: readonly Readonly<{
-    checkId: string;
-    result:
-      | "passed"
-      | "failed"
-      | "skipped"
-      | "cancelled"
-      | "neutral"
-      | "planned"
-      | "out-of-scope";
-    source: Readonly<{
-      repositoryId: number;
-      appId: number;
-      event: string;
-      workflowPath: string;
-      workflowBlobSha: string;
-      runId: number;
-      runAttempt: number;
-      headSha: string;
-      baseSha: string;
-      mergeSha: string;
-    }>;
-    artifactSha256: string | null;
-    coveredCheckIds: readonly string[];
-  }>[];
+  evidence: readonly (WorkflowEvidenceRecord | PreMergeDeferralRecord)[];
   branchProtection: Readonly<{
     readable: boolean;
     protected: boolean;
@@ -200,6 +355,36 @@ export type PrReviewGateInput = Readonly<{
     anotherApprovalInFlight: boolean;
     productionMergeAuthorized: boolean | null;
     ordinaryMergeTriggersProduction: boolean | null;
+    /**
+     * How integration against the current main is proven before a merge.
+     * `up-to-date-base` is the historical rule: the PR base must equal main.
+     * The mode comes from the trusted controller config, never from PR text.
+     * An absent value keeps `up-to-date-base`, so a runtime that predates this
+     * field can never relax a check by omission.
+     */
+    integrationMode?: IntegrationMode;
+    /**
+     * Whether the repository actually serves a merge queue for the default
+     * branch. `null` and an absent value both mean it could not be read.
+     * Merge-queue mode fails closed unless this is exactly `true`, so a
+     * deployment that turns the mode on without enabling the queue never
+     * reaches a merge.
+     */
+    mergeQueueAvailable?: boolean | null;
+    /**
+     * Who can update the default branch. `serialized-merge` issues the merge
+     * itself against whatever main is at that moment, so it needs this guard to
+     * prove that no other writer can advance main first. An absent or `null`
+     * value means the guard was not verified, and `serialized-merge` fails
+     * closed rather than assuming the default branch is App-only.
+     */
+    mainWriterGuard?: MainWriterGuard | null;
+    /**
+     * Root-owned operator attestation backing the guard when GitHub hides
+     * the bypass set. Absent or `null` means no attestation was presented;
+     * `serialized-merge` then needs live enumeration to pass.
+     */
+    mainWriterAttestation?: MainWriterAttestation | null;
   }>;
 }>;
 
@@ -213,6 +398,7 @@ export type TrustedPrReviewPolicy = Readonly<{
   validateWorkflowBlobSha: string | null;
   humanApprovedPaths?: readonly string[];
   humanApprovedNoRuntimeImpact?: boolean;
+  humanApprovalChannel?: "browser" | "legacy-root" | "unknown";
 }>;
 
 export type PrReviewGateReport = Readonly<{
@@ -229,6 +415,7 @@ export type PrReviewGateReport = Readonly<{
   reasons: readonly GateReason[];
   requiredEvidenceIds: readonly string[];
   acceptedEvidenceIds: readonly string[];
+  deferredEvidence: readonly DeferredEvidence[];
 }>;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -327,11 +514,53 @@ function parseFinding(
   };
 }
 
+function parsePreMergeDeferralPolicy(
+  value: unknown,
+  label: string,
+): PreMergeDeferralPolicy {
+  if (!isRecord(value)) throw new Error(`${label} must be an object.`);
+  const reason = value.reason;
+  if (
+    reason !== "requires-deployed-effective-configuration" &&
+    reason !== "requires-paid-live-provider-calls"
+  ) {
+    throw new Error(`${label}.reason is invalid.`);
+  }
+  const followUp = value.followUp;
+  if (!isRecord(followUp)) {
+    throw new Error(`${label}.followUp must be an object.`);
+  }
+  const stage = RELEASE_STAGES.find((candidate) => candidate === followUp.stage);
+  if (stage === undefined) {
+    throw new Error(`${label}.followUp.stage is invalid.`);
+  }
+  return {
+    reason,
+    followUp: {
+      stage,
+      command: requiredString(followUp.command, `${label}.followUp.command`),
+    },
+  };
+}
+
 function parseEvidence(
   value: unknown,
   index: number,
 ): PrReviewGateInput["evidence"][number] {
   if (!isRecord(value)) throw new Error(`evidence[${index}] must be an object.`);
+  if (value.kind === "deferred-before-merge") {
+    return {
+      kind: "deferred-before-merge",
+      checkId: requiredString(value.checkId, `evidence[${index}].checkId`),
+      policy: parsePreMergeDeferralPolicy(
+        value.policy,
+        `evidence[${index}].policy`,
+      ),
+    };
+  }
+  if (value.kind !== undefined && value.kind !== "workflow-evidence") {
+    throw new Error(`evidence[${index}].kind is invalid.`);
+  }
   const result = value.result;
   const allowedResults = [
     "passed",
@@ -362,7 +591,7 @@ function parseEvidence(
   }
   return {
     checkId: requiredString(value.checkId, `evidence[${index}].checkId`),
-    result: result as PrReviewGateInput["evidence"][number]["result"],
+    result: result as WorkflowEvidenceRecord["result"],
     source: {
       repositoryId: requiredPositiveInteger(
         source.repositoryId,
@@ -396,6 +625,19 @@ function parseEvidence(
       `evidence[${index}].coveredCheckIds`,
     ),
   };
+}
+
+/**
+ * Issue numbers a GitHub closing keyword names in `text`. GitHub matches the
+ * keyword anywhere, including inside "do not close #44", so this is
+ * deliberately broad: a false positive only routes a deferred merge to a human.
+ */
+export function closingKeywordIssueNumbers(text: string): number[] {
+  const numbers = new Set<number>();
+  const pattern =
+    /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b:?\s*(?:#|[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+#|https?:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/issues\/)([1-9]\d{0,8})\b/gi;
+  for (const match of text.matchAll(pattern)) numbers.add(Number(match[1]));
+  return [...numbers].sort((left, right) => left - right);
 }
 
 export function parseIssueClosureExclusions(title: string, body: string): Readonly<{
@@ -606,6 +848,22 @@ export function parsePrReviewGateInput(value: unknown): PrReviewGateInput {
       ? null
       : requiredSha(pullRequest.mergeSha, "pullRequest.mergeSha");
 
+  const mergeable = pullRequest.mergeable === null || pullRequest.mergeable === undefined
+    ? null
+    : requiredBoolean(pullRequest.mergeable, "pullRequest.mergeable");
+  const mergeableState = pullRequest.mergeableState === null || pullRequest.mergeableState === undefined
+    ? null
+    : requiredString(pullRequest.mergeableState, "pullRequest.mergeableState");
+  const integrationMode = optionalIntegrationMode(runtime.integrationMode);
+  const mergeQueueAvailable =
+    runtime.mergeQueueAvailable === undefined || runtime.mergeQueueAvailable === null
+      ? undefined
+      : requiredBoolean(runtime.mergeQueueAvailable, "runtime.mergeQueueAvailable");
+  const mainWriterGuard = optionalMainWriterGuard(runtime.mainWriterGuard);
+  const mainWriterAttestation = optionalMainWriterAttestation(
+    runtime.mainWriterAttestation,
+  );
+
   const installed = runtime.reviewAppInstalledForRepository;
   if (installed !== null && typeof installed !== "boolean") {
     throw new Error("runtime.reviewAppInstalledForRepository must be boolean or null.");
@@ -657,6 +915,8 @@ export function parsePrReviewGateInput(value: unknown): PrReviewGateInput {
       headSha: requiredSha(pullRequest.headSha, "pullRequest.headSha"),
       baseSha: requiredSha(pullRequest.baseSha, "pullRequest.baseSha"),
       mergeSha,
+      mergeable,
+      mergeableState,
       baseRef: requiredString(pullRequest.baseRef, "pullRequest.baseRef"),
       headRepositoryId:
         pullRequest.headRepositoryId === null
@@ -679,6 +939,14 @@ export function parsePrReviewGateInput(value: unknown): PrReviewGateInput {
       ),
       keepOpenIssueNumbers: parseNumberArrayOrEmpty(pullRequest.keepOpenIssueNumbers, "pullRequest.keepOpenIssueNumbers"),
       issueClosureAmbiguous: requiredBoolean(pullRequest.issueClosureAmbiguous, "pullRequest.issueClosureAmbiguous"),
+      closingIssueNumbers:
+        pullRequest.closingIssueNumbers === undefined ||
+        pullRequest.closingIssueNumbers === null
+          ? null
+          : parseNumberArray(
+              pullRequest.closingIssueNumbers,
+              "pullRequest.closingIssueNumbers",
+            ),
       changedFiles,
     },
     issues: issues.map(parsePrReviewIssue),
@@ -699,6 +967,9 @@ export function parsePrReviewGateInput(value: unknown): PrReviewGateInput {
         review.requirementDigest,
         "review.requirementDigest",
       ),
+      ...(review.baseReviewSafe === undefined ? {} : {
+        baseReviewSafe: requiredBoolean(review.baseReviewSafe, "review.baseReviewSafe"),
+      }),
       decision,
       diffComplete: requiredBoolean(review.diffComplete, "review.diffComplete"),
       reviewerAppId: requiredPositiveInteger(
@@ -737,8 +1008,240 @@ export function parsePrReviewGateInput(value: unknown): PrReviewGateInput {
       ),
       productionMergeAuthorized: productionAuthorized,
       ordinaryMergeTriggersProduction: productionMerge,
+      ...(integrationMode === undefined ? {} : { integrationMode }),
+      ...(mergeQueueAvailable === undefined ? {} : { mergeQueueAvailable }),
+      ...(mainWriterGuard === undefined ? {} : { mainWriterGuard }),
+      ...(mainWriterAttestation === undefined ? {} : { mainWriterAttestation }),
     },
   };
+}
+
+function optionalMainWriterGuard(
+  value: unknown,
+): PrReviewGateInput["runtime"]["mainWriterGuard"] {
+  if (value === undefined || value === null) return undefined;
+  if (!isRecord(value)) throw new Error("runtime.mainWriterGuard must be an object.");
+  const bypassActorIds = parseNumberArrayOrEmpty(
+    value.bypassActorIds,
+    "runtime.mainWriterGuard.bypassActorIds",
+  );
+  const rulesetIds = parseNumberArrayOrEmpty(
+    value.rulesetIds,
+    "runtime.mainWriterGuard.rulesetIds",
+  );
+  return {
+    readable: requiredBoolean(value.readable, "runtime.mainWriterGuard.readable"),
+    restrictsDefaultBranchUpdates: requiredBoolean(
+      value.restrictsDefaultBranchUpdates,
+      "runtime.mainWriterGuard.restrictsDefaultBranchUpdates",
+    ),
+    bypassActorIds,
+    // Required, so a snapshot that forgets to prove the bypass set fails the
+    // parse instead of silently looking like an App-only main.
+    bypassActorsEnumerated: requiredBoolean(
+      value.bypassActorsEnumerated,
+      "runtime.mainWriterGuard.bypassActorsEnumerated",
+    ),
+    appBypassMode: optionalStringOrNull(
+      value.appBypassMode,
+      "runtime.mainWriterGuard.appBypassMode",
+    ),
+    rulesetIds,
+    ...(value.rulesetFingerprints === undefined
+      ? {}
+      : { rulesetFingerprints: parseRulesetFingerprints(value.rulesetFingerprints) }),
+  };
+}
+
+function parseRulesetFingerprints(value: unknown): readonly RulesetFingerprint[] {
+  if (!Array.isArray(value)) {
+    throw new Error("runtime.mainWriterGuard.rulesetFingerprints must be an array.");
+  }
+  return value.map((entry, index) => {
+    const label = `runtime.mainWriterGuard.rulesetFingerprints[${index}]`;
+    if (!isRecord(entry)) throw new Error(`${label} must be an object.`);
+    const fingerprint = entry.fingerprint;
+    if (typeof fingerprint !== "string" || !/^[0-9a-f]{64}$/.test(fingerprint)) {
+      throw new Error(`${label}.fingerprint must be lowercase hex SHA-256.`);
+    }
+    return {
+      id: requiredPositiveInteger(entry.id, `${label}.id`),
+      fingerprint,
+    };
+  });
+}
+
+function optionalMainWriterAttestation(
+  value: unknown,
+): MainWriterAttestation | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (!isRecord(value)) {
+    throw new Error("runtime.mainWriterAttestation must be an object.");
+  }
+  if (value.version !== MAIN_WRITER_ATTESTATION_VERSION) {
+    throw new Error(
+      `runtime.mainWriterAttestation.version must be ${MAIN_WRITER_ATTESTATION_VERSION}.`,
+    );
+  }
+  const asserted = value.assertedBypassAppIds;
+  if (
+    !Array.isArray(asserted) ||
+    asserted.length === 0 ||
+    asserted.some(
+      (actorId) =>
+        typeof actorId !== "number" ||
+        !Number.isSafeInteger(actorId) ||
+        actorId <= 0,
+    )
+  ) {
+    throw new Error(
+      "runtime.mainWriterAttestation.assertedBypassAppIds must be a non-empty array of positive integers.",
+    );
+  }
+  const fingerprint = value.rulesetFingerprint;
+  if (typeof fingerprint !== "string" || !/^[0-9a-f]{64}$/.test(fingerprint)) {
+    throw new Error(
+      "runtime.mainWriterAttestation.rulesetFingerprint must be lowercase hex SHA-256.",
+    );
+  }
+  return {
+    version: MAIN_WRITER_ATTESTATION_VERSION,
+    rulesetId: requiredPositiveInteger(value.rulesetId, "runtime.mainWriterAttestation.rulesetId"),
+    rulesetFingerprint: fingerprint,
+    assertedBypassAppIds: [...asserted as readonly number[]].sort((left, right) => left - right),
+    attestedAt: requiredString(value.attestedAt, "runtime.mainWriterAttestation.attestedAt"),
+    attestedBy: requiredString(value.attestedBy, "runtime.mainWriterAttestation.attestedBy"),
+  };
+}
+
+function optionalStringOrNull(value: unknown, label: string): string | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "string") throw new Error(`${label} must be a string.`);
+  return value;
+}
+
+function optionalIntegrationMode(
+  value: unknown,
+): PrReviewGateInput["runtime"]["integrationMode"] {
+  if (value === undefined || value === null) return undefined;
+  return parseIntegrationMode(value);
+}
+
+/**
+ * The one place an integration mode is accepted. The mode comes from the
+ * root-owned controller config, never from PR text or a comment, and an absent
+ * value keeps the historical `up-to-date-base` rule so nothing relaxes by
+ * omission.
+ */
+export function parseIntegrationMode(value: unknown): IntegrationMode {
+  if (value === undefined || value === null || value === "up-to-date-base") {
+    return "up-to-date-base";
+  }
+  if (value === "merge-queue") return "merge-queue";
+  if (value === "serialized-merge") return "serialized-merge";
+  throw new Error(
+    `integrationMode must be "up-to-date-base", "merge-queue", or "serialized-merge".`,
+  );
+}
+
+/**
+ * The trusted integration mode for this snapshot. An absent value keeps the
+ * historical `up-to-date-base` rule, so nothing relaxes by omission.
+ */
+export function integrationModeOf(
+  input: Pick<PrReviewGateInput, "runtime">,
+): IntegrationMode {
+  return input.runtime.integrationMode ?? "up-to-date-base";
+}
+
+function headBoundApproval(input: Pick<PrReviewGateInput, "runtime">): boolean {
+  return integrationModeOf(input) !== "up-to-date-base";
+}
+
+/**
+ * Why the default-branch writer guard does not hold, or `null` when it does.
+ *
+ * The guard only passes when the repository restricts updates to the default
+ * branch and the single actor allowed to bypass that restriction is this
+ * repository's approval App. Every other outcome -- unreadable rulesets, no
+ * update restriction at all, an extra human or team, or a different App -- is a
+ * reason to stop, because each of them leaves a writer that could move main
+ * between the snapshot and the merge.
+ *
+ * The bypass set has to be enumerated, not merely empty. GitHub hides
+ * `bypass_actors` from callers without administration access, and an empty
+ * unreadable set would otherwise be indistinguishable from a ruleset that
+ * genuinely grants nobody a bypass.
+ *
+ * GitHub also withholds `bypass_actors` from the approval App token itself,
+ * so live enumeration can stay impossible with the settings exactly right.
+ * For that case the guard accepts a root-owned operator attestation instead:
+ * the operator records the bypass list seen in the repository settings UI
+ * together with the live ruleset fingerprint, and later runs re-read the
+ * live fingerprint. Equality means nobody touched the ruleset since, so the
+ * asserted list still holds; any touch fails closed. Attestation never
+ * overrides a readable live set: when GitHub does enumerate, the live list
+ * alone decides.
+ */
+function mainWriterGuardReason(
+  input: Pick<PrReviewGateInput, "runtime">,
+  policy: TrustedPrReviewPolicy,
+): string | null {
+  const guard = input.runtime.mainWriterGuard ?? null;
+  if (guard === null || !guard.readable) return "main_writer_guard_unreadable";
+  if (!guard.restrictsDefaultBranchUpdates) return "main_writer_guard_missing";
+  const approvalAppId = policy.reviewAppId;
+  if (approvalAppId === null) return "main_writer_guard_missing";
+  if (guard.bypassActorsEnumerated) {
+    const bypass = guard.bypassActorIds;
+    if (bypass.length !== 1 || bypass[0] !== approvalAppId) {
+      return "main_writer_guard_bypass_actors";
+    }
+    return null;
+  }
+  return attestedGuardReason(input, approvalAppId);
+}
+
+/**
+ * Why an attested guard does not hold, or `null` when it does.
+ *
+ * The live restriction, target, and update rule are re-verified above, so
+ * only the hidden bypass membership rides on the attestation. Three checks
+ * bind it: the attestation must name exactly the live covering set, every
+ * live fingerprint must equal the attested one, and the asserted bypass must
+ * be exactly the approval App. A ruleset touch of any kind, including a
+ * bypass list edit, changes the live fingerprint and fails closed here.
+ * Attestation covers exactly one ruleset by schema design; a second covering
+ * ruleset fails closed until the operator merges the overlap away.
+ */
+function attestedGuardReason(
+  input: Pick<PrReviewGateInput, "runtime">,
+  approvalAppId: number,
+): string | null {
+  const guard = input.runtime.mainWriterGuard;
+  const attestation = input.runtime.mainWriterAttestation ?? null;
+  if (attestation === null || attestation === undefined) {
+    return "main_writer_guard_bypass_actors_unreadable";
+  }
+  const live = new Map(
+    (guard?.rulesetFingerprints ?? []).map((entry) => [entry.id, entry.fingerprint]),
+  );
+  if (
+    guard === null ||
+    guard === undefined ||
+    live.size !== 1 ||
+    !live.has(attestation.rulesetId)
+  ) {
+    return "main_writer_attestation_ruleset_changed";
+  }
+  if (live.get(attestation.rulesetId) !== attestation.rulesetFingerprint) {
+    return "main_writer_attestation_fingerprint_mismatch";
+  }
+  const asserted = attestation.assertedBypassAppIds;
+  if (asserted.length !== 1 || asserted[0] !== approvalAppId) {
+    return "main_writer_attestation_assertion_mismatch";
+  }
+  return null;
 }
 
 export function requirementDigest(
@@ -787,6 +1290,7 @@ function outcome(
     reasons: [reason],
     requiredEvidenceIds,
     acceptedEvidenceIds,
+    deferredEvidence: [],
   };
 }
 
@@ -817,84 +1321,120 @@ function isTestPath(path: string): boolean {
   );
 }
 
-function requiresHumanReview(input: PrReviewGateInput, policy: TrustedPrReviewPolicy): string | null {
+// One definition of the protected review surface. Both the gate's own decision
+// and the browser challenge frozen by the controller call this function, so the
+// paths Luke approves and the paths the gate demands cannot drift apart.
+export function protectedReviewPaths(
+  changedFiles: PrReviewGateInput["pullRequest"]["changedFiles"],
+  approvedPaths: readonly string[] = [],
+): readonly string[] {
+  const approved = new Set(approvedPaths);
+  return changedFiles.flatMap(({ path }) => {
+    const normalized = path.replaceAll("\\", "/");
+    if (approved.has(normalized)) return [];
+    return HUMAN_REVIEW_PATHS.some((prefix) =>
+      normalized === prefix || normalized.startsWith(prefix) || normalized.startsWith(prefix.replace(/\/$/, "")),
+    ) ? [normalized] : [];
+  });
+}
+
+function requiresHumanReview(input: PrReviewGateInput, policy: TrustedPrReviewPolicy): Readonly<{ code: string; message: string }> | null {
   if (input.pullRequest.externalReviewState === "needs-human") {
-    return "A human review or review thread needs attention.";
+    return { code: "human_review_required", message: "A human review or review thread needs attention." };
   }
   if (
     /\b(?:do not merge|do not auto[- ]merge|not for merge|not to be merged)\b|不要(?:自动)?合入|暂停自动审批/i.test(
       [input.pullRequest.title, input.pullRequest.body, ...input.issues.map((issue) => issue.body)].join("\n"),
     )
   ) {
-    return "The PR or Issue explicitly pauses automatic merging.";
+    return { code: "human_review_required", message: "The PR or Issue explicitly pauses automatic merging." };
   }
+  const unreviewedProtectedPaths = new Set(
+    protectedReviewPaths(input.pullRequest.changedFiles, policy.humanApprovedPaths ?? []),
+  );
+  // The protected-path reason is reported last, never first. It is the only human
+  // reason the browser channel treats as "wait for Luke", so letting it mask a
+  // pause, a triage label, or a dependency would turn a real blocker into a wait
+  // and hide that blocker from the check run.
+  let protectedReason: Readonly<{ code: string; message: string }> | null = null;
   for (const { path, status } of input.pullRequest.changedFiles) {
     const normalized = path.replaceAll("\\", "/");
-    if (
-      !policy.humanApprovedPaths?.includes(normalized) && HUMAN_REVIEW_PATHS.some(
-        (prefix) =>
-          normalized === prefix ||
-          normalized.startsWith(prefix) ||
-          normalized.startsWith(prefix.replace(/\/$/, "")),
-      )
-    ) {
-      return `The change touches protected review or product policy path ${normalized}.`;
+    if (protectedReason === null && unreviewedProtectedPaths.has(normalized)) {
+      protectedReason = {
+        code: policy.humanApprovalChannel === "browser" ? "browser_human_approval_required" : "human_review_required",
+        message: `The change touches protected review or product policy path ${normalized}.`,
+      };
     }
     if (status === "removed" && isTestPath(normalized)) {
-      return `The change removes test file ${normalized}.`;
+      return { code: "human_review_required", message: `The change removes test file ${normalized}.` };
     }
   }
   if (REQUIRED_REVIEW_FLAGS.some((flag) => input.review.riskFlags[flag])) {
-    return "The review identified a product, authorization, privacy, migration, or feature-enable decision.";
+    return { code: "human_review_required", message: "The review identified a product, authorization, privacy, migration, or feature-enable decision." };
   }
   if (
     input.review.capability.newCapabilityEnabled ||
     input.review.capability.majorContractChange ||
     input.review.capability.externalMvpRelease
   ) {
-    return "This change triggers full capability acceptance or a product release decision.";
+    return { code: "human_review_required", message: "This change triggers full capability acceptance or a product release decision." };
   }
   const numbers = input.issues.map((issue) => issue.number);
   const linked = input.pullRequest.linkedIssueNumbers;
   if (numbers.length === 0 || new Set(numbers).size !== numbers.length ||
     new Set(linked).size !== linked.length || numbers.length !== linked.length ||
     linked.some((number) => !numbers.includes(number))) {
-    return "The PR must supply every referenced Issue exactly once.";
+    return { code: "human_review_required", message: "The PR must supply every referenced Issue exactly once." };
   }
-  if (input.pullRequest.state !== "open") return "The PR is closed.";
+  if (input.pullRequest.state !== "open") return { code: "human_review_required", message: "The PR is closed." };
   const exclusions = parseIssueClosureExclusions(input.pullRequest.title, input.pullRequest.body);
   if (input.pullRequest.issueClosureAmbiguous || exclusions.ambiguous ||
     exclusions.keepOpenIssueNumbers.join() !== [...input.pullRequest.keepOpenIssueNumbers].sort((a, b) => a - b).join() ||
     input.pullRequest.keepOpenIssueNumbers.some((number) => !numbers.includes(number))) {
-    return "The PR's keep-open Issue declarations are ambiguous or inconsistent.";
+    return { code: "human_review_required", message: "The PR's keep-open Issue declarations are ambiguous or inconsistent." };
   }
   const deliveryIssues = input.issues.filter((issue) => !input.pullRequest.keepOpenIssueNumbers.includes(issue.number));
   if (!deliveryIssues.some((issue) => issue.state === "open")) {
-    return "All referenced Issues are already closed.";
+    return { code: "human_review_required", message: "All referenced Issues are already closed." };
   }
   for (const issue of input.issues) {
-    if (issue.body.trim().length === 0) return `Issue #${issue.number} has no review requirement.`;
+    if (issue.body.trim().length === 0) return { code: "human_review_required", message: `Issue #${issue.number} has no review requirement.` };
     if (input.pullRequest.keepOpenIssueNumbers.includes(issue.number)) continue;
     if (issue.pause.active || issue.pause.source === "unknown") {
-      return `Issue #${issue.number} is paused or its pause state cannot be trusted.`;
+      return { code: "human_review_required", message: `Issue #${issue.number} is paused or its pause state cannot be trusted.` };
     }
     if (issue.state === "closed") continue;
     if (issue.blockedBy === null || issue.blockedBy.some((number) => !deliveryIssues.some((target) => target.number === number))) {
-      return `Issue #${issue.number} still has blocking dependencies outside this PR.`;
+      return { code: "human_review_required", message: `Issue #${issue.number} still has blocking dependencies outside this PR.` };
     }
     if (issue.labels.some((label) =>
       ["ready-for-human", "needs-info", "needs-triage", "wontfix"].includes(label.toLowerCase()))) {
-      return `Issue #${issue.number} has a triage label that requires a human decision.`;
+      return { code: "human_review_required", message: `Issue #${issue.number} has a triage label that requires a human decision.` };
     }
   }
-  return null;
+  return protectedReason;
+}
+
+function deferralPolicyEquals(
+  candidate: PreMergeDeferralPolicy,
+  registry: PreMergeDeferralPolicy,
+): boolean {
+  return (
+    candidate.reason === registry.reason &&
+    candidate.followUp.stage === registry.followUp.stage &&
+    candidate.followUp.command === registry.followUp.command
+  );
 }
 
 function verifyEvidence(
   input: PrReviewGateInput,
   policy: TrustedPrReviewPolicy,
   requiredIds: readonly string[],
-): { accepted: string[]; blocker: string | null } {
+): {
+  accepted: string[];
+  deferred: DeferredEvidence[];
+  blocker: string | null;
+} {
   const entriesById = new Map<string, PrReviewGateInput["evidence"][number]>();
   const duplicateIds = new Set<string>();
   let evidenceRun: { runId: number; runAttempt: number } | null = null;
@@ -905,17 +1445,45 @@ function verifyEvidence(
   if (duplicateIds.size > 0) {
     return {
       accepted: [],
+      deferred: [],
       blocker: `Evidence contains duplicate check records: ${[...duplicateIds].join(", ")}.`,
     };
   }
 
   const accepted: string[] = [];
+  const deferred: DeferredEvidence[] = [];
   for (const checkId of requiredIds) {
     const evidence = entriesById.get(checkId);
-    if (!evidence) return { accepted, blocker: `Required evidence ${checkId} is missing.` };
+    if (!evidence) {
+      return { accepted, deferred, blocker: `Required evidence ${checkId} is missing.` };
+    }
+    if (evidence.kind === "deferred-before-merge") {
+      const registryPolicy = preMergeDeferralFor(checkId);
+      if (registryPolicy === null) {
+        return {
+          accepted,
+          deferred,
+          blocker: `Required evidence ${checkId} is not a deferrable check and cannot be deferred before merge.`,
+        };
+      }
+      if (!deferralPolicyEquals(evidence.policy, registryPolicy)) {
+        return {
+          accepted,
+          deferred,
+          blocker: `Required evidence ${checkId} has a deferral whose policy does not match the release registry.`,
+        };
+      }
+      deferred.push({
+        checkId,
+        reason: registryPolicy.reason,
+        followUp: registryPolicy.followUp,
+      });
+      continue;
+    }
     if (evidence.result !== "passed") {
       return {
         accepted,
+        deferred,
         blocker: `Required evidence ${checkId} is ${evidence.result}, not passed.`,
       };
     }
@@ -927,11 +1495,13 @@ function verifyEvidence(
       source.workflowPath !== PR_VALIDATE_WORKFLOW_PATH ||
       source.workflowBlobSha !== policy.validateWorkflowBlobSha ||
       source.headSha !== input.pullRequest.headSha ||
-      source.baseSha !== input.pullRequest.baseSha ||
+      source.baseSha !== (integrationModeOf(input) === "serialized-merge"
+        ? input.repository.defaultBranchSha : input.pullRequest.baseSha) ||
       source.mergeSha !== input.pullRequest.mergeSha
     ) {
       return {
         accepted,
+        deferred,
         blocker: `Required evidence ${checkId} does not match the trusted workflow and current PR snapshot.`,
       };
     }
@@ -942,6 +1512,7 @@ function verifyEvidence(
     ) {
       return {
         accepted,
+        deferred,
         blocker: `Required evidence ${checkId} comes from a different workflow run or attempt.`,
       };
     }
@@ -952,12 +1523,13 @@ function verifyEvidence(
     ) {
       return {
         accepted,
+        deferred,
         blocker: `Targeted evidence ${checkId} is missing its verified test artifact entry.`,
       };
     }
     accepted.push(checkId);
   }
-  return { accepted, blocker: null };
+  return { accepted, deferred, blocker: null };
 }
 
 export function evaluatePrReviewGate(
@@ -988,11 +1560,20 @@ export function evaluatePrReviewGate(
     input.review.repositoryId !== input.repository.id ||
     input.review.pullRequestNumber !== input.pullRequest.number ||
     input.review.headSha !== input.pullRequest.headSha ||
-    input.review.baseSha !== input.pullRequest.baseSha
+    (integrationModeOf(input) !== "serialized-merge" &&
+      input.review.baseSha !== input.pullRequest.baseSha)
   ) {
     return outcome(input, "awaiting_verification", {
       code: "stale_review",
       message: "The review report does not match the current repository, PR, head, and base.",
+    });
+  }
+  if (integrationModeOf(input) === "serialized-merge" &&
+      input.review.baseSha !== input.repository.defaultBranchSha &&
+      input.review.baseReviewSafe !== true) {
+    return outcome(input, "awaiting_verification", {
+      code: "stale_base_review_risk",
+      message: "Main changed after this review and its effect on the reviewed code has not been cleared.",
     });
   }
   if (
@@ -1019,8 +1600,8 @@ export function evaluatePrReviewGate(
   const humanReason = requiresHumanReview(input, policy);
   if (humanReason) {
     return outcome(input, "human_decision", {
-      code: "human_review_required",
-      message: humanReason,
+      code: humanReason.code,
+      message: humanReason.message,
     });
   }
   if (
@@ -1033,7 +1614,31 @@ export function evaluatePrReviewGate(
       message: "The PR is Draft, targets a different branch, or comes from another repository.",
     });
   }
-  if (
+  if (headBoundApproval(input)) {
+    // The exact clean/behind state is enforced by mergeActionFor because
+    // this check run is itself a required check: it stays `failure` until the
+    // merge candidate is reached, which keeps GitHub reporting `blocked` for
+    // a healthy PR even after the App review lands.
+    if (input.pullRequest.mergeable === false) {
+      return outcome(input, "awaiting_verification", {
+        code: "pull_request_conflict",
+        message: "The PR conflicts with the current main and requires a fix.",
+      });
+    }
+    if (input.pullRequest.mergeable !== true) {
+      return outcome(input, "awaiting_verification", {
+        code: "mergeability_unknown",
+        message:
+          "GitHub has not reported whether the PR can merge into the current main.",
+      });
+    }
+    if (input.pullRequest.mergeSha === null) {
+      return outcome(input, "awaiting_verification", {
+        code: "base_or_merge_ref_changed",
+        message: "The PR merge ref for the current main is not available.",
+      });
+    }
+  } else if (
     input.pullRequest.baseSha !== input.repository.defaultBranchSha ||
     input.pullRequest.mergeSha === null
   ) {
@@ -1151,14 +1756,74 @@ export function evaluatePrReviewGate(
       message: "The current main branch protection could not be read.",
     });
   }
+  // Merge-queue integration replaces the up-to-date-base rule with a queue that
+  // builds and tests the merged result, so the queue itself has to exist. A
+  // deployment that turns the mode on before the repository serves a queue for
+  // main stops here instead of merging against a base nobody validated.
+  if (
+    integrationModeOf(input) === "merge-queue" &&
+    input.runtime.mergeQueueAvailable !== true
+  ) {
+    return outcome(input, "human_decision", {
+      code: "merge_queue_unavailable",
+      message:
+        "Merge-queue integration is configured, but main does not enforce a merge queue.",
+    });
+  }
+  if (integrationModeOf(input) === "merge-queue") {
+    return outcome(input, "human_decision", {
+      code: "merge_queue_not_supported",
+      message: "Native queue integration lacks a trusted gate producer for merge-group commits and cannot be activated.",
+    });
+  }
+  // Serialized-merge lets the controller merge a PR whose head is behind main,
+  // so GitHub must stop requiring an up-to-date branch. Leaving it on would
+  // stall every stale-base merge with no visible reason.
+  if (
+    integrationModeOf(input) === "serialized-merge" &&
+    protection.requiresUpToDate
+  ) {
+    return outcome(input, "human_decision", {
+      code: "requires_up_to_date_still_enabled",
+      message:
+        "Serialized-merge integration is configured, but main still requires branches to be up to date before merging.",
+    });
+  }
+  // Whenever a ruleset restricts who can update main, the guard must prove
+  // the restriction is App-only, in every integration mode. Protection
+  // readability only means the rules parsed; a hidden bypass actor could
+  // otherwise advance main outside this controller while every rule below
+  // still looks green. Serialized-merge always needs the proof because it
+  // merges behind-main heads against a moving target; other modes need it
+  // only once such a ruleset exists. Repositories without one keep the exact
+  // historical behavior.
+  if (
+    integrationModeOf(input) === "serialized-merge" ||
+    input.runtime.mainWriterGuard?.restrictsDefaultBranchUpdates === true
+  ) {
+    const guard = mainWriterGuardReason(input, policy);
+    if (guard !== null) {
+      return outcome(input, "human_decision", {
+        code: guard,
+        message:
+          "Main can only be updated through a restriction that is not exclusively held by the approval App, or that could not be verified.",
+      });
+    }
+  }
   if (
     !protection.protected ||
     protection.branch !== policy.defaultBranch ||
-    !protection.requiresUpToDate ||
+    (integrationModeOf(input) === "up-to-date-base" && !protection.requiresUpToDate) ||
     !protection.dismissesStaleReviews ||
     !protection.enforcesAdmins ||
     protection.requiredApprovingReviews !== 1 ||
-    protection.bypassActorIds.length > 0 ||
+    // The approval App has to be able to merge, so it may legitimately appear as
+    // a ruleset bypass actor. Any *other* bypass actor is a human or a second
+    // App that could move main outside this controller.
+    (integrationModeOf(input) !== "serialized-merge" &&
+      protection.bypassActorIds.some(
+        (actorId) => actorId !== policy.reviewAppId,
+      )) ||
     !hasExactRequiredChecks(
       protection,
       policy.actionsAppId,
@@ -1185,17 +1850,6 @@ export function evaluatePrReviewGate(
       message: "Ordinary merges trigger production deployment, but that effect is not authorized.",
     });
   }
-  if (
-    input.pullRequest.changedFiles.some(({ path }) =>
-      /^packages\/data\/migrations(?:-purge-marker)?\//i.test(path),
-    )
-  ) {
-    return outcome(input, "awaiting_verification", {
-      code: "migration_compatibility_evidence_required",
-      message: "A migration needs verified old-schema upgrade and compatibility evidence.",
-    });
-  }
-
   const plan = planDailyReleaseValidation({
     version: DAILY_RELEASE_VALIDATION_REQUEST_VERSION,
     change: {
@@ -1247,6 +1901,52 @@ export function evaluatePrReviewGate(
     );
   }
 
+  const deferred = verification.deferred;
+  if (deferred.length > 0) {
+    if (integrationModeOf(input) === "serialized-merge") {
+      return outcome(input, "human_decision", {
+        code: "serialized_deferred_merge_not_supported",
+        message: "Serialized integration requires all pre-merge checks to pass before an immediate guarded merge.",
+      }, uniqueRequiredIds, verification.accepted);
+    }
+    if (policy.humanApprovalChannel === "browser") {
+      return outcome(
+        input,
+        "human_decision",
+        {
+          code: "browser_deferred_merge_requires_human",
+          message:
+            "Browser approval permits only an immediate merge of the reviewed head. Deferred pre-merge checks require a maintainer decision.",
+        },
+        uniqueRequiredIds,
+        verification.accepted,
+      );
+    }
+    const closing = new Set([
+      ...closingKeywordIssueNumbers(
+        `${input.pullRequest.title}\n${input.pullRequest.body}`,
+      ),
+      ...(input.pullRequest.closingIssueNumbers ?? []),
+    ]);
+    if (input.pullRequest.closingIssueNumbers === null || closing.size > 0) {
+      return outcome(
+        input,
+        "human_decision",
+        {
+          code: "deferred_merge_would_close_issues",
+          message:
+            input.pullRequest.closingIssueNumbers === null
+              ? "Pre-merge checks are deferred, and the Issues GitHub would close on merge could not be read."
+              : `Pre-merge checks are deferred, but GitHub would close ${[...closing]
+                  .sort((left, right) => left - right)
+                  .map((number) => `#${number}`)
+                  .join(", ")} on merge. Remove the closing keywords and Development links so the Issues stay open.`,
+        },
+        uniqueRequiredIds,
+        verification.accepted,
+      );
+    }
+  }
   return {
     version: PR_REVIEW_REPORT_VERSION,
     mode: "read-only",
@@ -1257,15 +1957,27 @@ export function evaluatePrReviewGate(
     baseSha: input.pullRequest.baseSha,
     mergeSha: input.pullRequest.mergeSha,
     requirementDigest: requirementDigest(input.issues, input.pullRequest),
-    outcome: "merge_candidate",
+    outcome:
+      deferred.length > 0 ? "merge_candidate_with_deferrals" : "merge_candidate",
     reasons: [
-      {
-        code: "all_required_evidence_verified",
-        message: "The snapshot satisfies the configured read-only merge candidate policy.",
-      },
+      deferred.length > 0
+        ? {
+            code: "pre_merge_checks_deferred",
+            message: deferred
+              .map(
+                (entry) =>
+                  `${entry.checkId} was not run before merge; runs at ${entry.followUp.stage}: ${entry.followUp.command}`,
+              )
+              .join("; "),
+          }
+        : {
+            code: "all_required_evidence_verified",
+            message: "The snapshot satisfies the configured read-only merge candidate policy.",
+          },
     ],
     requiredEvidenceIds: uniqueRequiredIds,
     acceptedEvidenceIds: verification.accepted,
+    deferredEvidence: deferred,
   };
 }
 

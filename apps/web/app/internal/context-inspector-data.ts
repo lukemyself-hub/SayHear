@@ -1,7 +1,9 @@
 import type {
   CompiledContextSectionKey,
   ContextPolicyVersions,
+  HistoryRecallInspection,
   RecentContextInspection,
+  TurnInspection,
   RetrievalCandidateInspection,
   RetrievalRunManifest,
 } from "@sayhear/application";
@@ -80,6 +82,7 @@ export type ContextInspectorReferencedEvent = Readonly<{
   section:
     | "committed_raw_events"
     | "current_user_input"
+    | "history_recall_context"
     | "recent_conversation_context";
   selectionOrder: number | null;
   selectionReason: string | null;
@@ -105,9 +108,16 @@ export type ContextInspectorPayload = Readonly<{
       totalTokens: number;
     }>;
   generationCommandId: string;
+  /** Which stage this command ran (decision, history_answer, ...). */
+  generationStage?: string;
+  harnessPolicyVersion?: string;
+  /** Set when this command is either end of a controlled history review. */
+  historyRecall?: HistoryRecallInspection | null;
   model: string;
   provider: string;
   providerPolicyVersion: string;
+  /** The whole Turn this command belongs to. */
+  turn?: TurnInspection | null;
   retrievalCandidates: readonly RetrievalCandidateInspection[];
 }>;
 
@@ -270,10 +280,20 @@ export function sectionVersionLabel(
         referenceValue(section.reference, ":closure:", ":dialogue:") ??
         "daily-session"
       );
+    case "time_context":
+      return "context-time:v1";
     case "action_finalization_receipt":
       return /^receipt:\d+$/.test(section.reference)
         ? section.reference
         : "receipt";
+    case "history_recall_receipt":
+      // Issue #314: the frozen review result names its policy identity.
+      return (
+        section.reference.match(/"policyVersion":"([^"]+)"/)?.[1] ??
+        "history-recall:unavailable"
+      );
+    case "history_recall_context":
+      return "history-recall-revisions";
     case "committed_raw_events":
       return "event-revisions";
     case "current_user_input":

@@ -1,0 +1,51 @@
+{
+  "caseId": "H10",
+  "findings": [
+    {
+      "criterionId": "S-supplement",
+      "itemId": "a-companions",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-supplement",
+      "itemId": "f-whole-ride",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-supplement",
+      "itemId": "f-technical-talk",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-switch",
+      "itemId": "a-repair-today",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-switch",
+      "itemId": "f-stale-continuation",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-switch",
+      "itemId": "f-technical-talk",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    }
+  ],
+  "reviewer": "agent:<name> | human:<name>",
+  "rubricVersion": "continuity-rubric:v1",
+  "runId": "run-f491e675-fdaa-4b52-a930-f0d7fbce6a37",
+  "schemaVersion": "continuity-acceptance-review:v1"
+}

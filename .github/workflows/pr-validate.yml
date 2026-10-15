@@ -5,15 +5,24 @@ name: PR Validate
 # no `paths` / `paths-ignore` filter: a path filter would let a change to source,
 # a check script, or this workflow itself skip the run.
 on:
+  # The App requests a fresh current-main integration using a reserved PR label.
+  # All label additions run Validate to avoid a skipped required check replacing
+  # a real validation result or cancelling its run.
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
+  # The merge queue validates the merged result on `gh-readonly-queue/main/...`
+  # before it lands on main. Without this trigger the required `validate` check
+  # never reports on the merge-group ref, so a queue entry would wait forever.
+  merge_group:
 
 # Unprivileged event: no repository secret is exposed to code under review.
 permissions:
   contents: read
 
-# One run per pull request; a superseded run is pointless work.
+# One run per pull request, and one per merge-group ref: a superseded run is
+# pointless work, and a merge-group run must not cancel a PR run (or vice versa).
 concurrency:
-  group: pr-validate-${{ github.event.pull_request.number }}
+  group: pr-validate-${{ github.event.pull_request.number || github.event.merge_group.head_sha }}
   cancel-in-progress: true
 
 jobs:
@@ -81,6 +90,32 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.sha }}
+
+      - name: Record validated checkout identity
+        env:
+          PR_VALIDATE_EVENT: ${{ github.event_name }}
+          PR_VALIDATE_NUMBER: ${{ github.event.pull_request.number || '' }}
+          PR_VALIDATE_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
+          PR_VALIDATE_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
+        run: |
+          node --input-type=module -e '
+            import { execFileSync } from "node:child_process";
+            import { mkdirSync, writeFileSync } from "node:fs";
+            mkdirSync("artifacts", { recursive: true });
+            const number = process.env.PR_VALIDATE_NUMBER;
+            const identity = {
+              event: process.env.PR_VALIDATE_EVENT,
+              pullRequestNumber: number ? Number(number) : null,
+              headSha: process.env.PR_VALIDATE_HEAD_SHA || "0".repeat(40),
+              baseSha: process.env.PR_VALIDATE_BASE_SHA || "0".repeat(40),
+              checkoutSha: execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim().toLowerCase(),
+              parentShas: execFileSync("git", ["show", "-s", "--format=%P", "HEAD"], { encoding: "utf8" }).trim().toLowerCase().split(" "),
+              runId: Number(process.env.GITHUB_RUN_ID),
+              runAttempt: Number(process.env.GITHUB_RUN_ATTEMPT),
+            };
+            writeFileSync("artifacts/pr-validate-source.json", `${JSON.stringify(identity)}\n`);
+          '
 
       - uses: pnpm/action-setup@v4
 
@@ -118,7 +153,7 @@ jobs:
         if: ${{ !cancelled() && steps.install_dependencies.outcome == 'success' && steps.verify_test_databases.outcome == 'success' }}
         run: pnpm test:ci
 
-      # Asserts the expected 41 system suites (the `expectedSystemSuiteCount`
+      # Asserts the expected 54 system suites (the `expectedSystemSuiteCount`
       # constant in scripts/ci/system-suite-execution.ts; a test fails if this
       # comment drifts from it) actually executed with no skipped test, so an
       # environment-caused skip cannot read as a pass.
@@ -152,12 +187,12 @@ jobs:
         if: ${{ !cancelled() && steps.install_dependencies.outcome == 'success' }}
         run: pnpm build
 
-      # The JSON report is the one artifact worth keeping: it names each failing
-      # suite. Everything else stays in the step log for on-demand reading.
       - name: Upload the vitest report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
-          name: vitest-report-${{ github.event.pull_request.number }}
-          path: artifacts/vitest-report.json
+          name: vitest-report-${{ github.event.pull_request.number || github.event.merge_group.head_sha }}
+          path: |
+            artifacts/vitest-report.json
+            artifacts/pr-validate-source.json
           if-no-files-found: warn

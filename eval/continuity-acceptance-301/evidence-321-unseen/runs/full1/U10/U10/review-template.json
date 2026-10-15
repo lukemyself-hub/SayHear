@@ -1,0 +1,51 @@
+{
+  "caseId": "U10",
+  "findings": [
+    {
+      "criterionId": "S-supplement",
+      "itemId": "a-companions",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-supplement",
+      "itemId": "f-whole-hike",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-supplement",
+      "itemId": "f-technical-talk",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-switch",
+      "itemId": "a-parking-today",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-switch",
+      "itemId": "f-stale-continuation",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-switch",
+      "itemId": "f-technical-talk",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    }
+  ],
+  "reviewer": "agent:<name> | human:<name>",
+  "rubricVersion": "continuity-rubric:v1",
+  "runId": "run-7cacff81-eff9-433b-85d3-6901cdb759c4",
+  "schemaVersion": "continuity-acceptance-review:v1"
+}

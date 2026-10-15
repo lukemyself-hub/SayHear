@@ -275,6 +275,17 @@ Core Flow 1B 默认使用 LiveKit Cloud Agents 的托管 Agent deployment。
 - 删除列分阶段；
 - 每次迁移包含 rollback 或 forward-fix 方案；
 - 对 Memory / Journal 认识状态变化做显式数据迁移。
+- **G1 冻结 schema 合同**：已接受的 G1 release manifest 冻结一个精确的迁移前缀；此后的迁移必须登记为扩展
+  （`packages/application/src/schema-extension.ts`），CI 守卫 `pnpm check:schema-extensions` 对受保护关系只允许加可空列或建索引。
+  目前唯一的例外是 0071 对 `generation_commands.generation_stage` CHECK 的一次替换，边界见
+  [ADR-0094](../adr/0094-conversation-agent-stages-use-separate-generation-commands.md) 的 History Answer 修订。
+  `generation_commands.latest_input_fence_version`（0080）是无 CHECK 的版本文本列而不是 `freshness_policy` 的新取值，原因见
+  [ADR-0083](../adr/0083-generation-commands-use-versioned-freshness-policies.md) 的 #319 修订。
+- **迁移编号可以跳号**：并行票预先划分号段以避免重号，未用完的号不补（例如 0072 → 0075 → 0080，其间的 0073–0074、0076–0079 是
+  预留未用，不是缺失）。runner 按完整文件名字典序执行。
+- **回滚应用版本的前置条件（History Answer）**：回滚到不含历史分支的应用版本之前，必须先关闭历史治理并把未结算的 History Answer
+  命令排空到 0（`POST /api/internal/operator/history-recall {action:"disable"}`，响应与 `GET` 均返回 `historyAnswers.unsettled`）。
+  旧版本的陈旧扫描会把这类命令当作普通 Decision 重跑；规则与理由见 ADR-0093、ADR-0094 的 SPEC #301 评审修订。这是 T09 #322 的发布前置。
 
 ### 23.2 ID 与 Namespace 演进
 

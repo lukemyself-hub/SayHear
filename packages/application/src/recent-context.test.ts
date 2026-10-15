@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import {
   asCompiledContextId,
   asConversationEventRevisionId,
@@ -13,6 +14,8 @@ import {
   createContextCompiler,
   LEGACY_CONTEXT_COMPILER_VERSION,
   RECENT_CONTEXT_COMPILER_VERSION,
+  RECENT_CONTEXT_TIME_COMPILER_VERSION,
+  TIME_AWARE_CONTEXT_COMPILER_VERSION,
   type ContextCompilerRepository,
   type ContextPolicyVersions,
   type ContextSourceSnapshot,
@@ -1078,19 +1081,24 @@ describe("Context Compiler — recent-source freeze/replay (#293)", () => {
   function createCompilerWithRecent(
     items: readonly RecentContextSourceItem[],
     extraEvents: ContextSourceSnapshot["events"] = [],
+    options: Readonly<{
+      compilerVersion?: string;
+      sourceOverrides?: Partial<ContextSourceSnapshot>;
+    }> = {},
   ) {
     let saved:
       | Parameters<ContextCompilerRepository["saveCompiledContext"]>[0]
       | undefined;
     const compiler = createContextCompiler({
       clock: () => new Date("2026-08-14T09:00:00.000Z"),
-      compilerVersion: "context-compiler:v1",
+      compilerVersion:
+        options.compilerVersion ?? TIME_AWARE_CONTEXT_COMPILER_VERSION,
       contentHmacSecret: "recent-context-integrity-secret",
       rawEventTokenBudget: 4_000,
       recentContext: { policy: POLICY, source: sourcePort(items) },
       repository: {
         async loadContextSource() {
-          return buildSource(extraEvents);
+          return { ...buildSource(extraEvents), ...options.sourceOverrides };
         },
         async saveCompiledContext(input) {
           saved = input;
@@ -1123,7 +1131,7 @@ describe("Context Compiler — recent-source freeze/replay (#293)", () => {
         occurredAt: "2026-08-12T18:00:00.000Z",
         revisionId: 0x601,
         sequence: 4,
-        text: "yesterday",
+        text: "I wrote this yesterday.",
       }),
     ]);
     await compiler.compile({ generationCommandId, interactionTurnId, userId });
@@ -1153,7 +1161,203 @@ describe("Context Compiler — recent-source freeze/replay (#293)", () => {
       recentRevisionId,
       currentInputRevisionId,
     ]);
-    expect(payload.instructions).not.toContain("yesterday");
+    expect(payload.instructions).not.toContain("I wrote this yesterday.");
+  });
+
+  it("sends the current and per-message time anchors through the time-aware Context version", async () => {
+    const currentAt = new Date("2026-11-01T09:30:00.000Z");
+    const sameSessionLateNight = {
+      actor: "user" as const,
+      expressedAt: "2026-11-01T06:55:00.000Z",
+      expressionTimezone: "America/Los_Angeles",
+      expressionTimezoneSource: "request" as const,
+      locale: "en-US",
+      revisionId: rev(0x602),
+      sequence: 7,
+      text: "I went to bed late.",
+    };
+    const sameSessionBeforeClockChange = {
+      actor: "assistant" as const,
+      expressedAt: "2026-11-01T08:30:00.000Z",
+      expressionTimezone: "America/Los_Angeles",
+      expressionTimezoneSource: "request" as const,
+      locale: "en-US",
+      revisionId: rev(0x603),
+      sequence: 8,
+      text: "You said it was 1:30.",
+    };
+    const currentInput = {
+      actor: "user" as const,
+      expressedAt: currentAt.toISOString(),
+      expressionTimezone: "America/Los_Angeles",
+      expressionTimezoneSource: "request" as const,
+      locale: "en-US",
+      revisionId: currentInputRevisionId,
+      sequence: 9,
+      text: "What did I say yesterday?",
+    };
+    const { compiler, saved } = createCompilerWithRecent(
+      [
+        item({
+          dailySessionId: earlierSessionId,
+          expressedAt: "2026-10-31T14:30:00.000Z",
+          expressionTimezone: "Asia/Shanghai",
+          expressionTimezoneSource: "request",
+          revisionId: 0x601,
+          sequence: 4,
+          text: "I visited the garden yesterday.",
+        }),
+      ],
+      [],
+      {
+        compilerVersion: TIME_AWARE_CONTEXT_COMPILER_VERSION,
+        sourceOverrides: {
+          commandCreatedAt: currentAt,
+          events: [sameSessionLateNight, sameSessionBeforeClockChange, currentInput],
+          requestTimezone: "America/Los_Angeles",
+        },
+      },
+    );
+    await compiler.compile({ generationCommandId, interactionTurnId, userId });
+    const manifest = saved();
+    if (!manifest) throw new Error("The test manifest was not captured.");
+
+    const timeSection = manifest.sections.find(
+      (section) => section.key === "time_context",
+    );
+    expect(timeSection).toBeDefined();
+    const payload = compiler.renderPermittedPayload({
+      ...manifest,
+      generationStage: "decision",
+    });
+
+    // The same input compiled at the integration baseline (84adc42, before
+    // the SPEC #301 review fixes, numbered Times table) still replays byte for
+    // byte: a Context frozen before a release is sent as it was compiled.
+    const baseline = JSON.parse(
+      readFileSync(
+        new URL("./fixtures/ordinary-turn-context-84adc42.json", import.meta.url),
+        "utf8",
+      ),
+    ) as { manifest: typeof manifest; payload: unknown };
+    expect(baseline.manifest.compilerVersion).toBe("context-compiler:recent-time:v3");
+    expect(
+      JSON.parse(
+        JSON.stringify(
+          compiler.renderPermittedPayload({
+            ...baseline.manifest,
+            generationStage: "decision",
+          }),
+        ),
+      ),
+    ).toEqual(baseline.payload);
+
+    // From v4 each user message says when it was written; the instructions
+    // hold no table of times to count into.
+    expect(manifest.compilerVersion).toBe("context-compiler:recent-time:v4");
+    expect(payload.instructions).toContain("current request anchor");
+    expect(payload.instructions).toContain("local=2026-11-01 01:30:00 GMT-8");
+    expect(payload.instructions).toContain("Now is Sunday 1 November 2026, 01:30.");
+    expect(payload.instructions).not.toContain("Times:");
+    expect(payload.instructions).not.toMatch(/^\d+=/m);
+    // Another zone is named; the hour the clocks repeated carries its offset.
+    expect(payload.messages.map((message) => message.text.split("\n")[0])).toEqual([
+      "[written Saturday 31 October 2026, yesterday, 22:30 (Asia/Shanghai)]",
+      "[written Saturday 31 October 2026, yesterday, 23:55]",
+      // The assistant's own turn (01:30 GMT-7) carries no line.
+      "You said it was 1:30.",
+      "[written Sunday 1 November 2026, today, 01:30 GMT-8]",
+    ]);
+    expect(payload.instructions).toContain("experience time");
+    expect(timeSection?.selectedTokens).toBeGreaterThan(0);
+    expect(manifest.totalTokens).toBe(
+      manifest.sections.reduce((total, section) => total + section.selectedTokens, 0),
+    );
+
+    const tamperedSections = manifest.sections.map((section) =>
+      section.key === "time_context"
+        ? {
+            ...section,
+            reference: section.reference.replace(
+              "America/Los_Angeles",
+              "America/New_York",
+            ),
+          }
+        : section,
+    );
+    expect(() =>
+      compiler.renderPermittedPayload({
+        ...manifest,
+        generationStage: "decision",
+        sections: tamperedSections,
+      }),
+    ).toThrow(CompiledContextIntegrityError);
+  });
+
+  it("keeps missing expression time and timezone unknown in the rendered request", async () => {
+    const { compiler, saved } = createCompilerWithRecent([], [], {
+      compilerVersion: TIME_AWARE_CONTEXT_COMPILER_VERSION,
+      sourceOverrides: {
+        events: [
+          {
+            actor: "user",
+            locale: "en-US",
+            revisionId: currentInputRevisionId,
+            sequence: 9,
+            text: "I cannot provide the exact time.",
+          },
+        ],
+      },
+    });
+    await compiler.compile({ generationCommandId, interactionTurnId, userId });
+    const manifest = saved();
+    if (!manifest) throw new Error("The test manifest was not captured.");
+    const payload = compiler.renderPermittedPayload({
+      ...manifest,
+      generationStage: "decision",
+    });
+
+    expect(payload.instructions).toContain("timezone=unknown");
+    expect(payload.instructions).toContain(
+      "Now is Thursday 13 August 2026, 19:00 UTC; the user's time zone is not recorded.",
+    );
+    expect(payload.messages.map((message) => message.text)).toEqual([
+      "[written at an unrecorded time]\nI cannot provide the exact time.",
+    ]);
+  });
+
+  it("replays the frozen compact v2 request without adding v3 date rules", () => {
+    const fixture: {
+      manifest: Parameters<ContextCompilerRepository["saveCompiledContext"]>[0];
+      payload: ReturnType<
+        ReturnType<typeof createContextCompiler>["renderPermittedPayload"]
+      >;
+    } = JSON.parse(
+      readFileSync(
+        new URL("./fixtures/time-context-v2.json", import.meta.url),
+        "utf8",
+      ),
+    );
+    const compiler = createContextCompiler({
+      clock: () => new Date("2026-08-21T07:10:00.000Z"),
+      compilerVersion: TIME_AWARE_CONTEXT_COMPILER_VERSION,
+      contentHmacSecret: "issue-307-synthetic-replay-secret",
+      rawEventTokenBudget: 4000,
+      repository: {
+        async loadContextSource() {
+          throw new Error("Replay must not compile new context");
+        },
+        async saveCompiledContext() {
+          throw new Error("Replay must not persist new context");
+        },
+      },
+    });
+    expect(
+      compiler.renderPermittedPayload({
+        ...fixture.manifest,
+        generationStage: "decision",
+      }),
+    ).toEqual(fixture.payload);
   });
 
   it("excludes events committed after the admitted command cutoff", async () => {
@@ -1279,8 +1483,28 @@ describe("Context Compiler — recent-source freeze/replay (#293)", () => {
     const recentManifest = recent.saved();
     if (!recentManifest) throw new Error("The recent manifest was not captured.");
     expect(recentManifest.compilerVersion).toBe(
+      RECENT_CONTEXT_TIME_COMPILER_VERSION,
+    );
+
+    const oldRecent = createCompilerWithRecent([], [], {
+      compilerVersion: LEGACY_CONTEXT_COMPILER_VERSION,
+    });
+    await oldRecent.compiler.compile({
+      generationCommandId,
+      interactionTurnId,
+      userId,
+    });
+    const oldRecentManifest = oldRecent.saved();
+    if (!oldRecentManifest) {
+      throw new Error("The old recent Context was not captured.");
+    }
+    expect(oldRecentManifest.compilerVersion).toBe(
       RECENT_CONTEXT_COMPILER_VERSION,
     );
+    expect(recent.compiler.renderPermittedPayload({
+      ...oldRecentManifest,
+      generationStage: "decision",
+    }).messages).toHaveLength(1);
 
     let legacyManifest:
       | Parameters<ContextCompilerRepository["saveCompiledContext"]>[0]
@@ -1334,6 +1558,161 @@ describe("Context Compiler — recent-source freeze/replay (#293)", () => {
         generationStage: "decision",
       }),
     ).toThrow(CompiledContextIntegrityError);
+  });
+
+  /**
+   * SPEC #301 presentation fix: a corrected message keeps its original place
+   * and time in the seven-day background and in the same Daily Session too, so
+   * a restatement of the old value written before the correction reads as a
+   * later change of mind. The notes sit on the messages themselves.
+   */
+  describe("corrections are noted on the messages (ordinary turns)", () => {
+    const currentAt = new Date("2026-11-03T18:00:00.000Z");
+    const zone = {
+      expressionTimezone: "America/Los_Angeles",
+      expressionTimezoneSource: "request" as const,
+      locale: "en-US",
+    };
+    const restatement = {
+      ...zone,
+      actor: "user" as const,
+      expressedAt: "2026-11-03T16:00:00.000Z",
+      revisionId: rev(0x702),
+      sequence: 7,
+      text: "Yes, two and a half months.",
+    };
+    const reply = {
+      ...zone,
+      actor: "assistant" as const,
+      expressedAt: "2026-11-03T16:00:05.000Z",
+      revisionId: rev(0x703),
+      sequence: 8,
+      text: "That is a good bonus.",
+    };
+    const currentInput = {
+      ...zone,
+      actor: "user" as const,
+      expressedAt: currentAt.toISOString(),
+      revisionId: currentInputRevisionId,
+      sequence: 9,
+      text: "Anyway, long day.",
+    };
+    /** The messages without the line that says when each was written. */
+    const spoken = (payload: { messages: readonly { text: string }[] }) =>
+      payload.messages.map((message) =>
+        message.text.replace(/^\[written [^\n]*\]\n/, ""),
+      );
+    const NOTE_RULE =
+      'A bracketed line starting "[Note." at the top of a message is a note for you about that message, not something anyone said: never read it out, repeat it or mention it. A message noted as their corrected wording is what they stand by; a message noted as written before that correction is how they put it earlier, not a later change of mind.';
+    const render = async (
+      recent: Parameters<typeof createCompilerWithRecent>[0],
+      events: NonNullable<ContextSourceSnapshot["events"]>,
+    ) => {
+      const { compiler, saved } = createCompilerWithRecent(recent, [], {
+        compilerVersion: TIME_AWARE_CONTEXT_COMPILER_VERSION,
+        sourceOverrides: {
+          commandCreatedAt: currentAt,
+          events,
+          requestTimezone: "America/Los_Angeles",
+        },
+      });
+      await compiler.compile({ generationCommandId, interactionTurnId, userId });
+      const manifest = saved();
+      if (!manifest) throw new Error("The test manifest was not captured.");
+      return {
+        manifest,
+        payload: compiler.renderPermittedPayload({ ...manifest, generationStage: "decision" }),
+      };
+    };
+
+    it("notes a corrected seven-day background message and a same-session message written before that correction", async () => {
+      const { manifest, payload } = await render(
+        [
+          item({
+            correctedAt: "2026-11-03T16:30:00.000Z",
+            dailySessionId: earlierSessionId,
+            expressedAt: "2026-11-02T03:00:00.000Z",
+            expressionTimezone: "Asia/Shanghai",
+            expressionTimezoneSource: "request",
+            revisionId: 0x701,
+            sequence: 4,
+            text: "The bonus is one and a half months.",
+          }),
+        ],
+        [restatement, reply, currentInput],
+      );
+      expect(spoken(payload)).toEqual([
+        "[Note. They corrected this message on 2026-11-04 00:30 (Asia/Shanghai): the wording below is their corrected one and is what they stand by.]\nThe bonus is one and a half months.",
+        "[Note. They wrote this before they made the 2026-11-04 00:30 (Asia/Shanghai) correction to their 2026-11-02 11:00 (Asia/Shanghai) message. It is not a later change of mind: where it differs from that corrected message on the same point, the corrected message is how it stands.]\nYes, two and a half months.",
+        "That is a good bonus.",
+        "Anyway, long day.",
+      ]);
+      // The note sits under the line saying when the message was written; the
+      // assistant's own turn carries neither.
+      expect(payload.messages.map((message) => message.text.split("\n")[0])).toEqual([
+        "[written Monday 2 November 2026, yesterday, 11:00 (Asia/Shanghai)]",
+        "[written Tuesday 3 November 2026, today, 08:00]",
+        "That is a good bonus.",
+        "[written Tuesday 3 November 2026, today, 10:00]",
+      ]);
+      expect(payload.instructions).toContain(NOTE_RULE);
+      // The frozen Context carries the instant, never the text.
+      for (const section of manifest.sections) {
+        expect(section.reference).not.toContain("bonus");
+      }
+      expect(compiler_replays(manifest, payload)).toBe(true);
+    });
+
+    it("notes a message corrected in the same Daily Session", async () => {
+      const { payload } = await render(
+        [],
+        [{ ...restatement, correctedAt: "2026-11-03T17:00:00.000Z" }, reply, currentInput],
+      );
+      expect(spoken(payload)).toEqual([
+        "[Note. They corrected this message on 2026-11-03 09:00: the wording below is their corrected one and is what they stand by.]\nYes, two and a half months.",
+        "That is a good bonus.",
+        "Anyway, long day.",
+      ]);
+      expect(payload.instructions).toContain(NOTE_RULE);
+    });
+
+    it("adds no note and no rule when nothing was corrected", async () => {
+      const { payload } = await render(
+        [
+          item({
+            dailySessionId: earlierSessionId,
+            expressedAt: "2026-11-02T03:00:00.000Z",
+            expressionTimezone: "Asia/Shanghai",
+            expressionTimezoneSource: "request",
+            revisionId: 0x701,
+            sequence: 4,
+            text: "The bonus is one and a half months.",
+          }),
+        ],
+        [restatement, reply, currentInput],
+      );
+      expect(spoken(payload)).toEqual([
+        "The bonus is one and a half months.",
+        "Yes, two and a half months.",
+        "That is a good bonus.",
+        "Anyway, long day.",
+      ]);
+      expect(payload.instructions).not.toContain("[Note.");
+    });
+
+    function compiler_replays(
+      manifest: NonNullable<ReturnType<ReturnType<typeof createCompilerWithRecent>["saved"]>>,
+      payload: unknown,
+    ): boolean {
+      const { compiler } = createCompilerWithRecent([], [], {
+        compilerVersion: TIME_AWARE_CONTEXT_COMPILER_VERSION,
+      });
+      return (
+        JSON.stringify(
+          compiler.renderPermittedPayload({ ...manifest, generationStage: "decision" }),
+        ) === JSON.stringify(payload)
+      );
+    }
   });
 });
 

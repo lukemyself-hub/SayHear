@@ -17,8 +17,14 @@ Accepted
 
 ## Current specs
 
+- [连续记忆、自然接续与稳定人格体验契约](https://github.com/lukemyself-hub/SayHear/issues/301)
+  — Internal Core / Memory & Recall — 体验与首轮路线已确认、`ready-for-agent`；先完成
+  [时间修复与上线验收](https://github.com/lukemyself-hub/SayHear/issues/307)，之后开展
+  [完整方案成本分析与路线决策](https://github.com/lukemyself-hub/SayHear/issues/308)，最终采用未定。
+
 - [#292 — Internal Core — 七天近期对话背景与跨日连续性修复](https://github.com/lukemyself-hub/SayHear/issues/292)
-  — Internal Core / Memory & Recall 近期连续性迭代 — `ready-for-agent`；开发票 #293–#296，初始 frontier #293。发布规格不代表实现或上线。
+  — Internal Core / Memory & Recall 近期连续性迭代 — SPEC 与实施票均已关闭，发布记录记载已启用；
+  更强的体验目标由上方连续记忆体验契约承接，关闭不代表新体验已达标。
 
 - [#193 — Internal Core / Core Flow 1A.3b — current G1-only scope](https://github.com/lukemyself-hub/SayHear/issues/193) — G1 重发与 7 天体验；G2 退出、G3 暂停。
 - [#275 — Internal Core — 按影响验证、PR CI 与发布流程精简](https://github.com/lukemyself-hub/SayHear/issues/275)

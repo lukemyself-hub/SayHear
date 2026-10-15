@@ -1,0 +1,56 @@
+{
+  "schemaVersion": "continuity-acceptance-fixture:v1",
+  "id": "C06",
+  "fixtureVersion": "dev-2",
+  "stage": "development",
+  "languageVariant": "code-switch",
+  "defaults": { "locale": "zh-CN", "timezone": "Asia/Hong_Kong" },
+  "history": [
+    {
+      "key": "cousin",
+      "at": "2026-08-20T13:10:00.000Z",
+      "user": "我表姐 Vivian 下个月要去面一个 consulting 的 senior role，让我周末陪她 mock 一下 case interview。",
+      "assistant": "陪她 mock case，听起来你这个周末被征用了。"
+    },
+    {
+      "key": "cousin-after",
+      "at": "2026-08-24T11:40:00.000Z",
+      "user": "昨天陪 Vivian 练了三个钟，她 market sizing 那 part 很稳，就是一紧张讲话太快。",
+      "assistant": "内容稳、语速快，这个比反过来好救。"
+    },
+    {
+      "key": "colleague",
+      "at": "2026-09-08T04:20:00.000Z",
+      "user": "组里新来了个 PM 也叫 Vivian，今天第一次一起开 sprint planning，她一上来就把我的 estimate 砍了一半。",
+      "assistant": "第一次开会就砍 estimate，她是你的新老板吗？"
+    },
+    {
+      "key": "colleague-reply",
+      "at": "2026-09-08T04:24:00.000Z",
+      "user": "先不说这个。总之下午被她气到了。",
+      "assistant": "好，那就先放着。被砍一半确实窝火。"
+    },
+    {
+      "key": "own-interview",
+      "at": "2026-09-15T12:30:00.000Z",
+      "user": "我自己上周五其实也偷偷去面了一家 fintech，二面，对面三个人轮流问 system design，出来腿都是软的。",
+      "assistant": "三个人轮流问 system design，腿软很正常。"
+    }
+  ],
+  "steps": [
+    {
+      "id": "ping",
+      "type": "say",
+      "at": "2026-09-18T03:00:00.000Z",
+      "text": "Vivian 刚 ping 我，说 interview 有结果了，约我今晚吃饭。",
+      "historyReview": { "searchTerms": ["interview", "面试", "mock", "market sizing"], "people": ["Vivian"], "continuationBasis": ["current_input"] }
+    },
+    {
+      "id": "boss",
+      "type": "say",
+      "at": "2026-09-18T03:03:00.000Z",
+      "text": "另外那个 Vivian 今天又在 standup 上 cue 我，你还记得她跟我是什么关系吗？",
+      "historyReview": { "searchTerms": ["PM", "sprint", "新来", "同事"], "people": ["Vivian"], "continuationBasis": ["current_input"] }
+    }
+  ]
+}

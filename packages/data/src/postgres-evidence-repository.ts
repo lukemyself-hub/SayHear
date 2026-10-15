@@ -2,9 +2,11 @@ import type { EvidenceChampion, EvidenceExtractionProvider, EvidenceRepository, 
 import { asDailySessionId, type DailySessionId } from "@sayhear/domain";
 import type { Pool } from "pg";
 import { lockActiveOwnerEpoch } from "./postgres-owner-epoch-fence";
+import { postgresFailureCode, retryPostgresTransaction } from "./postgres-transaction-retry";
 import { createUuidV7 } from "./uuid-v7";
 
 type SnapshotRow = {
+  frozen_evidence_item_ids: string[] | null;
   evidence_source_snapshot_id: string;
   user_id: string;
   daily_session_id: string;
@@ -20,21 +22,136 @@ type SnapshotRow = {
 };
 
 export class PostgresEvidenceRepository implements EvidenceRepository {
-  public constructor(private readonly pool: Pool, private readonly extractor: EvidenceExtractionProvider) {}
+  public constructor(private readonly pool: Pool, private readonly extractor: EvidenceExtractionProvider, private readonly beforeExtraction?: (userId: string) => Promise<void>, private readonly dispatchLeaseDurationMs = 300_000) {}
 
   public async freezeUserEvidence(input: Parameters<EvidenceRepository["freezeUserEvidence"]>[0]): ReturnType<EvidenceRepository["freezeUserEvidence"]> {
-    const client = await this.pool.connect();
+    const prepared = await retryPostgresTransaction(async () => {
+      const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
+      const locator = await client.query<{ user_id: string }>("SELECT user_id FROM daily_sessions WHERE daily_session_id = $1", [input.dailySessionId]);
+      if (!locator.rows[0]) { await client.query("ROLLBACK"); return { outcome: "not_found" as const }; }
+      const ownerEpoch = await lockActiveOwnerEpoch(client, locator.rows[0].user_id);
+      if (ownerEpoch !== input.expectedDataEpoch) { await client.query("ROLLBACK"); return { outcome: "not_found" as const }; }
       const session = await client.query<{
         user_id: string; activity_state: string; source_revision: string;
       }>("SELECT user_id, activity_state, source_revision FROM daily_sessions WHERE daily_session_id = $1 FOR UPDATE", [input.dailySessionId]);
       const row = session.rows[0];
-      if (!row) { await client.query("ROLLBACK"); return { outcome: "not_found" }; }
-      if (row.activity_state === "active") { await client.query("ROLLBACK"); return { outcome: "stale" }; }
-      if (Number(row.source_revision) !== input.sourceRevision) { await client.query("ROLLBACK"); return { outcome: "stale" }; }
-      const ownerEpoch = await lockActiveOwnerEpoch(client, row.user_id);
-      if (ownerEpoch === null || ownerEpoch !== input.expectedDataEpoch) { await client.query("ROLLBACK"); return { outcome: "not_found" }; }
+      if (!row) { await client.query("ROLLBACK"); return { outcome: "not_found" as const }; }
+      if (row.activity_state === "active") { await client.query("ROLLBACK"); return { outcome: "stale" as const }; }
+      if (Number(row.source_revision) !== input.sourceRevision) { await client.query("ROLLBACK"); return { outcome: "stale" as const }; }
+      if (row.user_id !== locator.rows[0].user_id) { await client.query("ROLLBACK"); return { outcome: "not_found" as const }; }
+      const completedSnapshot = await client.query<SnapshotRow>(
+        `SELECT snapshot.*, attempt.frozen_evidence_item_ids FROM evidence_source_snapshots snapshot
+         INNER JOIN evidence_model_run_attempts attempt ON attempt.evidence_source_snapshot_id = snapshot.evidence_source_snapshot_id AND attempt.status = 'completed'
+         WHERE snapshot.daily_session_id = $1 AND snapshot.source_revision = $2 AND snapshot.extraction_policy_version = $3`,
+        [input.dailySessionId, input.sourceRevision, input.extractionPolicyVersion],
+      );
+      if (completedSnapshot.rows[0]) {
+        const items = await client.query<EvidenceItemRow>("SELECT * FROM evidence_items WHERE user_id = $1 AND (evidence_item_id = ANY($2::uuid[]) OR ($2::uuid[] IS NULL AND evidence_source_snapshot_id = $3)) ORDER BY source_revision_id", [row.user_id, completedSnapshot.rows[0].frozen_evidence_item_ids, completedSnapshot.rows[0].evidence_source_snapshot_id]);
+        if (items.rows.length > 0) {
+          await client.query("COMMIT");
+          return { outcome: "frozen" as const, snapshot: toSnapshot(completedSnapshot.rows[0], items.rows) };
+        }
+        await client.query("UPDATE evidence_model_run_attempts SET status = 'failed', evidence_source_snapshot_id = NULL WHERE evidence_source_snapshot_id = $1", [completedSnapshot.rows[0].evidence_source_snapshot_id]);
+      }
+      const sourceRows = await client.query<{
+        user_id: string; conversation_event_id: string; conversation_event_revision_id: string; transcript_status: "final" | "corrected"; canonical_text: string; locale: string;
+      }>(`SELECT event.user_id, event.conversation_event_id, revision.conversation_event_revision_id, revision.transcript_status,
+          revision.canonical_text, revision.locale
+        FROM conversation_events event
+        INNER JOIN conversation_event_revisions revision
+          ON revision.conversation_event_revision_id = event.current_revision_id
+          AND revision.conversation_event_id = event.conversation_event_id
+          AND revision.user_id = event.user_id
+        WHERE event.daily_session_id = $1 AND event.user_id = $2
+          AND event.actor = 'user' AND event.lifecycle_status = 'active'
+          AND revision.transcript_status IN ('final', 'corrected')
+          AND revision.content_purged_at IS NULL`, [input.dailySessionId, row.user_id]);
+      const sources = sourceRows.rows;
+      await client.query("COMMIT");
+      return { outcome: "prepared" as const, row, sources };
+    } catch (error) { await client.query("ROLLBACK"); throw error; }
+    finally { client.release(); }
+    });
+    if (prepared.outcome !== "prepared") return prepared;
+    const { row, sources } = prepared;
+    if (sources.length === 0) return { outcome: "not_eligible" };
+    try {
+      await this.beforeExtraction?.(row.user_id);
+      const admitted = await retryPostgresTransaction(async () => {
+        const client = await this.pool.connect();
+        try {
+          await client.query("BEGIN");
+          const epoch = await lockActiveOwnerEpoch(client, row.user_id);
+          await client.query("SELECT daily_session_id FROM daily_sessions WHERE daily_session_id = $1 AND user_id = $2 FOR UPDATE", [input.dailySessionId, row.user_id]);
+          const valid = await client.query(`SELECT revision.conversation_event_revision_id FROM conversation_events event
+            INNER JOIN conversation_event_revisions revision ON revision.conversation_event_revision_id = event.current_revision_id
+            WHERE event.user_id = $1 AND event.daily_session_id = $2 AND event.actor = 'user' AND event.lifecycle_status = 'active'
+              AND revision.content_purged_at IS NULL AND revision.transcript_status IN ('final', 'corrected')
+              AND revision.conversation_event_revision_id = ANY($3::uuid[])`, [row.user_id, input.dailySessionId, sources.map((source) => source.conversation_event_revision_id)]);
+          if (epoch !== input.expectedDataEpoch || valid.rows.length !== sources.length) {
+            await client.query("ROLLBACK"); return false;
+          }
+          await client.query(`UPDATE evidence_model_run_attempts SET status = 'failed', result_metadata = jsonb_build_object('failure_code', 'dispatch_lease_expired')
+            WHERE user_id = $1 AND daily_session_id = $2 AND source_revision = $3 AND extraction_policy_version = $4
+              AND status = 'started' AND created_at < CURRENT_TIMESTAMP - ($5::bigint * INTERVAL '1 millisecond')`,
+            [row.user_id, input.dailySessionId, input.sourceRevision, input.extractionPolicyVersion, this.dispatchLeaseDurationMs]);
+          const completed = await client.query(`SELECT 1 FROM evidence_model_run_attempts attempt
+            INNER JOIN evidence_source_snapshots snapshot ON snapshot.evidence_source_snapshot_id = attempt.evidence_source_snapshot_id
+            WHERE snapshot.user_id = $1 AND snapshot.daily_session_id = $2 AND snapshot.source_revision = $3
+              AND snapshot.extraction_policy_version = $4 AND attempt.status = 'completed'`, [row.user_id, input.dailySessionId, input.sourceRevision, input.extractionPolicyVersion]);
+          if (completed.rowCount !== 0) { await client.query("COMMIT"); return false; }
+          const claimed = await client.query(`INSERT INTO evidence_model_run_attempts (
+              evidence_model_run_attempt_id, role, provider, model, config_version, extraction_policy_version,
+              prompt_fingerprint, status, created_at, user_id, daily_session_id, source_revision, expected_data_epoch)
+            VALUES ($1,'evidence.extract',$2,$3,$4,$5,$6,'started',CURRENT_TIMESTAMP,$7,$8,$9,$10)
+            ON CONFLICT DO NOTHING RETURNING evidence_model_run_attempt_id`,
+            [input.attemptId, input.champion.provider, input.champion.model, input.champion.configVersion,
+              input.extractionPolicyVersion, input.champion.snapshot, row.user_id, input.dailySessionId, input.sourceRevision, input.expectedDataEpoch]);
+          await client.query("COMMIT");
+          return claimed.rowCount === 1;
+        } catch (error) { await client.query("ROLLBACK"); throw error; }
+        finally { client.release(); }
+      });
+      if (!admitted) return { outcome: "stale" };
+      const extractedChunks = await Promise.allSettled(
+        sources.map((source) =>
+          this.extractor.extract({
+            locale: source.locale,
+            sourceText: source.canonical_text,
+            transport: {
+              dailySessionId: input.dailySessionId,
+              userId: source.user_id,
+            },
+          }),
+        ),
+      );
+      return await retryPostgresTransaction(async () => {
+      const client = await this.pool.connect();
+      try {
+      await client.query("BEGIN");
+      const commitEpoch = await lockActiveOwnerEpoch(client, row.user_id);
+      const current = await client.query<{ user_id: string; source_revision: string; activity_state: string }>(
+        "SELECT user_id, source_revision, activity_state FROM daily_sessions WHERE daily_session_id = $1 FOR UPDATE", [input.dailySessionId],
+      );
+      if (commitEpoch !== input.expectedDataEpoch || !current.rows[0] || current.rows[0].user_id !== row.user_id) {
+        await client.query("ROLLBACK"); return { outcome: "not_found" };
+      }
+      const dispatch = await client.query(`SELECT 1 FROM evidence_model_run_attempts
+        WHERE evidence_model_run_attempt_id = $1 AND status = 'started' AND user_id = $2
+          AND expected_data_epoch = $3 FOR UPDATE`, [input.attemptId, row.user_id, input.expectedDataEpoch]);
+      if (dispatch.rowCount !== 1) { await client.query("ROLLBACK"); return { outcome: "stale" }; }
+      const validSources = await client.query<{ conversation_event_revision_id: string }>(
+        `SELECT revision.conversation_event_revision_id FROM conversation_events event
+         INNER JOIN conversation_event_revisions revision ON revision.conversation_event_revision_id = event.current_revision_id
+         WHERE event.user_id = $1 AND event.daily_session_id = $2 AND event.actor = 'user'
+           AND event.lifecycle_status = 'active' AND revision.content_purged_at IS NULL
+           AND revision.transcript_status IN ('final', 'corrected')
+           AND revision.conversation_event_revision_id = ANY($3::uuid[])`,
+        [row.user_id, input.dailySessionId, sources.map((source) => source.conversation_event_revision_id)],
+      );
+      if (validSources.rows.length !== sources.length) { await client.query("ROLLBACK"); return { outcome: "stale" }; }
       const snapshotId = createUuidV7(input.now);
       const snapshotResult = await client.query<SnapshotRow & { inserted: boolean }>(
         `INSERT INTO evidence_source_snapshots (
@@ -57,59 +174,19 @@ export class PostgresEvidenceRepository implements EvidenceRepository {
         );
         snapshot = { ...existing.rows[0]!, inserted: false };
       }
-      await client.query(
-        `INSERT INTO evidence_model_run_attempts (
-           evidence_model_run_attempt_id, evidence_source_snapshot_id, role, provider, model,
-           config_version, extraction_policy_version, prompt_fingerprint, status, created_at
-         ) VALUES ($1, $2, 'evidence.extract', $3, $4, $5, $6, $7, 'started', $8)
-         ON CONFLICT DO NOTHING`,
-        [input.attemptId, snapshot.evidence_source_snapshot_id, input.champion.provider, input.champion.model,
-          input.champion.configVersion, input.extractionPolicyVersion, input.champion.snapshot, input.now],
-      );
-      const sourceRows = await client.query<{
-        user_id: string; conversation_event_id: string; conversation_event_revision_id: string; transcript_status: "final" | "corrected"; canonical_text: string; locale: string;
-      }>(`SELECT event.user_id, event.conversation_event_id, revision.conversation_event_revision_id, revision.transcript_status,
-          revision.canonical_text, revision.locale
-        FROM conversation_events event
-        INNER JOIN conversation_event_revisions revision
-          ON revision.conversation_event_revision_id = event.current_revision_id
-          AND revision.conversation_event_id = event.conversation_event_id
-          AND revision.user_id = event.user_id
-        WHERE event.daily_session_id = $1 AND event.user_id = $2
-          AND event.actor = 'user' AND event.lifecycle_status = 'active'
-          AND revision.transcript_status IN ('final', 'corrected')
-          AND revision.content_purged_at IS NULL`, [input.dailySessionId, row.user_id]);
-      const sources = sourceRows.rows;
-      // Provider evidence extraction is network-bound: one DeepSeek/OpenAI
-      // round-trip per source, ~20s each from production (Vercel), against a
-      // 60s function ceiling (Vercel Hobby). A serial pass exceeded the timeout
-      // on every replay, so sources are extracted concurrently (incident
-      // 2026-08-18, category=timeout). Even concurrently, a single slow source
-      // that hits the provider deadline must not fail the whole freeze: each
-      // source settles independently and the successful extractions are kept.
-      const extractedChunks = await Promise.allSettled(
-        sources.map((source) =>
-          this.extractor.extract({
-            locale: source.locale,
-            sourceText: source.canonical_text,
-            transport: {
-              dailySessionId: input.dailySessionId,
-              userId: source.user_id,
-            },
-          }),
-        ),
-      );
+      const completed = await client.query("SELECT 1 FROM evidence_model_run_attempts WHERE evidence_source_snapshot_id = $1 AND status = 'completed'", [snapshot.evidence_source_snapshot_id]);
+      if (completed.rowCount === 1) {
+        const existingItems = await client.query<EvidenceItemRow>("SELECT * FROM evidence_items WHERE evidence_source_snapshot_id = $1 ORDER BY source_revision_id", [snapshot.evidence_source_snapshot_id]);
+        await client.query("COMMIT");
+        return { outcome: "frozen", snapshot: toSnapshot(snapshot, existingItems.rows) };
+      }
+      await client.query("UPDATE evidence_model_run_attempts SET evidence_source_snapshot_id = $2 WHERE evidence_model_run_attempt_id = $1 AND status = 'started'", [input.attemptId, snapshot.evidence_source_snapshot_id]);
       let insertedSources = 0;
       for (let i = 0; i < sources.length; i++) {
         const source = sources[i]!;
         const settled = extractedChunks[i]!;
         if (settled.status === "rejected") {
-          // Runtime log only (never Workflow history): a transient provider
-          // failure on one source is not a reason to discard the rest.
-          console.error(
-            "[evidence-freeze] source extraction failed:",
-            settled.reason instanceof Error ? `${settled.reason.name}: ${settled.reason.message}` : String(settled.reason),
-          );
+          console.error("[evidence-freeze] source extraction failed", { category: "evidence_provider_failed" });
           continue;
         }
         const extracted = settled.value;
@@ -126,14 +203,11 @@ export class PostgresEvidenceRepository implements EvidenceRepository {
         [createUuidV7(input.now), source.user_id, snapshot.evidence_source_snapshot_id, source.conversation_event_id, source.conversation_event_revision_id, source.transcript_status, locator.locatorType, locator.locatorKey, input.extractionPolicyVersion, locator.role, input.now],
         );
       }
-      if (sourceRows.rows.length === 0) {
+      if (sources.length === 0) {
         await client.query("ROLLBACK");
         return { outcome: "not_eligible" };
       }
       if (insertedSources === 0) {
-        // Every source failed or produced no usable locators — a provider-level
-        // outage, not a valid but empty transcript. Fail so the workflow records
-        // retryable_failed and the recovery scan can retry later.
         throw new Error("Evidence extraction failed for every source.");
       }
       await client.query(
@@ -143,39 +217,33 @@ export class PostgresEvidenceRepository implements EvidenceRepository {
          ON CONFLICT (evidence_item_id) DO NOTHING`,
         [snapshot.evidence_source_snapshot_id, input.commandId, input.attemptId, input.now],
       );
-      const items = await client.query<EvidenceItemRow>(`SELECT evidence_item_id, user_id, evidence_source_snapshot_id, source_event_id, source_revision_id, source_actor, source_status, locator_type, locator_key, extraction_policy_version, evidence_role, status FROM evidence_items WHERE evidence_source_snapshot_id = $1 ORDER BY source_revision_id`, [snapshot.evidence_source_snapshot_id]);
+      const items = await client.query<EvidenceItemRow>(`SELECT * FROM evidence_items WHERE user_id = $1
+        AND source_revision_id = ANY($2::uuid[]) AND extraction_policy_version = $3 AND status = 'active' ORDER BY source_revision_id, evidence_item_id`,
+        [row.user_id, sources.map((source) => source.conversation_event_revision_id), input.extractionPolicyVersion]);
+
       await client.query(
         `UPDATE evidence_model_run_attempts
-         SET status = 'completed', provider_completed_at = $2,
+         SET status = 'completed', provider_completed_at = $2, frozen_evidence_item_ids = $4::uuid[],
              result_metadata = jsonb_build_object('evidence_item_count', $3::int)
          WHERE evidence_model_run_attempt_id = $1 AND status = 'started'`,
-        [input.attemptId, input.now, items.rows.length],
+        [input.attemptId, input.now, items.rows.length, items.rows.map((item) => item.evidence_item_id)],
       );
       await client.query("COMMIT");
       return { outcome: "frozen", snapshot: toSnapshot(snapshot, items.rows) };
+      } catch (error) { await client.query("ROLLBACK"); throw error; }
+      finally { client.release(); }
+      });
     } catch (error) {
-      await client.query("ROLLBACK");
-      await this.pool.query(
-        `INSERT INTO evidence_model_run_attempts (
-           evidence_model_run_attempt_id, evidence_source_snapshot_id, role, provider, model,
-           config_version, extraction_policy_version, prompt_fingerprint, status,
-           result_metadata, provider_completed_at, created_at
-         ) VALUES ($1, NULL, 'evidence.extract', $2, $3, $4, $5, $6, 'failed',
-           jsonb_build_object('failure_code', $7::text), $8, $8)
-         ON CONFLICT (evidence_model_run_attempt_id) DO NOTHING`,
-        [input.attemptId, input.champion.provider, input.champion.model,
-          input.champion.configVersion, input.extractionPolicyVersion, input.champion.snapshot,
-          "evidence_extraction_failed", input.now],
-      );
+      await this.pool.query("UPDATE evidence_model_run_attempts SET status = 'failed', result_metadata = jsonb_build_object('failure_code', $2::text), provider_completed_at = CURRENT_TIMESTAMP WHERE evidence_model_run_attempt_id = $1 AND status = 'started'", [input.attemptId, postgresFailureCode(error) ? "database_failure" : "evidence_extraction_failed"]);
       throw error;
-    } finally { client.release(); }
+    }
   }
 
   public async findEvidenceSnapshot(input: { dailySessionId: DailySessionId; sourceRevision: number }): Promise<EvidenceSourceSnapshot | null> {
-    const result = await this.pool.query<SnapshotRow>("SELECT * FROM evidence_source_snapshots WHERE daily_session_id = $1 AND source_revision = $2", [input.dailySessionId, input.sourceRevision]);
+    const result = await this.pool.query<SnapshotRow>("SELECT snapshot.*, attempt.frozen_evidence_item_ids FROM evidence_source_snapshots snapshot INNER JOIN evidence_model_run_attempts attempt ON attempt.evidence_source_snapshot_id = snapshot.evidence_source_snapshot_id AND attempt.status = 'completed' WHERE snapshot.daily_session_id = $1 AND snapshot.source_revision = $2", [input.dailySessionId, input.sourceRevision]);
     const snapshot = result.rows[0];
     if (!snapshot) return null;
-    const items = await this.pool.query<EvidenceItemRow>("SELECT evidence_item_id, user_id, evidence_source_snapshot_id, source_event_id, source_revision_id, source_actor, source_status, locator_type, locator_key, extraction_policy_version, evidence_role, status FROM evidence_items WHERE evidence_source_snapshot_id = $1 ORDER BY source_revision_id", [snapshot.evidence_source_snapshot_id]);
+    const items = await this.pool.query<EvidenceItemRow>("SELECT * FROM evidence_items WHERE user_id = $1 AND (evidence_item_id = ANY($2::uuid[]) OR ($2::uuid[] IS NULL AND evidence_source_snapshot_id = $3)) ORDER BY source_revision_id", [snapshot.user_id, snapshot.frozen_evidence_item_ids, snapshot.evidence_source_snapshot_id]);
     return toSnapshot(snapshot, items.rows);
   }
 }

@@ -1,0 +1,317 @@
+{
+  "schemaVersion": "continuity-acceptance-oracle:v1",
+  "id": "U01",
+  "title": "U01 Unseen: recap of a crowded day that ends in a long deliberation, then one detail",
+  "capability": "Second, unseen counterpart of the full-day recap class. Yesterday held five separate subjects from early morning to almost midnight; the last one is a long late-night weighing of a decision that dwarfs the rest, and the day is longer than one history page and larger than both the default background budget and the history review budget. Asked to go back over yesterday, all five subjects are covered and this morning's unrelated annoyance is kept out; asked a follow-up, the cause of the work problem and who helped find it are given from the original words.",
+  "spec": [
+    "#301 R1",
+    "#301 R2",
+    "ADR-0152"
+  ],
+  "ownerTickets": [
+    "#314",
+    "#315"
+  ],
+  "language": "en",
+  "fixture": {
+    "version": "final-2",
+    "sha256": "9c37d0c495804f1ea29219b0cc22680502fc3acd9cbf3c99ea1f6d720c5a432a"
+  },
+  "preconditions": [
+    {
+      "description": "yesterday spans more than one history page of 50 messages",
+      "localDate": "2026-09-16",
+      "minMessages": 51
+    },
+    {
+      "description": "yesterday's user text alone exceeds the 2,000-token default background budget",
+      "localDate": "2026-09-16",
+      "minUserContextTokens": 2001
+    },
+    {
+      "description": "yesterday's text exceeds the 3,000-token history review budget, so the late long subject cannot fit with the early ones",
+      "localDate": "2026-09-16",
+      "minUserContextTokens": 3001
+    }
+  ],
+  "facts": {
+    "allowed": [
+      {
+        "id": "a-two-files",
+        "statement": "The wrong date was printed because the first proof and the corrected proof had been saved under an identical file name in two different folders, and the job ticket pointed at the folder holding the older one.",
+        "sources": [
+          "inv-3:user"
+        ]
+      },
+      {
+        "id": "a-helper",
+        "statement": "A colleague from the front desk sat down with the person and went through the email exchange with the customer message by message, which is how the cause was found.",
+        "sources": [
+          "inv-3:user"
+        ]
+      }
+    ],
+    "forbidden": [
+      {
+        "id": "f-today-ticket",
+        "statement": "Presenting the sixty-dollar parking fine for street cleaning as part of yesterday; it was mentioned this morning.",
+        "sources": [
+          "today-1:user"
+        ]
+      },
+      {
+        "id": "f-ruled-out-cause",
+        "statement": "Giving as the cause either a mistake in keying the order or the press operator using an old plate; both were checked and ruled out.",
+        "sources": [
+          "inv-2:user"
+        ]
+      },
+      {
+        "id": "f-decided",
+        "statement": "Stating that the person has decided to buy the print shop, or decided against it; she said explicitly that nothing is decided.",
+        "sources": [
+          "shop-10:user"
+        ]
+      }
+    ]
+  },
+  "topics": [
+    {
+      "id": "t-basement",
+      "statement": "A flooded basement after the sump pump failed overnight, with a neighbour helping to clear the water and a replacement booked for Friday.",
+      "sources": [
+        "pump-1:user",
+        "pump-2:user",
+        "pump-3:user"
+      ]
+    },
+    {
+      "id": "t-invitations",
+      "statement": "A morning at the print shop over a run of wedding invitations printed with the wrong date, traced and put right by reprinting free of charge.",
+      "sources": [
+        "inv-1:user",
+        "inv-3:user",
+        "inv-4:user"
+      ]
+    },
+    {
+      "id": "t-mother",
+      "statement": "A lunchtime call from the person's sister about their mother having scraped the car and hidden it, and who should raise her driving with her.",
+      "sources": [
+        "mum-1:user",
+        "mum-3:user",
+        "mum-4:user"
+      ]
+    },
+    {
+      "id": "t-driving-test",
+      "statement": "The daughter failing her driving test on the parallel park.",
+      "sources": [
+        "test-1:user",
+        "test-2:user"
+      ]
+    },
+    {
+      "id": "t-shop",
+      "statement": "A long late-night weighing of whether to buy the print shop from its retiring owner.",
+      "sources": [
+        "shop-1:user",
+        "shop-3:user",
+        "shop-10:user"
+      ]
+    }
+  ],
+  "time": [
+    {
+      "id": "tm-yesterday",
+      "statement": "All five subjects were expressed on 16 September local time; the parking fine belongs to 17 September.",
+      "sources": [
+        "pump-1:user",
+        "shop-12:user",
+        "today-1:user"
+      ]
+    }
+  ],
+  "expectedBehavior": [
+    "Name all five subjects; the short early ones must not be dropped because the last one was long.",
+    "Keep yesterday and this morning apart.",
+    "For the follow-up, give the two identically named files and the colleague who went through the emails, from the original words."
+  ],
+  "failureSignals": [
+    "An early subject (the basement, the mother's car, the driving test) is missing from what reaches the Provider or from the recap.",
+    "This morning's parking fine is told as yesterday's.",
+    "The follow-up names a cause that was ruled out or never said."
+  ],
+  "sourceEligibility": [
+    {
+      "source": "pump-1:user",
+      "eligibility": "allowed",
+      "reason": "Yesterday's original expression."
+    },
+    {
+      "source": "inv-1:user",
+      "eligibility": "allowed",
+      "reason": "Yesterday's original expression."
+    },
+    {
+      "source": "inv-3:user",
+      "eligibility": "allowed",
+      "reason": "Yesterday's original expression; carries the asked-for detail."
+    },
+    {
+      "source": "mum-1:user",
+      "eligibility": "allowed",
+      "reason": "Yesterday's original expression."
+    },
+    {
+      "source": "test-1:user",
+      "eligibility": "allowed",
+      "reason": "Yesterday's original expression."
+    },
+    {
+      "source": "shop-1:user",
+      "eligibility": "allowed",
+      "reason": "Yesterday's original expression."
+    }
+  ],
+  "criteria": [
+    {
+      "id": "O-commit",
+      "kind": "objective",
+      "modes": [
+        "deterministic",
+        "real-model"
+      ],
+      "description": "The recap request streams and commits.",
+      "check": {
+        "type": "turn_committed",
+        "step": "recap"
+      }
+    },
+    {
+      "id": "O-detail-commit",
+      "kind": "objective",
+      "modes": [
+        "deterministic",
+        "real-model"
+      ],
+      "description": "The follow-up streams and commits.",
+      "check": {
+        "type": "turn_committed",
+        "step": "detail"
+      }
+    },
+    {
+      "id": "O-ownership",
+      "kind": "objective",
+      "modes": [
+        "deterministic",
+        "real-model"
+      ],
+      "description": "The first and last of yesterday's messages are filed under 16 September and this morning's under 17 September.",
+      "check": {
+        "type": "session_ownership",
+        "expect": [
+          {
+            "source": "pump-1:user",
+            "logicalDate": "2026-09-16"
+          },
+          {
+            "source": "shop-12:user",
+            "logicalDate": "2026-09-16"
+          },
+          {
+            "source": "today-1:user",
+            "logicalDate": "2026-09-17"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-day-read",
+      "kind": "objective",
+      "modes": [
+        "real-model"
+      ],
+      "description": "Yesterday is read as a non-empty day.",
+      "check": {
+        "type": "date_coverage",
+        "step": "recap",
+        "localDate": "2026-09-16",
+        "expect": {
+          "empty": false
+        }
+      }
+    },
+    {
+      "id": "O-topic-coverage",
+      "kind": "objective",
+      "modes": [
+        "real-model"
+      ],
+      "owner": "#315",
+      "description": "At least the opening message of each of the five subjects reaches the Provider for the recap.",
+      "check": {
+        "type": "outbound_includes",
+        "step": "recap",
+        "sources": [
+          "pump-1:user",
+          "inv-1:user",
+          "mum-1:user",
+          "test-1:user",
+          "shop-1:user"
+        ]
+      }
+    },
+    {
+      "id": "O-detail-source",
+      "kind": "objective",
+      "modes": [
+        "real-model"
+      ],
+      "owner": "#315",
+      "description": "The message holding the asked-for detail reaches the Provider for the follow-up.",
+      "check": {
+        "type": "outbound_includes",
+        "step": "detail",
+        "sources": [
+          "inv-3:user"
+        ]
+      }
+    },
+    {
+      "id": "S-topics",
+      "kind": "semantic",
+      "owner": "#315",
+      "description": "The recap covers all five subjects, on the right day, without this morning's fine.",
+      "step": "recap",
+      "required": [
+        "t-basement",
+        "t-invitations",
+        "t-mother",
+        "t-driving-test",
+        "t-shop",
+        "tm-yesterday"
+      ],
+      "forbidden": [
+        "f-today-ticket",
+        "f-decided"
+      ]
+    },
+    {
+      "id": "S-detail",
+      "kind": "semantic",
+      "owner": "#315",
+      "description": "The follow-up answer is grounded in the original words.",
+      "step": "detail",
+      "required": [
+        "a-two-files",
+        "a-helper"
+      ],
+      "forbidden": [
+        "f-today-ticket",
+        "f-ruled-out-cause"
+      ]
+    }
+  ]
+}

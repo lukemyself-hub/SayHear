@@ -1,0 +1,67 @@
+{
+  "schemaVersion": "continuity-acceptance-fixture:v1",
+  "id": "U12",
+  "fixtureVersion": "final-2",
+  "stage": "final",
+  "languageVariant": "code-switch",
+  "defaults": {
+    "locale": "zh-CN",
+    "timezone": "Asia/Kuala_Lumpur"
+  },
+  "history": [
+    {
+      "key": "rent",
+      "at": "2026-09-14T12:10:00.000Z",
+      "user": "今天 landlord 发 WhatsApp 来讲 renewal 的事，说下个月开始 rent 要涨到 3200，而且要一次签两年。",
+      "assistant": "涨到 3200 还要一口气签两年，这条 WhatsApp 够你想一阵子的。"
+    },
+    {
+      "key": "rent-echo",
+      "at": "2026-09-14T12:15:00.000Z",
+      "user": "对，3200，比现在整整贵了 500。我今晚要坐下来重新算一下 budget。",
+      "assistant": "一个月多 500，是该重新算一算。"
+    },
+    {
+      "key": "jo",
+      "at": "2026-09-15T13:20:00.000Z",
+      "user": "我 housemate Jo 偷偷跟我讲，她打算年底搬去跟男朋友住，还没跟 landlord 说，叫我一个字都不要讲出去。",
+      "assistant": "这件事她只告诉了你，那你就先替她收着。"
+    },
+    {
+      "key": "jo-echo",
+      "at": "2026-09-15T13:26:00.000Z",
+      "user": "一想到 Jo 要搬走我就有点慌，一个人根本 cover 不了整间 unit 的租金。",
+      "assistant": "她一走，整间屋子的租金都落到你头上，慌是正常的。"
+    },
+    {
+      "key": "aircon",
+      "at": "2026-09-17T11:30:00.000Z",
+      "user": "家里这礼拜也不太平：客厅那台 aircon 滴水滴了三天，我用一个 pail 接着。Landlord 礼拜四总算派了个 technician 来，说是 drain pipe 塞住了，通了二十分钟就好了。",
+      "assistant": "接了三天水，结果二十分钟就通了，早来三天就好了。"
+    }
+  ],
+  "steps": [
+    {
+      "id": "fix",
+      "type": "correct",
+      "at": "2026-09-18T11:50:00.000Z",
+      "target": "rent",
+      "text": "今天 landlord 发 WhatsApp 来讲 renewal 的事，说下个月开始 rent 要涨到 2900，而且要一次签两年。"
+    },
+    {
+      "id": "forget-housemate",
+      "type": "forget",
+      "at": "2026-09-19T03:00:00.000Z",
+      "targets": [
+        "jo",
+        "jo-echo"
+      ]
+    },
+    {
+      "id": "house",
+      "type": "say",
+      "at": "2026-09-22T12:00:00.000Z",
+      "text": "帮我 recap 一下，上礼拜我都跟你讲了哪些跟房子有关的事？"
+    }
+  ]
+}

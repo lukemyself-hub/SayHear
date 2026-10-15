@@ -583,6 +583,10 @@ h1 {
   width: 44px;
 }
 
+.composerSend[hidden] {
+  display: none;
+}
+
 .composerSend:disabled {
   /* The reference design keeps the control solid black in its empty state, so
      the disabled attribute carries the semantics and the fill stays. */
@@ -2394,4 +2398,36 @@ h1 {
 
 .noticeSuccess {
   color: #2f6b3d;
+}
+
+/* #320: history review and original words in the Context Inspector. */
+.historyReview .historyWords {
+  margin-top: 1rem;
+}
+.historyReview .historyWordsList {
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.6rem;
+  max-height: 24rem;
+  overflow-y: auto;
+}
+.historyReview .historyWordsList li {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid rgba(127, 127, 127, 0.3);
+  border-radius: 0.5rem;
+  overflow-wrap: anywhere;
+}
+.historyReview .historyWordsMeta {
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+.historyReview .historyWordsText {
+  white-space: pre-wrap;
+}
+.historyReview .inspectorId {
+  overflow-wrap: anywhere;
 }

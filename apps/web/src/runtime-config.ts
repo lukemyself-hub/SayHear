@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs";
-
 import {
   verifyOneA3bG1ReleaseManifest,
   type OneA3bG1ReleaseManifest,
@@ -116,8 +114,8 @@ export function resolveOneA3bG1ReleaseManifest(
   }
   const manifest = parsed as OneA3bG1ReleaseManifest;
   const deployedCommit =
-    environment.VERCEL_GIT_COMMIT_SHA ??
-    environment.SAYHEAR_DEPLOYED_GIT_COMMIT_SHA;
+    environment.VERCEL_GIT_COMMIT_SHA?.trim() ||
+    environment.SAYHEAR_DEPLOYED_GIT_COMMIT_SHA?.trim();
   if (g1StageFullyRequested(environment) && !deployedCommit) {
     throw new Error(
       "SAYHEAR_DEPLOYED_GIT_COMMIT_SHA or VERCEL_GIT_COMMIT_SHA is required when the G1 write switches are enabled.",
@@ -253,15 +251,35 @@ export function loadRuntimeConfiguration(environment: Environment) {
   if (testNow && Number.isNaN(testNow.getTime())) {
     throw new Error("SAYHEAR_TEST_NOW must be a valid ISO timestamp.");
   }
-  // The verify driver advances a controlled clock between HTTP requests by
-  // rewriting this file; every runtime-configuration load re-reads it, so no
-  // server restart is needed. `SAYHEAR_TEST_NOW` stays the fallback the fixture
-  // used at launch. Test deployment only, enforced above.
-  const controlledTestNow =
-    environment.SAYHEAR_TEST_NOW_FILE === undefined
-      ? null
-      : readTestNowFile(environment.SAYHEAR_TEST_NOW_FILE);
-  const effectiveTestNow = controlledTestNow ?? testNow;
+  // T00 #313: a scenario runner advances controlled time across turns and
+  // days without restarting the app. The instant lives in a file named by the
+  // test composition (never a client parameter) and is re-read on every clock
+  // call. The same test-only deployment guard as SAYHEAR_TEST_NOW applies, and
+  // an unreadable instant throws instead of falling back to the wall clock.
+  const testNowFile = environment.SAYHEAR_TEST_NOW_FILE?.trim() || null;
+  if (testNowFile && testNow) {
+    throw new Error(
+      "SAYHEAR_TEST_NOW_FILE and SAYHEAR_TEST_NOW cannot both be set.",
+    );
+  }
+  const readTestNowFile = (file: string): Date => {
+    let instant: Date;
+    try {
+      // Resolved at call time, only on this test-only path: this module is
+      // also loaded by `instrumentation.ts`, so it must not statically import
+      // a Node built-in that a non-Node bundle cannot provide.
+      const { readFileSync } = process.getBuiltinModule("node:fs");
+      instant = new Date(readFileSync(file, "utf8").trim());
+    } catch {
+      throw new Error("SAYHEAR_TEST_NOW_FILE could not be read.");
+    }
+    if (Number.isNaN(instant.getTime())) {
+      throw new Error(
+        "SAYHEAR_TEST_NOW_FILE must contain a valid ISO timestamp.",
+      );
+    }
+    return instant;
+  };
 
   const adapter = resolveProviderAdapter(environment.SAYHEAR_PROVIDER_ADAPTER);
   const deterministicChunks =
@@ -302,6 +320,20 @@ export function loadRuntimeConfiguration(environment: Environment) {
   if (!Number.isInteger(timeoutMs) || timeoutMs <= 0) {
     throw new Error("SAYHEAR_PROVIDER_TIMEOUT_MS must be a positive integer.");
   }
+  // Issue #319: a chat request has its own end-to-end budget and its own
+  // Provider timeout, separate from SAYHEAR_PROVIDER_TIMEOUT_MS, which the
+  // background roles share (memory extraction legitimately needs minutes).
+  // Both can only be tightened below the ADR-0152 stop condition (60 s).
+  const conversationRequestBudgetMs = boundedMilliseconds(
+    environment,
+    "SAYHEAR_CONVERSATION_REQUEST_BUDGET_MS",
+    CONVERSATION_REQUEST_MAX_MS,
+  );
+  const conversationProviderTimeoutMs = boundedMilliseconds(
+    environment,
+    "SAYHEAR_CONVERSATION_PROVIDER_TIMEOUT_MS",
+    CONVERSATION_REQUEST_MAX_MS,
+  );
   const deepseekBaseUrl =
     environment.SAYHEAR_DEEPSEEK_BASE_URL ?? "https://api.deepseek.com";
   if (deepseekBaseUrl.length === 0) {
@@ -448,6 +480,12 @@ export function loadRuntimeConfiguration(environment: Environment) {
     );
   }
   const writeSwitches = Object.freeze({
+    // Issue #314: the controlled read-only history review. Default off; only
+    // an explicit true offers the function and wires the answer stage.
+    historyRecallEnabled: explicitSwitch(
+      environment,
+      "SAYHEAR_HISTORY_RECALL_ENABLED",
+    ),
     evidenceExtractionEnabled: enabledSwitch(
       environment,
       "SAYHEAR_EVIDENCE_EXTRACTION_ENABLED",
@@ -493,9 +531,11 @@ export function loadRuntimeConfiguration(environment: Environment) {
       environment,
       "SAYHEAR_BACKUP_POLICY_VERSION",
     ),
-    clock: effectiveTestNow
-      ? () => new Date(effectiveTestNow)
-      : () => new Date(),
+    clock: testNowFile
+      ? () => readTestNowFile(testNowFile)
+      : testNow
+        ? () => new Date(testNow)
+        : () => new Date(),
     databaseUrl,
     deployment,
     ownerPurge: Object.freeze({
@@ -518,6 +558,10 @@ export function loadRuntimeConfiguration(environment: Environment) {
       leaseOwner: "sayhear-cron",
     }),
     recoveryScannerSecret: required(environment, "CRON_SECRET"),
+    conversationRequest: Object.freeze({
+      budgetMs: conversationRequestBudgetMs,
+      providerTimeoutMs: conversationProviderTimeoutMs,
+    }),
     provider: Object.freeze({
       adapter,
       apiKey: liveProviderCredentials?.apiKey ?? null,
@@ -577,30 +621,44 @@ function parseDeterministicChunks(value: string): readonly string[] {
   return parsed;
 }
 
-/**
- * The verify driver's controllable test clock: the file content is the frozen
- * "now" for every runtime-configuration load. It must be readable and hold one
- * ISO timestamp, because a silent fallback to wall time would fake a real
- * clock. Test deployment only, enforced by assertSafeRuntimeConfiguration.
- */
-function readTestNowFile(path: string): Date {
-  if (path.trim().length === 0) {
-    throw new Error("SAYHEAR_TEST_NOW_FILE must name a file.");
-  }
-  let content: string;
-  try {
-    content = readFileSync(path, "utf8");
-  } catch {
+/** ADR-0152 (2026-10-12 revision): a chat request is stopped end to end after 60 seconds. */
+export const CONVERSATION_REQUEST_MAX_MS = 60_000;
+
+function boundedMilliseconds(
+  environment: Readonly<Record<string, string | undefined>>,
+  name: string,
+  maximum: number,
+): number {
+  const raw = environment[name];
+  const value = raw === undefined ? maximum : Number(raw);
+  if (!Number.isInteger(value) || value <= 0 || value > maximum) {
     throw new Error(
-      "SAYHEAR_TEST_NOW_FILE must point to a readable timestamp file.",
+      `${name} must be a positive integer of at most ${maximum} milliseconds.`,
     );
   }
-  const value = content.trim();
-  const parsed = new Date(value);
-  if (value.length === 0 || Number.isNaN(parsed.getTime())) {
+  return value;
+}
+
+/**
+ * The verify driver's controllable test clock: the file content is the frozen
+ * "now" for every clock call. It must be readable and hold one ISO timestamp,
+ * because a silent fallback to wall time would fake a real clock. Test deployment
+ * only, enforced by assertSafeRuntimeConfiguration.
+ */
+function readTestNowFile(path: string): Date {
+  let instant: Date;
+  try {
+    // Use the runtime builtin lazily because this module is also imported by
+    // instrumentation, which can be bundled for a non-Node runtime.
+    const { readFileSync } = process.getBuiltinModule("node:fs");
+    instant = new Date(readFileSync(path, "utf8").trim());
+  } catch {
+    throw new Error("SAYHEAR_TEST_NOW_FILE could not be read.");
+  }
+  if (Number.isNaN(instant.getTime())) {
     throw new Error("SAYHEAR_TEST_NOW_FILE must contain a valid ISO timestamp.");
   }
-  return parsed;
+  return instant;
 }
 
 /**
@@ -610,11 +668,9 @@ function readTestNowFile(path: string): Date {
  * run. Test deployment only, enforced by assertSafeRuntimeConfiguration.
  */
 function readProviderFaultChunksFile(path: string): number | undefined {
-  if (path.trim().length === 0) {
-    throw new Error("SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS_FILE must name a file.");
-  }
   let content: string;
   try {
+    const { readFileSync } = process.getBuiltinModule("node:fs");
     content = readFileSync(path, "utf8");
   } catch {
     return undefined;

@@ -14,6 +14,7 @@ import { MessageSurface } from "./message-time";
 import { eventMessageCreatedAt } from "./message-time-presentation";
 import { usePortalShell } from "./portal-shell";
 import {
+  CLIENT_REQUEST_DEADLINE_MS,
   decideSend,
   INITIAL_SCROLL_FOLLOW_STATE,
   INITIAL_WAIT_STATE,
@@ -21,12 +22,21 @@ import {
   isNearBottom,
   reduceScrollFollow,
   reduceWaitState,
+  requestEndedPlan,
   streamingText,
   submissionFailurePlan,
   waitAnnouncement,
   waitingDotsVisible,
+  type RequestEndedBy,
   type WaitState,
 } from "./text-conversation-state";
+
+/** One in-flight request the person can stop or replace (issue #319). */
+type ActiveRun = {
+  readonly controller: AbortController;
+  endedBy: RequestEndedBy | null;
+  readonly id: number;
+};
 
 type VisibleUserMessage = Readonly<{
   actor: "user" | "assistant";
@@ -69,6 +79,9 @@ const INTERRUPTED_MESSAGE =
 
 const SAVED_BUT_FAILED_MESSAGE =
   "SayHear could not complete the response. Your message was saved; start a new message to continue.";
+
+const TIMED_OUT_MESSAGE =
+  "SayHear took too long and stopped waiting. Your message was saved; send a new message to continue.";
 
 const RETRY_INTERRUPTED_MESSAGE =
   "The retried response was also interrupted. It remains separate and can be retried explicitly.";
@@ -113,6 +126,8 @@ export function TextConversation(props: {
   const pending = useRef<PendingSubmission | null>(null);
   const retryRequestIds = useRef(new Map<string, string>());
   const inFlightRef = useRef(false);
+  const activeRun = useRef<ActiveRun | null>(null);
+  const runCounter = useRef(0);
   const composingRef = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -192,6 +207,8 @@ export function TextConversation(props: {
         composingRef.current || native.isComposing || native.keyCode === 229,
       key: event.key,
       shiftKey: event.shiftKey,
+      // A message may be sent while a reply is being prepared: it adds to the
+      // question or changes the subject and retires the older answer.
       submitting: inFlight || inFlightRef.current,
       text,
     });
@@ -226,11 +243,19 @@ export function TextConversation(props: {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (inFlightRef.current) {
+    const previousRun = activeRun.current;
+    if (
+      text.trim().length === 0 &&
+      (previousRun !== null || pending.current === null)
+    ) {
       return;
     }
-    if (pending.current === null && text.trim().length === 0) {
-      return;
+    if (previousRun !== null) {
+      // A newer message retires the older answer in progress: it is cancelled
+      // here and fenced out on the server, whichever lands first.
+      previousRun.endedBy = "superseded";
+      previousRun.controller.abort();
+      pending.current = null;
     }
 
     const submission =
@@ -244,6 +269,17 @@ export function TextConversation(props: {
       } satisfies PendingSubmission);
     pending.current = submission;
     inFlightRef.current = true;
+    const run: ActiveRun = {
+      controller: new AbortController(),
+      endedBy: null,
+      id: ++runCounter.current,
+    };
+    activeRun.current = run;
+    const isCurrent = () => activeRun.current === run;
+    const deadlineTimer = window.setTimeout(() => {
+      run.endedBy ??= "timeout";
+      run.controller.abort();
+    }, CLIENT_REQUEST_DEADLINE_MS);
     // Hide the sent text the moment it is on its way. Keeping it in the field
     // while the reply is still streaming read as "not sent yet", even though
     // the message was already committed above the composer. `pending` keeps the
@@ -269,11 +305,15 @@ export function TextConversation(props: {
         body: JSON.stringify(submission),
         headers: { "content-type": "application/json" },
         method: "POST",
+        signal: run.controller.signal,
       });
       if (!response.ok) {
         throw new Error(`The message could not be recorded (${response.status}).`);
       }
       for await (const result of readNdjson(response)) {
+        if (!isCurrent()) {
+          break;
+        }
         if (result.type === "user_committed") {
           userCommitted = true;
           const committed = result as {
@@ -381,6 +421,38 @@ export function TextConversation(props: {
       setText("");
       shell?.clearDraft(props.draftKey);
     } catch (submissionError) {
+      if (run.endedBy !== null) {
+        // The person stopped it, a newer message replaced it, or the client
+        // deadline passed: not a failure to dramatize. Words already shown stay
+        // as a read-only interrupted partial with the explicit Retry.
+        const ended = requestEndedPlan({
+          endedBy: run.endedBy,
+          hasPartialText: streamedAssistantText.length > 0,
+          userCommitted,
+        });
+        if (ended.hasPartialText && currentTurnId !== null) {
+          appendInterruptedResponse(
+            currentTurnId,
+            streamedAssistantText,
+            setTimeline,
+          );
+        }
+        if (isCurrent()) {
+          if (ended.preserveDraft) {
+            setText((current) => (current.length === 0 ? submission.text : current));
+          }
+          if (!ended.preservesSubmissionIdentity) {
+            pending.current = null;
+          }
+          setWait((current) =>
+            reduceWaitState(current, {
+              type: run.endedBy === "timeout" ? "stream_error" : "stop",
+            }),
+          );
+          setError(ended.showError ? TIMED_OUT_MESSAGE : null);
+        }
+        return;
+      }
       const plan = submissionFailurePlan({
         hasPartialText: streamedAssistantText.length > 0,
         streamEndedWithoutTerminal:
@@ -414,12 +486,25 @@ export function TextConversation(props: {
             : SAVED_BUT_FAILED_MESSAGE,
       );
     } finally {
-      inFlightRef.current = false;
-      if (responseCommitted) {
-        // Keep the next message one keystroke away after a successful reply.
-        textareaRef.current?.focus();
+      window.clearTimeout(deadlineTimer);
+      if (isCurrent()) {
+        activeRun.current = null;
+        inFlightRef.current = false;
+        if (responseCommitted) {
+          // Keep the next message one keystroke away after a successful reply.
+          textareaRef.current?.focus();
+        }
       }
     }
+  }
+
+  function stopResponse(): void {
+    const run = activeRun.current;
+    if (run === null) {
+      return;
+    }
+    run.endedBy = "stop";
+    run.controller.abort();
   }
 
   async function retryInterrupted(originalTurnId: string) {
@@ -431,6 +516,17 @@ export function TextConversation(props: {
     retryRequestIds.current.set(originalTurnId, retryRequestId);
     updateRetryStatus(originalTurnId, "retrying", setTimeline);
     inFlightRef.current = true;
+    const run: ActiveRun = {
+      controller: new AbortController(),
+      endedBy: null,
+      id: ++runCounter.current,
+    };
+    activeRun.current = run;
+    const isCurrent = () => activeRun.current === run;
+    const deadlineTimer = window.setTimeout(() => {
+      run.endedBy ??= "timeout";
+      run.controller.abort();
+    }, CLIENT_REQUEST_DEADLINE_MS);
     setWait((current) => reduceWaitState(current, { type: "submit" }));
     setError(null);
     let retryTurnId: string | null = null;
@@ -443,11 +539,15 @@ export function TextConversation(props: {
         body: JSON.stringify({ originalTurnId, retryRequestId }),
         headers: { "content-type": "application/json" },
         method: "POST",
+        signal: run.controller.signal,
       });
       if (!response.ok) {
         throw new Error(`The response could not be retried (${response.status}).`);
       }
       for await (const result of readNdjson(response)) {
+        if (!isCurrent()) {
+          break;
+        }
         if (result.type === "retry_committed") {
           retryTurnId =
             "turnId" in result && typeof result.turnId === "string"
@@ -528,6 +628,23 @@ export function TextConversation(props: {
         );
       }
     } catch (retryError) {
+      if (run.endedBy !== null) {
+        // Stopped, replaced or timed out: the explicit Retry stays available.
+        const hadText = streamedAssistantText.length > 0 && retryTurnId !== null;
+        if (hadText && retryTurnId !== null) {
+          appendInterruptedResponse(retryTurnId, streamedAssistantText, setTimeline);
+        }
+        updateRetryStatus(originalTurnId, hadText ? "retried" : "available", setTimeline);
+        if (isCurrent()) {
+          setWait((current) =>
+            reduceWaitState(current, {
+              type: run.endedBy === "timeout" ? "stream_error" : "stop",
+            }),
+          );
+          setError(run.endedBy === "timeout" ? TIMED_OUT_MESSAGE : null);
+        }
+        return;
+      }
       const hasPartialText = streamedAssistantText.length > 0;
       const disconnectedTurnId =
         !responseCommitted && retryTurnId !== null && hasPartialText
@@ -554,16 +671,24 @@ export function TextConversation(props: {
             : "The response could not be retried.",
       );
     } finally {
-      inFlightRef.current = false;
-      if (responseCommitted) {
-        textareaRef.current?.focus();
+      window.clearTimeout(deadlineTimer);
+      if (isCurrent()) {
+        activeRun.current = null;
+        inFlightRef.current = false;
+        if (responseCommitted) {
+          textareaRef.current?.focus();
+        }
       }
     }
   }
 
   const streamedText = streamingText(wait);
+  const hasDraft = text.trim().length > 0;
+  // While a reply is being prepared, an empty composer offers Stop and a
+  // written one sends the addition (which retires the older answer).
+  const showStop = inFlight && !hasDraft;
   const sendLabel = inFlight
-    ? "发送中"
+    ? "补充发送"
     : error && pending.current
       ? "重试发送"
       : "发送";
@@ -667,7 +792,7 @@ export function TextConversation(props: {
           </label>
           <textarea
             className="composerInput"
-            disabled={inFlight || !props.writeGate.allowed}
+            disabled={!props.writeGate.allowed}
             id="user-text"
             onChange={(event) => {
               pending.current = null;
@@ -686,12 +811,23 @@ export function TextConversation(props: {
             rows={1}
             value={text}
           />
+          {showStop ? (
+            <button
+              aria-label="停止"
+              className="composerSend composerStop"
+              onClick={stopResponse}
+              type="button"
+            >
+              <svg aria-hidden="true" height="20" viewBox="0 0 24 24" width="20">
+                <rect fill="currentColor" height="10" rx="2" width="10" x="7" y="7" />
+              </svg>
+            </button>
+          ) : null}
           <button
             aria-label={sendLabel}
             className="composerSend"
-            disabled={
-              inFlight || !props.writeGate.allowed || text.trim().length === 0
-            }
+            disabled={!props.writeGate.allowed || !hasDraft}
+            hidden={showStop}
             type="submit"
           >
             <svg

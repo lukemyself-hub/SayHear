@@ -17,7 +17,19 @@ import {
   realpath,
 } from "node:fs/promises";
 import { homedir } from "node:os";
-import { SignedCompletionStore, recoverCompletion, CompletionMismatch, CompletionUnavailable, type CompletionStore, type CompletionRecord, type CompletionIdentity } from "./pr-approval/completion.ts";
+import {
+  AGENT_IDENTITY,
+  BROWSER_APPROVAL_VERSION,
+  LUKE_IDENTITY,
+  authorizationChannel,
+  latestLukeReview,
+  readBrowserAuthorization,
+  SignedBrowserApprovalStore,
+  type BrowserApprovalStore,
+  type BrowserChallenge,
+  type BrowserReceipt,
+} from "./pr-approval/browser-approval.ts";
+import { SignedCompletionStore, recoverCompletion, CompletionMismatch, CompletionUnavailable, type CompletionStore, type CompletionRecord, type CompletionIdentity, type CompletionClock } from "./pr-approval/completion.ts";
 import { promisify } from "node:util";
 import { inflateRawSync } from "node:zlib";
 import { isAbsolute, relative, resolve } from "node:path";
@@ -25,41 +37,66 @@ import { pathToFileURL } from "node:url";
 
 import {
   evaluatePrReviewGate,
+  integrationModeOf,
   PR_REVIEW_GATE_CHECK_NAME,
+  PR_REVIEW_GATE_LEGACY_POLICY_VERSION as V4_POLICY_VERSION,
+  PR_REVIEW_GATE_PREVIOUS_POLICY_VERSION as V5_POLICY_VERSION,
+  PR_REVIEW_GATE_INSTALLED_POLICY_VERSION as V8_POLICY_VERSION,
+  PR_REVIEW_GATE_OLDER_INSTALLED_POLICY_VERSION as V6_POLICY_VERSION,
+  PR_REVIEW_GATE_V9_POLICY_VERSION,
+  PR_REVIEW_GATE_V10_POLICY_VERSION,
   PR_REVIEW_GATE_POLICY_VERSION,
   PR_REVIEW_REPORT_VERSION,
   PR_VALIDATE_WORKFLOW_PATH,
   parsePrReviewGateInput,
+  parseIntegrationMode,
   requirementDigest,
   parseIssueClosureExclusions,
+  closingKeywordIssueNumbers,
+  protectedReviewPaths,
   SAYHEAR_REPOSITORY_ID,
   SAYHEAR_REPOSITORY_NAME,
+  type IntegrationMode,
+  MAIN_WRITER_ATTESTATION_VERSION,
+  type MainWriterAttestation,
   type PrReviewGateInput,
   type PrReviewGateReport,
+  type RulesetFingerprint,
   type TrustedPrReviewPolicy,
 } from "./pr-review-gate.ts";
+import { SignedIntegrationRefreshStore, requestIntegrationRefresh, type IntegrationRefreshStore } from "./pr-approval/integration-refresh.ts";
 import { collectPullRequestDiff, readPullRequestFileManifest, type CollectedPrDiff } from "./pr-approval/diff.ts";
 import {
   FIXED_PR_CI_BASELINE,
   planDailyReleaseValidation,
+  preMergeDeferralFor,
   DAILY_RELEASE_VALIDATION_REQUEST_VERSION,
   RELEASE_CHECKS,
   type ReleaseImpactKind,
 } from "./daily-release-validation.ts";
 
-export { SignedCompletionStore, recoverCompletion, CompletionMismatch, CompletionUnavailable, COMPLETION_RETRY_POLICY } from "./pr-approval/completion.ts";
+export { SignedCompletionStore, recoverCompletion, parseCompletionRecord, CompletionMismatch, CompletionUnavailable, COMPLETION_RETRY_POLICY } from "./pr-approval/completion.ts";
 export { collectPullRequestDiff, readPullRequestFileManifest, gitBlobSha } from "./pr-approval/diff.ts";
-export { PR_REVIEW_GATE_POLICY_VERSION, PR_REVIEW_REPORT_VERSION, PR_VALIDATE_WORKFLOW_PATH,
-  SAYHEAR_REPOSITORY_ID, SAYHEAR_REPOSITORY_NAME, evaluatePrReviewGate, parsePrReviewGateInput,
-  requirementDigest, parseIssueClosureExclusions } from "./pr-review-gate.ts";
-export { FIXED_PR_CI_BASELINE, RELEASE_CHECKS } from "./daily-release-validation.ts";
+export { PR_REVIEW_GATE_POLICY_VERSION, PR_REVIEW_GATE_LEGACY_POLICY_VERSION, PR_REVIEW_GATE_PREVIOUS_POLICY_VERSION, PR_REVIEW_GATE_INSTALLED_POLICY_VERSION, PR_REVIEW_GATE_OLDER_INSTALLED_POLICY_VERSION, PR_REVIEW_REPORT_VERSION, PR_VALIDATE_WORKFLOW_PATH,
+  SAYHEAR_REPOSITORY_ID, SAYHEAR_REPOSITORY_NAME, evaluatePrReviewGate, parsePrReviewGateInput, integrationModeOf, parseIntegrationMode, type IntegrationMode,
+  requirementDigest, parseIssueClosureExclusions, closingKeywordIssueNumbers, protectedReviewPaths } from "./pr-review-gate.ts";
+export { FIXED_PR_CI_BASELINE, RELEASE_CHECKS, preMergeDeferralFor } from "./daily-release-validation.ts";
+export {
+  BROWSER_APPROVAL_VERSION, AGENT_IDENTITY, LUKE_IDENTITY, authorizationChannel, browserContextDigest,
+  latestLukeReview, matchesActor, parseBrowserContext, parseBrowserReceipt, parseBrowserState,
+  readBrowserAuthorization, SignedBrowserApprovalStore,
+  type BrowserApprovalStore, type BrowserChallenge, type BrowserContext, type BrowserReceipt, type BrowserState,
+} from "./pr-approval/browser-approval.ts";
 
-declare const __PR_APPROVAL_BUILD_INFO__: Readonly<{ sourceCommit: string; nodeVersion: string; esbuildVersion: string }>;
+declare const __PR_APPROVAL_BUILD_INFO__: Readonly<{ sourceCommit: string; sourceDiffSha256: string; nodeVersion: string; esbuildVersion: string }>;
 export function controllerBuildIdentity(): Readonly<Record<string, unknown>> {
   return {
-    ...(typeof __PR_APPROVAL_BUILD_INFO__ === "undefined" ? { sourceCommit: "unbundled" } : __PR_APPROVAL_BUILD_INFO__),
+    ...(typeof __PR_APPROVAL_BUILD_INFO__ === "undefined"
+      ? { sourceCommit: "unbundled", sourceDiffSha256: null }
+      : __PR_APPROVAL_BUILD_INFO__),
     completionVersion: "sayhear-pr-completion:v1", policyVersion: PR_REVIEW_GATE_POLICY_VERSION,
     diffCollectionVersion: "sayhear-pr-diff:v2", baseSyncHandoffVersion: "sayhear-pr-base-sync:v1",
+    browserApprovalVersion: BROWSER_APPROVAL_VERSION,
   };
 }
 
@@ -71,6 +108,7 @@ const CONFIG_DIRECTORY =
   "/Library/Application Support/SayHear/PRApproval";
 const CONFIG_PATH = `${CONFIG_DIRECTORY}/config.json`;
 const CONTROLLER_PATH = `${CONFIG_DIRECTORY}/controller.mjs`;
+const ATTESTATION_PATH = `${CONFIG_DIRECTORY}/main-writer-attestation.json`;
 const LAUNCHER_PATHS = [
   `${CONFIG_DIRECTORY}/pr-approval-status`,
   `${CONFIG_DIRECTORY}/pr-approval-prepare`,
@@ -109,6 +147,9 @@ const REVIEW_RETRYABLE_WAIT_REASONS = new Set([
   "stale_review",
   "github_context_unavailable",
   "incomplete_diff",
+  // GitHub computes mergeability asynchronously, so a freshly created or
+  // rebased merge ref reports nothing at all for the first read or two.
+  "mergeability_unknown",
 ]);
 
 type JsonRecord = Record<string, unknown>;
@@ -160,13 +201,32 @@ export type GitHubAppConfig = Readonly<{
   slug: string;
   productionMergeAuthorized: boolean;
   ordinaryMergeTriggersProduction: boolean;
+  /**
+   * How the controller proves a PR integrates with the current main before it
+   * merges. `up-to-date-base` keeps the historical rule (the PR base must equal
+   * main). `merge-queue` binds the approval to the head commit and hands the
+   * merged result to GitHub's merge queue. `serialized-merge` also binds the
+   * approval to the head commit but pins its own merge against the current main
+   * instead of enqueueing. Absent means `up-to-date-base`.
+   */
+  integrationMode?: IntegrationMode;
   humanReviewAuthorizations?: readonly HumanReviewAuthorization[];
 }>;
+
+// Only armed auto-merge operations count here. Reviewed PRs waiting for their
+// turn do not block parallel review, but an armed writer can race an immediate merge.
+export function anotherApprovalInFlightFor(
+  integrationMode: IntegrationMode,
+  openPullRequestCount: number,
+): boolean {
+  return integrationMode !== "merge-queue" && openPullRequestCount > 0;
+}
 
 export type HumanReviewAuthorization = Readonly<{
   pullRequestNumber: number;
   // Audit provenance; exact diff and requirement matching survive main-only updates.
   approvedHeadSha: string;
+  approvedBaseSha?: string;
   diffDigest: string;
   requirementDigest: string;
   paths: readonly string[];
@@ -200,6 +260,7 @@ export function parseHumanReviewAuthorizations(value: unknown): readonly HumanRe
     return {
       pullRequestNumber: requiredPositiveInteger(raw.pullRequestNumber, "pullRequestNumber"),
       approvedHeadSha: hex(raw.approvedHeadSha, 40),
+      ...(raw.approvedBaseSha === undefined ? {} : { approvedBaseSha: hex(raw.approvedBaseSha, 40) }),
       diffDigest: hex(raw.diffDigest, 64),
       requirementDigest: hex(raw.requirementDigest, 64),
       paths: raw.paths as string[],
@@ -259,16 +320,71 @@ type ReviewPacket = Readonly<{
   reviewContext: Readonly<{
     reportVersion: string;
     policyVersion: string;
+    baseSha: string;
     requirementDigest: string;
   }>;
   impactHints: readonly ReleaseImpactKind[];
   suggestedEvidenceIds: readonly string[];
+  browserApproval: Readonly<{
+    version: string;
+    channel: HumanReviewBinding["channel"];
+    frozenAt: number | null;
+    epoch: string | null;
+    reviewId: number | null;
+  }>;
 }>;
+
+// The three authorization channels are mutually exclusive. An agent-authored PR
+// can only be authorized by Luke's browser review; a root record never applies.
+export type HumanReviewBinding = Readonly<{
+  channel: "browser" | "legacy-root" | "unknown";
+  paths: readonly string[];
+  noRuntimeImpact: boolean;
+  validateWorkflowBlobSha: string | null;
+  receipt: BrowserReceipt | null;
+  challenge: BrowserChallenge | null;
+}>;
+const NO_HUMAN_BINDING: HumanReviewBinding = Object.freeze({
+  channel: "unknown", paths: [], noRuntimeImpact: false, validateWorkflowBlobSha: null, receipt: null, challenge: null,
+});
+
+// v4 requirement digests digested top-level review bodies and states. v5 excludes
+// every review record so that approval text, dismissal, and review state cannot
+// change the requirement the approval is bound to. Inline comments stay included.
+//
+// Only identities that ran against the durable store belong here: a signed
+// completion receipt is read back with the projection its own policy produced.
+// v7 was reviewed on main but never installed, so it never wrote one. v6 and v8
+// were both installed and both wrote receipts, so both stay listed.
+export type RequirementProjection = "review-inclusive-v4" | "review-exclusive-v5";
+export const RECEIPT_POLICY_VERSIONS: readonly string[] = [
+  PR_REVIEW_GATE_POLICY_VERSION,
+  PR_REVIEW_GATE_V10_POLICY_VERSION,
+  PR_REVIEW_GATE_V9_POLICY_VERSION,
+  V8_POLICY_VERSION,
+  V6_POLICY_VERSION,
+  V5_POLICY_VERSION,
+  V4_POLICY_VERSION,
+];
+export function requirementProjectionFor(policyVersion: string): RequirementProjection {
+  // Never guess a projection for an unknown policy: guessing the review-inclusive
+  // one would silently accept a digest the policy never produced.
+  if (!RECEIPT_POLICY_VERSIONS.includes(policyVersion)) throw new Error(`Unknown PR review policy version: ${policyVersion}`);
+  return policyVersion === V4_POLICY_VERSION ? "review-inclusive-v4" : "review-exclusive-v5";
+}
 
 type ControllerConfig = Readonly<{
   api: GitHubApi;
   completionStore?: CompletionStore;
+  integrationRefreshStore?: IntegrationRefreshStore;
+  browserApprovalStore?: BrowserApprovalStore;
   app: GitHubAppConfig;
+  /**
+   * Operator attestation loaded once at startup next to the App config, so
+   * snapshot and status paths never touch the protected filesystem mid-flow.
+   * Absent means no attestation was presented; unit-test configs omit it.
+   */
+  mainWriterAttestation?: MainWriterAttestation | null;
   policy: TrustedPrReviewPolicy;
   botActorId: number;
   ownerActorId: number;
@@ -285,6 +401,9 @@ type GitHubPullRequest = JsonRecord & {
   base: JsonRecord & { ref: string; sha: string };
   user: JsonRecord & { id: number };
   merge_commit_sha: string | null;
+  // GitHub computes mergeability asynchronously; `null` means "not ready yet".
+  mergeable?: boolean | null;
+  mergeable_state?: string | null;
   changed_files: number;
 };
 
@@ -649,6 +768,7 @@ async function readLocalAppConfig(): Promise<GitHubAppConfig> {
       value.ordinaryMergeTriggersProduction,
       "ordinaryMergeTriggersProduction",
     ),
+    integrationMode: parseIntegrationMode(value.integrationMode),
     humanReviewAuthorizations: parseHumanReviewAuthorizations(value.humanReviewAuthorizations),
   };
 }
@@ -733,10 +853,12 @@ export function isVercelDeploymentStatus(comment: GitHubComment): boolean {
     (comment.body ?? "").startsWith("[vc]: #");
 }
 
-function digestDiscussion(
+export function digestDiscussion(
   comments: readonly GitHubComment[],
-  reviews: readonly GitHubReview[] = [],
+  reviews: readonly GitHubReview[],
+  projection: RequirementProjection,
 ): string {
+  const includedReviews = projection === "review-exclusive-v5" ? [] : reviews;
   const entries = [
     ...comments.map((comment) => ({
       id: comment.id,
@@ -745,7 +867,7 @@ function digestDiscussion(
       createdAt: comment.created_at,
       updatedAt: comment.updated_at,
     })),
-    ...reviews.map((review) => ({
+    ...includedReviews.map((review) => ({
       id: review.id,
       actor: review.user.id,
       body: review.body ?? "",
@@ -783,6 +905,7 @@ function isTestResultPassed(value: unknown): boolean {
   if (!isRecord(value) || value.status !== "passed") return false;
   return (
     Array.isArray(value.assertionResults) &&
+    value.assertionResults.length > 0 &&
     value.assertionResults.every(
       (assertion) => isRecord(assertion) && assertion.status === "passed",
     )
@@ -793,7 +916,8 @@ function reportHasNoSkips(value: unknown): value is JsonRecord & {
   success: boolean;
   testResults: readonly JsonRecord[];
 } {
-  if (!isRecord(value) || value.success !== true || !Array.isArray(value.testResults)) {
+  if (!isRecord(value) || value.success !== true ||
+    !Array.isArray(value.testResults) || value.testResults.length === 0) {
     return false;
   }
   return value.testResults.every(isTestResultPassed);
@@ -990,6 +1114,48 @@ export async function readIssueDependencies(
   }
 }
 
+/**
+ * Issues GitHub would close natively when the PR merges: Development-sidebar
+ * links and body keywords. Returns `null` when the set cannot be read whole.
+ */
+export async function readClosingIssueReferences(
+  api: GitHubApi,
+  pullNumber: number,
+): Promise<number[] | null> {
+  try {
+    const data = await readGraphql<{
+      repository?: {
+        pullRequest?: {
+          closingIssuesReferences?: {
+            nodes?: readonly { number?: number }[];
+            pageInfo?: { hasNextPage?: boolean };
+          };
+        } | null;
+      } | null;
+    }>(
+      api,
+      `query($owner:String!,$name:String!,$number:Int!){
+        repository(owner:$owner,name:$name){
+          pullRequest(number:$number){
+            closingIssuesReferences(first:100){nodes{number} pageInfo{hasNextPage}}
+          }
+        }
+      }`,
+      { owner: "lukemyself-hub", name: "SayHear", number: pullNumber },
+    );
+    const references = data.repository?.pullRequest?.closingIssuesReferences;
+    if (!references?.nodes || references.pageInfo?.hasNextPage !== false) return null;
+    const numbers: number[] = [];
+    for (const node of references.nodes) {
+      if (typeof node.number !== "number" || !Number.isSafeInteger(node.number) || node.number <= 0) return null;
+      numbers.push(node.number);
+    }
+    return numbers;
+  } catch {
+    return null;
+  }
+}
+
 async function readReviewThreadState(
   api: GitHubApi,
   pullNumber: number,
@@ -1039,6 +1205,35 @@ async function readReviewThreadState(
       }
     }
     return false;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Whether GitHub exposes a merge queue for main. Querying the branch-specific
+ * GraphQL field avoids treating the ruleset list summary as if it contained
+ * each ruleset's rule details.
+ */
+export async function readMergeQueueAvailability(
+  api: GitHubApi,
+): Promise<boolean | null> {
+  try {
+    const data = await readGraphql<{
+      repository?: { mergeQueue?: { id?: unknown } | null } | null;
+    }>(
+      api,
+      `query { repository(owner: "lukemyself-hub", name: "SayHear") {
+        mergeQueue(branch: "main") { id }
+      } }`,
+      {},
+    );
+    if (!isRecord(data.repository)) return null;
+    const queue = data.repository.mergeQueue;
+    if (queue === null) return false;
+    return isRecord(queue) && typeof queue.id === "string" && queue.id.length > 0
+      ? true
+      : null;
   } catch {
     return null;
   }
@@ -1098,27 +1293,45 @@ export async function readBranchProtection(
     ? protection.enforce_admins.enabled === true
     : false;
 
-  let bypassActorIds: number[] = [];
-  try {
-    const rulesets = await api.pages<JsonRecord>(
-      repositoryPath("/rulesets?includes_parents=true"),
-    );
-    for (const ruleset of rulesets) {
-      if (!Array.isArray(ruleset.bypass_actors)) {
-        throw new Error("The ruleset bypass actors could not be verified.");
+  const rulesets = await readRulesetDetails(api);
+  if (rulesets === null) {
+    return {
+      readable: false,
+      protected: true,
+      branch: "main",
+      requiresUpToDate: checks?.strict === true,
+      dismissesStaleReviews: reviewRules?.dismiss_stale_reviews === true,
+      enforcesAdmins: enforceAdmins,
+      requiredApprovingReviews:
+        typeof reviewRules?.required_approving_review_count === "number"
+          ? reviewRules.required_approving_review_count
+          : 0,
+      requiredChecks,
+      bypassActorIds: [],
+    };
+  }
+  const bypassActors = new Set<number>();
+  // A hidden bypass set (GitHub withholds `bypass_actors` from this App)
+  // does not poison readability: the rules themselves parsed, and bypass
+  // membership is decided by the main writer guard, which fails closed on
+  // anything it cannot prove. Only a corrupt visible entry is unreadable.
+  let corruptBypass = false;
+  for (const ruleset of rulesets) {
+    if (!Array.isArray(ruleset.bypass_actors)) continue;
+    for (const actor of ruleset.bypass_actors) {
+      if (!isRecord(actor) || typeof actor.actor_id !== "number" || !Number.isSafeInteger(actor.actor_id) || actor.actor_id <= 0 ||
+          typeof actor.actor_type !== "string" || !["Integration", "Team", "RepositoryRole", "OrganizationAdmin", "DeployKey"].includes(actor.actor_type) ||
+          !["always", "pull_request", "exempt"].includes(String(actor.bypass_mode))) {
+        corruptBypass = true;
+        break;
       }
-      const actors = ruleset.bypass_actors;
-      if (actors.length > 0) {
-        bypassActorIds.push(
-          ...actors.map((actor) =>
-            isRecord(actor) && typeof actor.actor_id === "number"
-              ? Math.max(1, actor.actor_id)
-              : Number.MAX_SAFE_INTEGER,
-          ),
-        );
-      }
+      bypassActors.add(actor.actor_id);
     }
-  } catch {
+    if (corruptBypass) break;
+  }
+  const bypassActorIds = [...bypassActors].sort((left, right) => left - right);
+
+  if (corruptBypass) {
     return {
       readable: false,
       protected: true,
@@ -1151,6 +1364,326 @@ export async function readBranchProtection(
   };
 }
 
+/**
+ * Every repository ruleset that applies to SayHear, as detail records.
+ *
+ * `/repos/{owner}/{repo}/rulesets` answers with summaries only: it omits
+ * `conditions`, `rules`, and `bypass_actors`, which are exactly the fields the
+ * default-branch writer guard has to read. Each ruleset therefore needs its own
+ * detail read, and a detail that cannot be read makes the whole result
+ * unusable, because a ruleset that might cover main must never be skipped.
+ *
+ * Returns null when anything could not be read.
+ */
+async function readRulesetDetails(
+  api: GitHubApi,
+): Promise<JsonRecord[] | null> {
+  let summaries: readonly JsonRecord[];
+  try {
+    summaries = await api.pages<JsonRecord>(
+      repositoryPath("/rulesets?includes_parents=true"),
+    );
+  } catch {
+    return null;
+  }
+  const details: JsonRecord[] = [];
+  for (const summary of summaries) {
+    if (!isRecord(summary)) return null;
+    const id = summary.id;
+    if (typeof id !== "number" || !Number.isSafeInteger(id) || id <= 0) {
+      return null;
+    }
+    let detail: JsonRecord;
+    try {
+      detail = await api.request<JsonRecord>(
+        repositoryPath(`/rulesets/${id}?includes_parents=true`),
+      );
+    } catch {
+      return null;
+    }
+    if (!isRecord(detail) || detail.id !== id) return null;
+    details.push(detail);
+  }
+  return details;
+}
+
+function stableStringify(value: unknown): string {
+  if (value === null) return "null";
+  if (Array.isArray(value)) {
+    return `[${value.map((entry) => stableStringify(entry)).join(",")}]`;
+  }
+  if (isRecord(value)) {
+    const keys = Object.keys(value).sort();
+    return `{${keys.map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(",")}}`;
+  }
+  const text = JSON.stringify(value);
+  if (typeof text !== "string") throw new Error("Ruleset detail is not JSON-serializable.");
+  return text;
+}
+
+/**
+ * Content fingerprint of one ruleset detail record.
+ *
+ * Only fields the App token can actually read enter the fingerprint: id,
+ * enforcement, target, conditions, rules, and the `updated_at` instant.
+ * GitHub bumps `updated_at` on any ruleset mutation, including bypass list
+ * edits, so a fingerprint taken at attestation time stops matching after any
+ * touch. The instant is hashed as epoch milliseconds, never as the raw
+ * string: GitHub renders the same instant differently per caller (UTC `Z`
+ * form for the App token, local offset form for a user token), and hashing
+ * the raw text would make identical rulesets mismatch forever. Array order
+ * is significant on purpose: a reordering the API actually reports is
+ * treated as a change and fails closed.
+ */
+export function fingerprintRuleset(detail: JsonRecord): string {
+  const id = detail.id;
+  if (typeof id !== "number" || !Number.isSafeInteger(id) || id <= 0) {
+    throw new Error("Ruleset detail has no usable id.");
+  }
+  for (const key of ["enforcement", "target", "updated_at"] as const) {
+    if (typeof detail[key] !== "string") {
+      throw new Error(`Ruleset detail has no usable ${key}.`);
+    }
+  }
+  const updatedAt = Date.parse(detail.updated_at as string);
+  if (!Number.isSafeInteger(updatedAt)) {
+    throw new Error("Ruleset detail has no parsable updated_at instant.");
+  }
+  if (!isRecord(detail.conditions) || !Array.isArray(detail.rules)) {
+    throw new Error("Ruleset detail has no usable conditions or rules.");
+  }
+  return createHash("sha256")
+    .update(
+      stableStringify({
+        id: detail.id,
+        enforcement: detail.enforcement,
+        target: detail.target,
+        conditions: detail.conditions,
+        rules: detail.rules,
+        updatedAt,
+      }),
+    )
+    .digest("hex");
+}
+
+function parseMainWriterAttestation(value: unknown): MainWriterAttestation {
+  if (!isRecord(value)) throw new Error("Main writer attestation must be an object.");
+  if (value.version !== MAIN_WRITER_ATTESTATION_VERSION) {
+    throw new Error(
+      `Main writer attestation version must be ${MAIN_WRITER_ATTESTATION_VERSION}.`,
+    );
+  }
+  const fingerprint = value.rulesetFingerprint;
+  if (typeof fingerprint !== "string" || !/^[0-9a-f]{64}$/.test(fingerprint)) {
+    throw new Error("Main writer attestation has no usable ruleset fingerprint.");
+  }
+  const asserted = value.assertedBypassAppIds;
+  if (
+    !Array.isArray(asserted) ||
+    asserted.length === 0 ||
+    asserted.some(
+      (actorId) =>
+        typeof actorId !== "number" || !Number.isSafeInteger(actorId) || actorId <= 0,
+    )
+  ) {
+    throw new Error("Main writer attestation has no usable asserted bypass list.");
+  }
+  return {
+    version: MAIN_WRITER_ATTESTATION_VERSION,
+    rulesetId: requiredPositiveInteger(value.rulesetId, "rulesetId"),
+    rulesetFingerprint: fingerprint,
+    assertedBypassAppIds: [...asserted as readonly number[]].sort((left, right) => left - right),
+    attestedAt: requiredString(value.attestedAt, "attestedAt"),
+    attestedBy: requiredString(value.attestedBy, "attestedBy"),
+  };
+}
+
+/**
+ * The operator attestation backing the main writer guard, or null when the
+ * operator never attested. A missing file is ordinary: without it the guard
+ * simply needs live bypass enumeration to pass. A present but unreadable or
+ * malformed file throws, the same fail-closed posture as the App config.
+ */
+async function readMainWriterAttestation(): Promise<MainWriterAttestation | null> {
+  await assertTrustedDirectories();
+  let raw: string;
+  try {
+    const [resolvedPath, fileInfo] = await Promise.all([
+      realpath(ATTESTATION_PATH),
+      stat(ATTESTATION_PATH),
+    ]);
+    if (
+      resolvedPath !== ATTESTATION_PATH ||
+      !fileInfo.isFile() ||
+      fileInfo.uid !== 0 ||
+      (fileInfo.mode & 0o022) !== 0
+    ) {
+      throw new Error(
+        "Main writer attestation must be a root-owned, non-writable regular file.",
+      );
+    }
+    raw = await readFile(ATTESTATION_PATH, "utf8");
+  } catch (error: unknown) {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      (error as { code?: unknown }).code === "ENOENT"
+    ) {
+      return null;
+    }
+    throw error;
+  }
+  let value: unknown;
+  try {
+    value = JSON.parse(raw) as unknown;
+  } catch {
+    throw new Error(`Main writer attestation is not valid JSON at ${ATTESTATION_PATH}.`);
+  }
+  return parseMainWriterAttestation(value);
+}
+
+/**
+ * Who is allowed to update the default branch.
+ *
+ * `serialized-merge` merges a stale-base PR against whatever main is at the
+ * moment of the merge request. GitHub recomputes that merge then, so the merge
+ * itself cannot miss intervening commits, but nothing stops another writer from
+ * advancing main between the controller's last read and its merge request. The
+ * repository therefore has to prove that the approval App is the only actor
+ * able to update main, and the rulesets are the only machine-readable statement
+ * of that.
+ *
+ * Only an active branch ruleset that covers the default branch and carries an
+ * `update` rule counts. Anything unreadable fails closed: the guard blocks
+ * rather than assuming main is App-only.
+ *
+ * GitHub returns `bypass_actors` only to a caller with administration access, so
+ * a ruleset that hides the bypass set is reported as unproven rather than as an
+ * App-only main: an unreadable set never counts as an empty one.
+ */
+export async function readMainWriterGuard(
+  api: GitHubApi,
+  defaultBranch: string,
+): Promise<NonNullable<PrReviewGateInput["runtime"]["mainWriterGuard"]>> {
+  const unreadable = {
+    readable: false,
+    restrictsDefaultBranchUpdates: false,
+    bypassActorIds: [],
+    bypassActorsEnumerated: false,
+    appBypassMode: null,
+    rulesetIds: [],
+  } as const;
+  const rulesets = await readRulesetDetails(api);
+  if (rulesets === null) return unreadable;
+  const bypassActorIds = new Set<number>();
+  const bypassModes = new Set<string>();
+  const rulesetIds: number[] = [];
+  const rulesetFingerprints: RulesetFingerprint[] = [];
+  let restrictsDefaultBranchUpdates = false;
+  let bypassActorsEnumerated = true;
+  for (const ruleset of rulesets) {
+    // Only an active branch ruleset that covers the default branch can restrict
+    // who updates main; a tag ruleset or another branch is noise for this guard.
+    if (ruleset.target !== "branch" || ruleset.enforcement !== "active") {
+      continue;
+    }
+    // A branch ruleset whose conditions cannot be read might or might not cover
+    // main, so it is never allowed to pass unnoticed.
+    if (!isRecord(ruleset.conditions)) return unreadable;
+    if (!rulesetCoversBranch(ruleset.conditions, defaultBranch)) {
+      continue;
+    }
+    if (!Array.isArray(ruleset.rules)) return unreadable;
+    if (!ruleset.rules.some((rule) => isRecord(rule) && rule.type === "update")) {
+      continue;
+    }
+    const id = ruleset.id;
+    if (typeof id !== "number" || !Number.isSafeInteger(id) || id <= 0) {
+      return unreadable;
+    }
+    rulesetIds.push(id);
+    restrictsDefaultBranchUpdates = true;
+    try {
+      rulesetFingerprints.push({ id, fingerprint: fingerprintRuleset(ruleset) });
+    } catch {
+      return unreadable;
+    }
+    // GitHub reports this even when it hides `bypass_actors`, so the guard can
+    // still show whether the App itself is allowed through the restriction.
+    if (typeof ruleset.current_user_can_bypass === "string") {
+      bypassModes.add(ruleset.current_user_can_bypass);
+    }
+    if (!Array.isArray(ruleset.bypass_actors)) {
+      bypassActorsEnumerated = false;
+      continue;
+    }
+    for (const actor of ruleset.bypass_actors) {
+      const actorId = isRecord(actor) ? actor.actor_id : null;
+      if (typeof actorId !== "number" || !Number.isSafeInteger(actorId)) {
+        return unreadable;
+      }
+      bypassActorIds.add(actorId);
+    }
+  }
+  return {
+    readable: true,
+    restrictsDefaultBranchUpdates,
+    bypassActorIds: [...bypassActorIds].sort((left, right) => left - right),
+    bypassActorsEnumerated,
+    appBypassMode: bypassModes.size === 1 ? [...bypassModes][0]! : null,
+    rulesetIds,
+    rulesetFingerprints,
+  };
+}
+
+/**
+ * Whether a ruleset's ref conditions cover the default branch.
+ *
+ * GitHub writes `~DEFAULT_BRANCH` for the default branch, but a ruleset may
+ * also name `refs/heads/main` or a glob. A missing or empty include list never
+ * counts, so an unreadable condition cannot pass as full coverage.
+ */
+function rulesetCoversBranch(
+  conditions: JsonRecord,
+  defaultBranch: string,
+): boolean {
+  const refName = conditions.ref_name;
+  if (!isRecord(refName)) return false;
+  const ref = `refs/heads/${defaultBranch}`;
+  const include = Array.isArray(refName.include) ? refName.include : [];
+  if (
+    !include.some(
+      (pattern) =>
+        typeof pattern === "string" &&
+        refConditionMatches(pattern, ref, defaultBranch),
+    )
+  ) {
+    return false;
+  }
+  const exclude = Array.isArray(refName.exclude) ? refName.exclude : [];
+  return !exclude.some(
+    (pattern) =>
+      typeof pattern === "string" &&
+      refConditionMatches(pattern, ref, defaultBranch),
+  );
+}
+
+function refConditionMatches(
+  pattern: string,
+  ref: string,
+  defaultBranch: string,
+): boolean {
+  if (pattern === "~ALL") return true;
+  if (pattern === "~DEFAULT_BRANCH") return ref === `refs/heads/${defaultBranch}`;
+  const expression = pattern
+    .split("*")
+    .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("[^/]*");
+  const matcher = new RegExp(`^${expression}$`);
+  return matcher.test(ref) || matcher.test(ref.slice("refs/heads/".length));
+}
+
 async function createControllerConfig(
   config: GitHubAppConfig,
   api: GitHubRestClient,
@@ -1178,6 +1711,7 @@ async function createControllerConfig(
   return {
     api,
     app: config,
+    mainWriterAttestation: await readMainWriterAttestation(),
     policy: {
       repositoryId: SAYHEAR_REPOSITORY_ID,
       repositoryName: SAYHEAR_REPOSITORY_NAME,
@@ -1198,9 +1732,13 @@ async function createRuntimeControllerConfig(): Promise<ControllerConfig> {
   const config = await createControllerConfig(appConfig, api);
   const privateKey = await readAppPrivateKey();
   const publicKey = createPublicKey(privateKey).export({ type: "spki", format: "pem" }).toString();
-  return { ...config, completionStore: new SignedCompletionStore(
-    resolve(homedir(), "Library/Application Support/SayHear/PRApproval/completions"), privateKey, publicKey,
-  ) };
+  const storeDirectory = resolve(homedir(), "Library/Application Support/SayHear/PRApproval");
+  return {
+    ...config,
+    integrationRefreshStore: new SignedIntegrationRefreshStore(resolve(storeDirectory, "integration-refresh"), privateKey, publicKey),
+    completionStore: new SignedCompletionStore(resolve(storeDirectory, "completions"), privateKey, publicKey),
+    browserApprovalStore: new SignedBrowserApprovalStore(resolve(storeDirectory, "browser-approvals"), privateKey, publicKey),
+  };
 }
 
 export function parsePauseState(
@@ -1309,6 +1847,8 @@ function currentCheckSummary(
 ): Readonly<{ title: string; summary: string }> {
   const titleByOutcome: Record<PrReviewGateReport["outcome"], string> = {
     merge_candidate: "Review and evidence passed",
+    merge_candidate_with_deferrals:
+      "Review and evidence passed; some checks deferred",
     request_changes: "Changes required",
     awaiting_verification: "Evidence or state is incomplete",
     human_decision: "Human decision required",
@@ -1359,6 +1899,7 @@ export async function resolveLinkedIssues(
 export async function readCurrentPullRequestMergeSha(
   api: GitHubApi,
   pullRequest: Pick<GitHubPullRequest, "number" | "base" | "head" | "merge_commit_sha">,
+  currentMainSha = pullRequest.base.sha,
 ): Promise<string | null> {
   const expectedRef = `refs/pull/${pullRequest.number}/merge`;
   try {
@@ -1394,7 +1935,7 @@ export async function readCurrentPullRequestMergeSha(
       !isRecord(headParent) ||
       typeof baseParent.sha !== "string" ||
       typeof headParent.sha !== "string" ||
-      baseParent.sha.toLowerCase() !== pullRequest.base.sha.toLowerCase() ||
+      baseParent.sha.toLowerCase() !== currentMainSha.toLowerCase() ||
       headParent.sha.toLowerCase() !== pullRequest.head.sha.toLowerCase()
     ) {
       return null;
@@ -1439,7 +1980,7 @@ async function readLatestWorkflowRun(
   }
   let lastMismatch: string | null = null;
 
-  for (const check of actionsChecks) {
+  for (const check of actionsChecks.slice(0, 1)) {
     const detailsUrl =
       typeof check.details_url === "string" ? check.details_url : null;
     if (!detailsUrl) continue;
@@ -1504,7 +2045,11 @@ async function readVitestReport(
   api: GitHubApi,
   runId: number,
   pullNumber: number,
-): Promise<Readonly<{ digest: string; report: JsonRecord }> | null> {
+): Promise<Readonly<{
+  digest: string;
+  report: JsonRecord;
+  checkout: ValidatedCheckout | null;
+}> | null> {
   try {
     const response = await api.request<JsonRecord>(
       repositoryPath(`/actions/runs/${runId}/artifacts?per_page=100`),
@@ -1532,13 +2077,64 @@ async function readVitestReport(
     const digest = createHash("sha256").update(reportBytes).digest("hex");
     const report = JSON.parse(Buffer.from(reportBytes).toString("utf8")) as unknown;
     if (!isRecord(report)) return null;
-    return { digest, report };
+    return {
+      digest,
+      report,
+      checkout: parseValidatedCheckout(extractZipEntry(archive, "pr-validate-source.json")),
+    };
   } catch {
     return null;
   }
 }
 
-async function collectEvidence(
+type ValidatedCheckout = Readonly<{
+  event: string;
+  pullRequestNumber: number | null;
+  headSha: string;
+  baseSha: string;
+  checkoutSha: string;
+  parentShas: readonly string[] | null;
+  runId: number | null;
+  runAttempt: number | null;
+}>;
+
+// The receipt the Validate workflow writes to prove which merge ref it checked
+// out. A missing or malformed receipt is not an error in itself: `up-to-date-base`
+// never needed one, and the gate already requires base == main there. Only a
+// head-bound mode consumes it, and it fails closed on `null` itself.
+function parseValidatedCheckout(bytes: Uint8Array | null): ValidatedCheckout | null {
+  if (!bytes || bytes.byteLength > 20_000) return null;
+  try {
+    const value = JSON.parse(Buffer.from(bytes).toString("utf8")) as unknown;
+    if (!isRecord(value)) return null;
+    if (
+      typeof value.event !== "string" ||
+      (value.pullRequestNumber !== null &&
+        (typeof value.pullRequestNumber !== "number" ||
+          !Number.isSafeInteger(value.pullRequestNumber))) ||
+      typeof value.headSha !== "string" ||
+      typeof value.baseSha !== "string" ||
+      typeof value.checkoutSha !== "string" ||
+      !/^[0-9a-f]{40}$/i.test(value.headSha) ||
+      !/^[0-9a-f]{40}$/i.test(value.baseSha) ||
+      !/^[0-9a-f]{40}$/i.test(value.checkoutSha)
+    ) return null;
+    return {
+      event: value.event,
+      pullRequestNumber: value.pullRequestNumber,
+      headSha: value.headSha.toLowerCase(),
+      baseSha: value.baseSha.toLowerCase(),
+      checkoutSha: value.checkoutSha.toLowerCase(),
+      parentShas: Array.isArray(value.parentShas) && value.parentShas.length === 2 && value.parentShas.every((sha) => typeof sha === "string" && /^[a-f0-9]{40}$/.test(sha)) ? value.parentShas : null,
+      runId: typeof value.runId === "number" && Number.isSafeInteger(value.runId) && value.runId > 0 ? value.runId : null,
+      runAttempt: typeof value.runAttempt === "number" && Number.isSafeInteger(value.runAttempt) && value.runAttempt > 0 ? value.runAttempt : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function collectEvidence(
   config: ControllerConfig,
   pullNumber: number,
   pullRequest: GitHubPullRequest,
@@ -1547,12 +2143,13 @@ async function collectEvidence(
   capability: PrReviewGateInput["review"]["capability"],
   mergeSha: string | null,
   baseSha: string,
-  humanAuthorization: HumanReviewAuthorization | null = null,
+  humanBinding: HumanReviewBinding = NO_HUMAN_BINDING,
 ): Promise<Readonly<{
   evidence: PrReviewGateInput["evidence"];
   trustedWorkflowBlobSha: string | null;
   workflowStatus: "queued" | "in_progress" | "completed" | "missing" | "unknown";
   workflowConclusion: string | null;
+  staleIntegrationRunId: number | null;
 }>> {
   const plan = planDailyReleaseValidation({
     version: DAILY_RELEASE_VALIDATION_REQUEST_VERSION,
@@ -1571,8 +2168,8 @@ async function collectEvidence(
   // The plan already carries ui:portal-smoke for Portal UI paths, so the gate
   // and the evidence collector read the same path rule from one place.
 
-  // GitHub can omit merge_commit_sha on an open PR; the current-base gate
-  // prevents review until the PR's base matches main, so compare its head tree.
+  // GitHub can omit merge_commit_sha on an open PR. Without a verified merge
+  // ref, the workflow evidence below cannot prove an integrated checkout.
   const fallbackMergeSha = mergeSha ?? pullRequest.head.sha;
   const source = {
     repositoryId: SAYHEAR_REPOSITORY_ID,
@@ -1600,6 +2197,7 @@ async function collectEvidence(
       trustedWorkflowBlobSha: null,
       workflowStatus: "unknown",
       workflowConclusion: null,
+      staleIntegrationRunId: null,
     };
   }
 
@@ -1620,6 +2218,7 @@ async function collectEvidence(
       trustedWorkflowBlobSha: null,
       workflowStatus: "missing",
       workflowConclusion: null,
+      staleIntegrationRunId: null,
     };
   }
 
@@ -1635,13 +2234,14 @@ async function collectEvidence(
     return (
       check.name === "validate" &&
       app?.id === ACTIONS_APP_ID &&
-      detailsUrl.includes(`/actions/runs/${run.id}`)
+      new RegExp(`^https://github\\.com/${SAYHEAR_REPOSITORY_NAME}/actions/runs/${run.id}(?:/|$)`).test(detailsUrl)
     );
   });
   const runPull = run.pull_requests.find((entry) => entry.number === pullNumber);
+  const serialized = parseIntegrationMode(config.app.integrationMode) === "serialized-merge";
   const workflowSourceValid =
-    runPull?.base.sha === baseSha &&
-    runPull.head.sha === pullRequest.head.sha &&
+    (serialized ? runPull !== undefined : runPull?.base.sha === baseSha) &&
+    runPull?.head.sha === pullRequest.head.sha &&
     run.head_sha === pullRequest.head.sha &&
     (run.path === PR_VALIDATE_WORKFLOW_PATH ||
       run.path.startsWith(`${PR_VALIDATE_WORKFLOW_PATH}@`)) &&
@@ -1675,14 +2275,33 @@ async function collectEvidence(
   }
   const trustedWorkflow =
     workflowSourceValid &&
-    isTrustedWorkflowVersion(mainWorkflowSha, mergeWorkflowSha, humanAuthorization?.validateWorkflowBlobSha ?? null);
+    isTrustedWorkflowVersion(mainWorkflowSha, mergeWorkflowSha, humanBinding.validateWorkflowBlobSha);
   const testArtifact = await readVitestReport(
     config.api,
     run.id,
     pullNumber,
   );
+  // A head-bound mode may merge a base that moved after the review, so only
+  // there must the accepted artifact prove it ran on the current merge ref. In
+  // `up-to-date-base` the gate already requires base == main, and demanding a
+  // receipt would fail every PR until the recording workflow lands on main.
+  const headBoundIntegration =
+    parseIntegrationMode(config.app.integrationMode) !== "up-to-date-base";
+  const checkout = testArtifact?.checkout ?? null;
+  const checkoutMatchesMergeRef =
+    checkout !== null &&
+    checkout.event === "pull_request" &&
+    checkout.pullRequestNumber === pullNumber &&
+    checkout.headSha === pullRequest.head.sha.toLowerCase() &&
+    (serialized
+      ? checkout.parentShas?.[0] === baseSha.toLowerCase() && checkout.parentShas[1] === pullRequest.head.sha.toLowerCase() &&
+        checkout.runId === run.id && checkout.runAttempt === run.run_attempt
+      : checkout.baseSha === baseSha.toLowerCase()) &&
+    checkout.checkoutSha === mergeSha?.toLowerCase();
   const validReport =
-    testArtifact !== null && reportHasNoSkips(testArtifact.report);
+    testArtifact !== null &&
+    reportHasNoSkips(testArtifact.report) &&
+    (!headBoundIntegration || checkoutMatchesMergeRef);
 
   const evidenceSource = {
     ...source,
@@ -1703,8 +2322,14 @@ async function collectEvidence(
       trustedWorkflow &&
       run.status === "completed" &&
       run.conclusion === "success" &&
-      (checkId !== "baseline:test" || validReport) &&
+      (headBoundIntegration
+        ? validReport
+        : checkId !== "baseline:test" || validReport) &&
       (fixed || targetedPassed);
+    const policy = preMergeDeferralFor(checkId);
+    if (!passed && policy !== null) {
+      return { kind: "deferred-before-merge" as const, checkId, policy };
+    }
     return {
       checkId,
       result: passed
@@ -1719,7 +2344,25 @@ async function collectEvidence(
         !fixed && targetedPassed ? [checkId] : [],
     };
   });
+  let staleIntegrationRunId: number | null = null;
+  if (serialized && checkout && run.status === "completed" &&
+      ["success", "failure", "cancelled", "timed_out", "action_required"].includes(run.conclusion ?? "") &&
+      actionsCheck?.status === "completed" && checkout.event === "pull_request" && checkout.pullRequestNumber === pullNumber &&
+      checkout.headSha === pullRequest.head.sha.toLowerCase() && checkout.runId === run.id && checkout.runAttempt === run.run_attempt &&
+      checkout.parentShas?.[1] === pullRequest.head.sha.toLowerCase() && checkout.parentShas[0] !== baseSha.toLowerCase() &&
+      checkout.checkoutSha !== mergeSha.toLowerCase() && runPull?.head.sha === pullRequest.head.sha) {
+    try {
+      const oldCommit = await config.api.request<JsonRecord>(repositoryPath(`/git/commits/${checkout.checkoutSha}`));
+      const oldWorkflow = await config.api.request<JsonRecord>(repositoryPath(`/contents/${PR_VALIDATE_WORKFLOW_PATH}?ref=${checkout.checkoutSha}`));
+      const oldBaseWorkflow = await config.api.request<JsonRecord>(repositoryPath(`/contents/${PR_VALIDATE_WORKFLOW_PATH}?ref=${checkout.parentShas[0]}`));
+      if (oldCommit.sha === checkout.checkoutSha && Array.isArray(oldCommit.parents) && oldCommit.parents.length === 2 &&
+          oldCommit.parents.every((parent, index) => isRecord(parent) && parent.sha === checkout.parentShas?.[index]) &&
+          isTrustedWorkflowVersion(typeof oldBaseWorkflow.sha === "string" ? oldBaseWorkflow.sha : null,
+            typeof oldWorkflow.sha === "string" ? oldWorkflow.sha : null, humanBinding.validateWorkflowBlobSha)) staleIntegrationRunId = run.id;
+    } catch { /* Incomplete old provenance remains a wait, never a dispatch. */ }
+  }
   return {
+    staleIntegrationRunId,
     evidence,
     trustedWorkflowBlobSha: trustedWorkflow ? mergeWorkflowSha : null,
     workflowStatus:
@@ -1733,6 +2376,11 @@ async function collectEvidence(
 }
 
 type Snapshot = Readonly<{
+  baseReviewSafe?: boolean;
+  staleIntegrationRunId: number | null;
+  changedPaths: readonly string[];
+  humanBinding: HumanReviewBinding;
+  browserChallenge: BrowserChallenge | null;
   gateInput: Omit<PrReviewGateInput, "review" | "evidence">;
   evidence: PrReviewGateInput["evidence"];
   trustedWorkflowBlobSha: string | null;
@@ -1741,7 +2389,124 @@ type Snapshot = Readonly<{
   diff: CollectedPrDiff & Readonly<{ changeDigest: string }>;
 }>;
 
-async function readSnapshot(
+export async function baseReviewRiskSafe(
+  api: GitHubApi,
+  reviewedBase: string,
+  currentMain: string,
+  changedPaths: readonly string[],
+): Promise<boolean> {
+  if (![reviewedBase, currentMain].every((sha) => /^[a-f0-9]{40}$/.test(sha))) return false;
+  if (reviewedBase === currentMain) return true;
+  try {
+    const comparison = await api.request<JsonRecord>(repositoryPath(`/compare/${reviewedBase}...${currentMain}`));
+    const lastCommit = Array.isArray(comparison.commits) ? comparison.commits.at(-1) : null;
+    if (!isRecord(comparison.base_commit) || comparison.base_commit.sha !== reviewedBase ||
+        !isRecord(comparison.merge_base_commit) || comparison.merge_base_commit.sha !== reviewedBase ||
+        comparison.status !== "ahead" || !Array.isArray(comparison.commits) ||
+        comparison.commits.length === 0 || comparison.commits.length >= 250 ||
+        comparison.total_commits !== comparison.commits.length ||
+        !isRecord(lastCommit) || lastCommit.sha !== currentMain ||
+        !Array.isArray(comparison.files) || comparison.files.length >= 300) return false;
+    const proposed = new Set(changedPaths);
+    const highRisk = /(?:^|\/)(?:\.github|migrations?|schema|schemas|shared|contracts?|types|providers?|auth|authentication|authorization|security|permissions?|capabilities|feature-flags|polic(?:y|ies)|pr-approval)(?:\/|[.-])|(?:^|\/)(?:package\.json|[^/]*lock[^/]*|tsconfig[^/]*|[^/]*config\.[^/]+|AGENTS\.md|CLAUDE\.md)|^scripts\/pr-review-gate\.ts$|^docs\/(?:adr|architecture|product|agents)\//i;
+    return comparison.files.every((file) => {
+      if (!isRecord(file) || typeof file.filename !== "string" ||
+          !["added", "modified", "removed", "renamed", "copied"].includes(String(file.status)) ||
+          ((file.status === "renamed" || file.status === "copied") && typeof file.previous_filename !== "string")) return false;
+      const paths = [file.filename, ...(typeof file.previous_filename === "string" ? [file.previous_filename] : [])];
+      return paths.every((path) => path.length > 0 && !path.startsWith("/") && !path.split("/").includes("..") &&
+        !proposed.has(path) && !highRisk.test(path));
+    });
+  } catch {
+    return false;
+  }
+}
+
+async function withReviewSafety(config: ControllerConfig, snapshot: Snapshot, report: ModelReviewReport): Promise<Snapshot> {
+  if (integrationModeOf(snapshot.gateInput) !== "serialized-merge") return snapshot;
+  return { ...snapshot, baseReviewSafe: await baseReviewRiskSafe(config.api, report.baseSha,
+    snapshot.gateInput.repository.defaultBranchSha, snapshot.changedPaths) };
+}
+
+async function readHeadWorkflowBlob(api: GitHubApi, headSha: string): Promise<string> {
+  const file = await api.request<JsonRecord>(
+    repositoryPath(`/contents/${PR_VALIDATE_WORKFLOW_PATH}?ref=${encodeURIComponent(headSha)}`),
+  );
+  if (typeof file.sha !== "string" || !/^[a-f0-9]{40}$/i.test(file.sha)) {
+    throw new Error("The head candidate Validate workflow blob is unavailable.");
+  }
+  return file.sha.toLowerCase();
+}
+
+export async function readHumanBinding(
+  config: ControllerConfig,
+  input: Readonly<{
+    pullRequest: GitHubPullRequest;
+    number: number;
+    repositoryNodeId: string | null;
+    reviews: readonly GitHubReview[];
+    diffDigest: string;
+    diffComplete: boolean;
+    changedFiles: PrReviewGateInput["pullRequest"]["changedFiles"];
+    requirement: string;
+    headSha: string;
+    freeze: boolean;
+    now?: number;
+    currentMainSha?: string;
+    changedPaths?: readonly string[];
+  }>,
+): Promise<HumanReviewBinding> {
+  const channel = authorizationChannel(input.pullRequest.user);
+  if (channel === "legacy-root") {
+    const record = matchHumanReviewAuthorization(config.app.humanReviewAuthorizations ?? [], {
+      pullRequestNumber: input.number, diffDigest: input.diffDigest, requirementDigest: input.requirement, diffComplete: input.diffComplete,
+    });
+    const serialized = parseIntegrationMode(config.app.integrationMode) === "serialized-merge";
+    const eligible = record !== null && (!serialized || (record.approvedHeadSha === input.headSha && record.approvedBaseSha !== undefined &&
+      await baseReviewRiskSafe(config.api, record.approvedBaseSha, input.currentMainSha ?? input.pullRequest.base.sha,
+        input.changedPaths ?? input.changedFiles.map((file) => file.path))));
+    return record === null || !eligible
+      ? { ...NO_HUMAN_BINDING, channel: "legacy-root" }
+      : { channel: "legacy-root", paths: record.paths, noRuntimeImpact: record.noRuntimeImpact === true, validateWorkflowBlobSha: record.validateWorkflowBlobSha, receipt: null, challenge: null };
+  }
+  if (channel === "unknown") return NO_HUMAN_BINDING;
+  if (!config.browserApprovalStore) throw new Error("browser_approval_store_unavailable");
+  if (input.repositoryNodeId === null) throw new Error("browser_repository_identity_unavailable");
+  const serialized = parseIntegrationMode(config.app.integrationMode) === "serialized-merge";
+  const currentMain = input.currentMainSha ?? input.pullRequest.base.sha.toLowerCase();
+  const previous = await config.browserApprovalStore.read(input.number);
+  if (serialized && previous?.challenge && !await baseReviewRiskSafe(config.api,
+      previous.challenge.context.baseSha, currentMain, input.changedPaths ?? input.changedFiles.map((file) => file.path))) {
+    await readBrowserAuthorization(config.browserApprovalStore, input.number, null, input.reviews, false, input.now);
+  }
+  const context = {
+    ...(serialized ? { reviewBinding: "head-v2" as const } : {}),
+    repositoryId: SAYHEAR_REPOSITORY_ID, repositoryNodeId: input.repositoryNodeId,
+    pullRequestNumber: input.number, pullRequestNodeId: recordString(input.pullRequest, "node_id"),
+    author: AGENT_IDENTITY,
+    reviewer: LUKE_IDENTITY,
+    headSha: input.headSha, baseSha: serialized ? currentMain : input.pullRequest.base.sha.toLowerCase(),
+    diffDigest: input.diffDigest, requirementDigest: input.requirement,
+    protectedPaths: [...protectedReviewPaths(input.changedFiles)],
+    validateWorkflowBlobSha: await readHeadWorkflowBlob(config.api, input.headSha),
+  };
+  const authorization = await readBrowserAuthorization(
+    config.browserApprovalStore, input.number, context, input.reviews, input.freeze, input.now ?? Date.now(),
+  );
+  if (!authorization.receipt) return { channel: "browser", paths: [], noRuntimeImpact: false, validateWorkflowBlobSha: null, receipt: null, challenge: authorization.challenge };
+  // Browser channel keeps noRuntimeImpact false. The approval binds exact paths
+  // and the reviewed workflow blob only; it never classifies product risk.
+  return {
+    channel: "browser",
+    paths: authorization.receipt.challenge.context.protectedPaths,
+    noRuntimeImpact: false,
+    validateWorkflowBlobSha: authorization.receipt.challenge.context.validateWorkflowBlobSha,
+    receipt: authorization.receipt,
+    challenge: authorization.receipt.challenge,
+  };
+}
+
+export async function readSnapshot(
   config: ControllerConfig,
   pullNumber: number,
   impacts: readonly ReleaseImpactKind[] = [],
@@ -1750,9 +2515,18 @@ async function readSnapshot(
     majorContractChange: false,
     externalMvpRelease: false,
   },
+  options: Readonly<{ freezeBrowserChallenge?: boolean }> = {},
 ): Promise<Snapshot> {
-  const [repository, pullRequest, protection, refs, openPullRequests] =
-    await Promise.all([
+  const integrationMode = parseIntegrationMode(config.app.integrationMode);
+  const [
+    repository,
+    pullRequest,
+    protection,
+    refs,
+    openPullRequests,
+    mergeQueueAvailable,
+    mainWriterGuard,
+  ] = await Promise.all([
       readRepositoryMergeSettings(config.api),
       config.api.request<GitHubPullRequest>(
         repositoryPath(`/pulls/${pullNumber}`),
@@ -1764,7 +2538,14 @@ async function readSnapshot(
       config.api.pages<GitHubPullRequest>(
         repositoryPath("/pulls?state=open"),
       ),
+      integrationMode === "merge-queue"
+        ? readMergeQueueAvailability(config.api)
+        : Promise.resolve(null),
+      integrationMode === "serialized-merge"
+        ? readMainWriterGuard(config.api, "main")
+        : Promise.resolve(null),
     ]);
+  const mainWriterAttestation = config.mainWriterAttestation ?? null;
   if (recordNumber(repository, "id") !== SAYHEAR_REPOSITORY_ID) {
     throw new Error("The GitHub App returned a different repository.");
   }
@@ -1776,7 +2557,7 @@ async function readSnapshot(
 
   const [issues, mergeSha] = await Promise.all([
     resolveLinkedIssues(config.api, pullRequest),
-    readCurrentPullRequestMergeSha(config.api, pullRequest),
+    readCurrentPullRequestMergeSha(config.api, pullRequest, defaultBranchSha),
   ]);
   const [
     fileManifest,
@@ -1786,6 +2567,7 @@ async function readSnapshot(
     reviewComments,
     reviews,
     hasHumanReviewThread,
+    graphClosingIssueNumbers,
   ] = await Promise.all([
     readPullRequestFileManifest(config.api, pullNumber),
     config.api.pages<JsonRecord>(
@@ -1812,6 +2594,7 @@ async function readSnapshot(
       pullNumber,
       `${config.app.slug}[bot]`,
     ),
+    readClosingIssueReferences(config.api, pullNumber),
   ]);
 
   const changedFileRecords = fileManifest.files;
@@ -1875,17 +2658,19 @@ async function readSnapshot(
   const diffComplete = collectedDiff.complete;
   const diffDigest = collectedDiff.digest;
 
+  const requirementProjection = requirementProjectionFor(PR_REVIEW_GATE_POLICY_VERSION);
   const prDiscussionDigest = digestDiscussion(
     [...prComments, ...reviewComments].filter(
       (comment) => comment.user.id !== config.botActorId && !isVercelDeploymentStatus(comment),
     ),
     reviews.filter((review) => review.user.id !== config.botActorId),
+    requirementProjection,
   );
   const currentPullRequests = openPullRequests.filter(
     (candidate) =>
       candidate.number !== pullNumber &&
       candidate.base.ref === "main" &&
-      isRecord(candidate.auto_merge),
+      (integrationMode === "serialized-merge" ? candidate.auto_merge !== null : isRecord(candidate.auto_merge)),
   );
   const linkedNumbers = issues.map((issue) => issue.number);
   const normalizedIssues: PrReviewGateInput["issues"] = issueContexts.map(({ issue, comments, blockedBy }) => ({
@@ -1894,12 +2679,25 @@ async function readSnapshot(
     title: issue.title,
     body: issue.body ?? "",
     updatedAt: issue.updated_at,
-    discussionDigest: digestDiscussion(comments.filter((comment) => comment.user.id !== config.botActorId)),
+    discussionDigest: digestDiscussion(comments.filter((comment) => comment.user.id !== config.botActorId), [], requirementProjection),
     labels: labelNames(issue),
     blockedBy,
     pause: parsePauseState([...comments, ...prComments], config.ownerActorId, config.botActorId),
   }));
   const issueClosure = parseIssueClosureExclusions(pullRequest.title, pullRequest.body ?? "");
+  // Commit messages close Issues too once they land on main. The commits
+  // endpoint stops at 250 entries, so a full page means the set is unknown.
+  const closingIssueNumbers =
+    graphClosingIssueNumbers === null || commits.length >= 250 ||
+    commits.some((commit) => !isRecord(commit.commit) || typeof commit.commit.message !== "string")
+      ? null
+      : [...new Set([
+          ...graphClosingIssueNumbers,
+          ...commits.flatMap((commit) =>
+            isRecord(commit.commit) && typeof commit.commit.message === "string"
+              ? closingKeywordIssueNumbers(commit.commit.message)
+              : []),
+        ])].sort((left, right) => left - right);
   const normalizedPullRequest: PrReviewGateInput["pullRequest"] = {
     number: pullRequest.number,
     state: pullRequest.state,
@@ -1912,6 +2710,8 @@ async function readSnapshot(
     headSha: pullRequest.head.sha.toLowerCase(),
     baseSha: pullRequest.base.sha.toLowerCase(),
     mergeSha,
+    mergeable: pullRequest.mergeable ?? null,
+    mergeableState: pullRequest.mergeable_state ?? null,
     baseRef: pullRequest.base.ref,
     headRepositoryId:
       pullRequest.head.repo === null ? null : pullRequest.head.repo.id,
@@ -1920,6 +2720,7 @@ async function readSnapshot(
     linkedIssueNumbers: linkedNumbers,
     keepOpenIssueNumbers: issueClosure.keepOpenIssueNumbers,
     issueClosureAmbiguous: issueClosure.ambiguous,
+    closingIssueNumbers,
     changedFiles,
   };
   const normalizedRepository: PrReviewGateInput["repository"] = {
@@ -1929,6 +2730,20 @@ async function readSnapshot(
     defaultBranchSha,
     allowAutoMerge: repository.allow_auto_merge === true,
   };
+  const humanBinding = await readHumanBinding(config, {
+    pullRequest,
+    number: pullNumber,
+    repositoryNodeId: typeof repository.node_id === "string" ? repository.node_id : null,
+    reviews,
+    diffDigest,
+    diffComplete,
+    changedFiles,
+    requirement: requirementDigest(normalizedIssues, normalizedPullRequest),
+    headSha: normalizedPullRequest.headSha,
+    currentMainSha: defaultBranchSha,
+    changedPaths: changedFileRecords.flatMap((file) => typeof file.filename === "string" ? [file.filename, ...(typeof file.previous_filename === "string" ? [file.previous_filename] : [])] : []),
+    freeze: options.freezeBrowserChallenge === true,
+  });
   const collected = await collectEvidence(
     config,
     pullNumber,
@@ -1937,15 +2752,14 @@ async function readSnapshot(
     impacts,
     capability,
     normalizedPullRequest.mergeSha,
-    normalizedPullRequest.baseSha,
-    matchHumanReviewAuthorization(config.app.humanReviewAuthorizations ?? [], {
-      pullRequestNumber: pullNumber,
-      diffDigest,
-      requirementDigest: requirementDigest(normalizedIssues, normalizedPullRequest),
-      diffComplete,
-    }),
+    integrationMode === "serialized-merge" ? defaultBranchSha : normalizedPullRequest.baseSha,
+    humanBinding,
   );
   return {
+    staleIntegrationRunId: collected.staleIntegrationRunId,
+    changedPaths: changedFileRecords.flatMap((file) => typeof file.filename === "string" ? [file.filename, ...(typeof file.previous_filename === "string" ? [file.previous_filename] : [])] : []),
+    humanBinding,
+    browserChallenge: humanBinding.challenge,
     gateInput: {
       repository: normalizedRepository,
       pullRequest: normalizedPullRequest,
@@ -1953,10 +2767,20 @@ async function readSnapshot(
       branchProtection: protection,
       runtime: {
         reviewAppInstalledForRepository: true,
-        anotherApprovalInFlight: currentPullRequests.length > 0,
+        // The merge queue serializes the merges themselves, so a PR waiting
+        // behind another one is not a conflict: approvals may overlap. Only the
+        // pinned-merge path has to keep one PR in flight at a time.
+        anotherApprovalInFlight: anotherApprovalInFlightFor(
+          integrationMode,
+          currentPullRequests.length,
+        ),
         productionMergeAuthorized: config.app.productionMergeAuthorized,
         ordinaryMergeTriggersProduction:
           config.app.ordinaryMergeTriggersProduction,
+        integrationMode,
+        mergeQueueAvailable,
+        mainWriterGuard,
+        ...(mainWriterAttestation === null ? {} : { mainWriterAttestation }),
       },
     },
     evidence: collected.evidence,
@@ -1985,6 +2809,7 @@ function createModelReviewInput(
       pullRequestNumber: report.pullRequestNumber,
       headSha: report.headSha,
       baseSha: report.baseSha,
+      baseReviewSafe: report.baseSha === snapshot.gateInput.repository.defaultBranchSha || snapshot.baseReviewSafe === true,
       policyVersion: report.policyVersion,
       requirementDigest: report.requirementDigest,
       decision: report.decision,
@@ -2007,17 +2832,12 @@ function evaluateSnapshot(
   const input = parsePrReviewGateInput(
     createModelReviewInput(config, snapshot, report),
   );
-  const humanAuthorization = matchHumanReviewAuthorization(config.app.humanReviewAuthorizations ?? [], {
-    pullRequestNumber: snapshot.gateInput.pullRequest.number,
-    diffDigest: snapshot.diff.digest,
-    requirementDigest: requirementDigest(snapshot.gateInput.issues, snapshot.gateInput.pullRequest),
-    diffComplete: snapshot.diff.complete,
-  });
   const policy = {
     ...config.policy,
     validateWorkflowBlobSha: snapshot.trustedWorkflowBlobSha,
-    humanApprovedPaths: humanAuthorization?.paths ?? [],
-    humanApprovedNoRuntimeImpact: humanAuthorization?.noRuntimeImpact === true,
+    humanApprovedPaths: snapshot.humanBinding.paths,
+    humanApprovedNoRuntimeImpact: snapshot.humanBinding.noRuntimeImpact,
+    humanApprovalChannel: snapshot.humanBinding.channel,
   };
   return { input, gate: evaluatePrReviewGate(input, policy) };
 }
@@ -2051,7 +2871,15 @@ function reviewPacket(
       conclusion: snapshot.workflowConclusion,
     },
     diff: snapshot.diff,
+    browserApproval: {
+      version: BROWSER_APPROVAL_VERSION,
+      channel: snapshot.humanBinding.channel,
+      frozenAt: snapshot.browserChallenge?.frozenAt ?? null,
+      epoch: snapshot.browserChallenge?.epoch ?? null,
+      reviewId: snapshot.humanBinding.receipt?.reviewId ?? null,
+    },
     reviewContext: {
+      baseSha: integrationModeOf(snapshot.gateInput) === "serialized-merge" ? snapshot.gateInput.repository.defaultBranchSha : snapshot.gateInput.pullRequest.baseSha,
       reportVersion:
         reportContext?.reportVersion ?? PR_REVIEW_REPORT_VERSION,
       policyVersion:
@@ -2336,13 +3164,21 @@ function snapshotEvidenceDigest(snapshot: Snapshot): string {
       JSON.stringify(
         [...snapshot.evidence]
           .sort((left, right) => left.checkId.localeCompare(right.checkId))
-          .map((entry) => ({
-            checkId: entry.checkId,
-            result: entry.result,
-            source: entry.source,
-            artifactSha256: entry.artifactSha256,
-            coveredCheckIds: entry.coveredCheckIds,
-          })),
+          .map((entry) =>
+            entry.kind === "deferred-before-merge"
+              ? {
+                  checkId: entry.checkId,
+                  kind: entry.kind,
+                  policy: entry.policy,
+                }
+              : {
+                  checkId: entry.checkId,
+                  result: entry.result,
+                  source: entry.source,
+                  artifactSha256: entry.artifactSha256,
+                  coveredCheckIds: entry.coveredCheckIds,
+                },
+          ),
       ),
     )
     .digest("hex");
@@ -2395,9 +3231,10 @@ async function upsertCheckRun(
         `report=${reportBase64} -->`,
       ].join(" ")
     : "";
-  const evidenceSummary = snapshot.evidence.map(
-    (entry) =>
-      `- \`${entry.checkId}\`: ${entry.result}; run ${entry.source.runId}/${entry.source.runAttempt}; artifact ${entry.artifactSha256 ?? "none"}`,
+  const evidenceSummary = snapshot.evidence.map((entry) =>
+    entry.kind === "deferred-before-merge"
+      ? `- \`${entry.checkId}\`: deferred before merge (${entry.policy.reason}); follow-up at ${entry.policy.followUp.stage}: ${entry.policy.followUp.command}`
+      : `- \`${entry.checkId}\`: ${entry.result}; run ${entry.source.runId}/${entry.source.runAttempt}; artifact ${entry.artifactSha256 ?? "none"}`,
   );
   const payload = {
     name: PR_REVIEW_GATE_CHECK_NAME,
@@ -2405,7 +3242,8 @@ async function upsertCheckRun(
     external_id: externalId,
     status: "completed",
     conclusion:
-      gate.outcome === "merge_candidate"
+      gate.outcome === "merge_candidate" ||
+      gate.outcome === "merge_candidate_with_deferrals"
         ? "success"
         : gate.outcome === "human_decision"
           ? "action_required"
@@ -2474,7 +3312,7 @@ async function startReviewCheckRun(
   const externalId = checkExternalId(
     pullRequest.number,
     pullRequest.headSha,
-    pullRequest.baseSha,
+    integrationModeOf(snapshot.gateInput) === "serialized-merge" ? snapshot.gateInput.repository.defaultBranchSha : pullRequest.baseSha,
     requirement,
   );
   const existing = await findReviewCheckRun(
@@ -2543,7 +3381,7 @@ async function startReviewCheckRun(
   return "started";
 }
 
-async function readSavedReviewReport(
+export async function readSavedReviewReport(
   config: ControllerConfig,
   snapshot: Snapshot,
 ): Promise<Readonly<{
@@ -2565,7 +3403,9 @@ async function readSavedReviewReport(
     (await readCheckRunsForCommit(config.api, pullRequest.headSha)).filter(
     (entry) =>
       entry.name === PR_REVIEW_GATE_CHECK_NAME &&
-      entry.external_id === externalId &&
+      (entry.external_id === externalId || (integrationModeOf(snapshot.gateInput) === "serialized-merge" &&
+        typeof entry.external_id === "string" && entry.external_id.startsWith(`sayhear-pr-review:${pullRequest.number}:${pullRequest.headSha}:`) &&
+        entry.external_id.endsWith(`:${requirement}`))) &&
       isRecord(entry.app) &&
       entry.app.id === config.app.appId &&
       entry.status === "completed",
@@ -2575,7 +3415,7 @@ async function readSavedReviewReport(
   const summary = check.output.summary;
   if (typeof summary !== "string") return null;
   const marker = summary.match(
-    /<!-- sayhear-pr-auto-approval-state:v1 pr=(\d+) head=([0-9a-f]{40}) base=([0-9a-f]{40}) requirement=([0-9a-f]{64}) diff=([0-9a-f]{64}) change=([0-9a-f]{64}) evidence=([0-9a-f]{64}) outcome=(merge_candidate|request_changes|awaiting_verification|human_decision) report=([A-Za-z0-9_-]+) -->/i,
+    /<!-- sayhear-pr-auto-approval-state:v1 pr=(\d+) head=([0-9a-f]{40}) base=([0-9a-f]{40}) requirement=([0-9a-f]{64}) diff=([0-9a-f]{64}) change=([0-9a-f]{64}) evidence=([0-9a-f]{64}) outcome=(merge_candidate_with_deferrals|merge_candidate|request_changes|awaiting_verification|human_decision) report=([A-Za-z0-9_-]+) -->/i,
   );
   if (!marker) return null;
   try {
@@ -2586,17 +3426,22 @@ async function readSavedReviewReport(
     if (
       Number(marker[1]) !== pullRequest.number ||
       marker[2]!.toLowerCase() !== pullRequest.headSha ||
-      marker[3]!.toLowerCase() !== pullRequest.baseSha ||
+      marker[3]!.toLowerCase() !== report.baseSha.toLowerCase() ||
       marker[4]!.toLowerCase() !== requirement ||
       marker[5]!.toLowerCase() !== snapshot.diff.digest ||
       marker[6]!.toLowerCase() !== snapshot.diff.changeDigest ||
       report.pullRequestNumber !== pullRequest.number ||
       report.headSha.toLowerCase() !== pullRequest.headSha ||
-      report.baseSha.toLowerCase() !== pullRequest.baseSha ||
+      (integrationModeOf(snapshot.gateInput) !== "serialized-merge" && report.baseSha.toLowerCase() !== pullRequest.baseSha) ||
+      report.policyVersion !== PR_REVIEW_GATE_POLICY_VERSION ||
+      check.external_id !== checkExternalId(report.pullRequestNumber, report.headSha, report.baseSha, report.requirementDigest) ||
       report.requirementDigest !== requirement
     ) {
       return null;
     }
+    if (integrationModeOf(snapshot.gateInput) === "serialized-merge" &&
+        (!snapshot.diff.complete || !await baseReviewRiskSafe(config.api, report.baseSha,
+          snapshot.gateInput.repository.defaultBranchSha, snapshot.changedPaths))) return null;
     return {
       report,
       evidenceDigest: marker[7]!.toLowerCase(),
@@ -2615,12 +3460,19 @@ type AppReviewIdentity = Readonly<{
 
 const APP_REVIEW_MARKER = "<!-- sayhear-pr-auto-approval-review:v2";
 
+/**
+ * `approve_deferred` marks an approval whose gate deferred pre-merge checks.
+ * It is still a GitHub APPROVE, but Issue completion accepts only `approve`,
+ * so a deferred merge can never close its Issues through the controller.
+ */
+export type AppReviewOutcome = "approve" | "approve_deferred" | "request_changes";
+
 export function appReviewOutcomeForIdentity(
   body: string | null,
   identity: AppReviewIdentity,
-): "approve" | "request_changes" | null {
+): AppReviewOutcome | null {
   const marker = body?.match(
-    /<!-- sayhear-pr-auto-approval-review:v2 pr=(\d+) head=([0-9a-f]{40}) base=([0-9a-f]{40}) requirement=([0-9a-f]{64}) outcome=(approve|request_changes) -->/i,
+    /<!-- sayhear-pr-auto-approval-review:v2 pr=(\d+) head=([0-9a-f]{40}) base=([0-9a-f]{40}) requirement=([0-9a-f]{64}) outcome=(approve_deferred|approve|request_changes) -->/i,
   );
   if (
     !marker ||
@@ -2631,7 +3483,7 @@ export function appReviewOutcomeForIdentity(
   ) {
     return null;
   }
-  return marker[5]!.toLowerCase() as "approve" | "request_changes";
+  return marker[5]!.toLowerCase() as AppReviewOutcome;
 }
 
 async function findExistingAppReview(
@@ -2657,13 +3509,18 @@ async function findExistingAppReview(
 async function submitPullRequestReview(
   config: ControllerConfig,
   report: ModelReviewReport,
+  deferred: PrReviewGateReport["deferredEvidence"],
 ): Promise<GitHubReview> {
   const existing = await findExistingAppReview(
     config,
     report,
   );
-  const desired =
-    report.decision === "request_changes" ? "request_changes" : "approve";
+  const desired: AppReviewOutcome =
+    report.decision === "request_changes"
+      ? "request_changes"
+      : deferred.length > 0
+        ? "approve_deferred"
+        : "approve";
   if (existing) {
     if (appReviewOutcomeForIdentity(existing.body, report) !== desired) {
       throw new Error(
@@ -2688,6 +3545,18 @@ async function submitPullRequestReview(
           ),
         ]
       : ["", "No blocking findings."]),
+    ...(deferred.length > 0
+      ? [
+          "",
+          "Not run before merge:",
+          ...deferred.map(
+            (entry) =>
+              `- \`${entry.checkId}\`: ${entry.reason}; follow-up at ${entry.followUp.stage}: \`${entry.followUp.command}\``,
+          ),
+          "",
+          "The linked Issues stay open until these checks run.",
+        ]
+      : []),
     "",
     reviewMarker,
   ].join("\n");
@@ -2997,6 +3866,13 @@ async function recordReviewHandoff(
   });
 }
 
+class ProtectedMergeRejected extends Error {}
+
+export function definitiveMergeRejection(error: unknown): boolean {
+  return error instanceof ProtectedMergeRejected ||
+    (error instanceof GitHubApiError && [400, 401, 403, 404, 405, 409, 422].includes(error.status));
+}
+
 export async function requestProtectedMerge(
   api: GitHubApi,
   pullRequestNumber: number,
@@ -3020,24 +3896,142 @@ export async function requestProtectedMerge(
         isRecord(readback.head) && readback.head.sha === headSha) return;
     throw error;
   }
-  if (result.merged !== true) throw new Error("GitHub did not confirm the protected merge.");
+  if (result.merged !== true) throw new ProtectedMergeRejected("GitHub did not confirm the protected merge.");
+}
+
+function mergeMethodFor(repository: JsonRecord): "MERGE" | "SQUASH" | "REBASE" {
+  return repository.allow_merge_commit === true ? "MERGE"
+    : repository.allow_squash_merge === true ? "SQUASH"
+      : repository.allow_rebase_merge === true ? "REBASE" : "MERGE";
+}
+
+// The browser channel is the authorization channel for every agent-authored PR,
+// but only a PR that touches a protected path actually needs Luke's approval. An
+// ordinary agent PR merges on the pinned head with no human binding at all.
+export function browserAuthorizationRequired(
+  binding: HumanReviewBinding,
+  changedFiles: PrReviewGateInput["pullRequest"]["changedFiles"],
+): boolean {
+  return binding.channel === "browser" && protectedReviewPaths(changedFiles).length > 0;
+}
+
+// Which merge mechanism the bound human channel allows. The browser channel never
+// arms GitHub's deferred auto-merge: once the App approval is published, a later
+// dismissal of Luke's review leaves the App review alone in the branch-protection
+// slot, so the browser channel either issues one pinned merge now or waits.
+// With a merge queue the same rule holds with one substitution: the browser
+// channel issues one queue entry now, and the queue performs the merge.
+// With serialized merge the controller issues one pinned merge now against the
+// current main, and never arms a deferred intent, so a stale base is fine.
+export type MergeAction = "enqueue" | "arm-auto-merge" | "merge-now" | "wait";
+
+export function mergeActionFor(
+  binding: HumanReviewBinding,
+  pullRequest: JsonRecord,
+  integrationMode: IntegrationMode = "up-to-date-base",
+): MergeAction {
+  if (integrationMode !== "up-to-date-base") {
+    // Both head-bound modes merge the reviewed head against the live main
+    // without moving it, so an out-of-date base is expected and must not block.
+    // Only a confirmed clean/behind state proceeds; every other state waits
+    // instead of arming a deferred intent that could land without fresh
+    // verification. The queue performs the merge itself; serialized merge pins
+    // it here. The gate deliberately leaves this state check to this step,
+    // because its own check run keeps GitHub reporting `blocked` until the
+    // candidate is reached.
+    const state = pullRequest.mergeable_state;
+    if (pullRequest.mergeable !== true || (state !== "clean" && state !== "behind")) {
+      return "wait";
+    }
+    return integrationMode === "merge-queue" ? "enqueue" : "merge-now";
+  }
+  if (binding.channel !== "browser") return "arm-auto-merge";
+  const clean =
+    pullRequest.mergeable === true && pullRequest.mergeable_state === "clean";
+  return clean ? "merge-now" : "wait";
+}
+
+// The endpoint that performs an approved merge. The two channels are not
+// interchangeable even when both would merge immediately: only `arm-auto-merge`
+// may leave a deferred intent behind, and the browser channel must never do so.
+export async function applyMergeAction(
+  config: ControllerConfig,
+  report: Readonly<{ pullRequestNumber: number; headSha: string }>,
+  repository: JsonRecord,
+  pullRequest: GitHubPullRequest,
+  action: "enqueue" | "arm-auto-merge" | "merge-now",
+): Promise<void> {
+  if (parseIntegrationMode(config.app.integrationMode) === "serialized-merge" && action !== "merge-now") {
+    throw new Error("serialized_merge_requires_immediate_merge");
+  }
+  if (action === "enqueue") {
+    await requestMergeQueueEnqueue(config, report, pullRequest);
+    return;
+  }
+  if (action === "arm-auto-merge") {
+    await requestPullRequestAutoMerge(config, report, repository, pullRequest);
+    return;
+  }
+  await requestProtectedMerge(config.api, report.pullRequestNumber, report.headSha, mergeMethodFor(repository), false);
+}
+
+/**
+ * One explicit merge-queue entry. `expectedHeadOid` pins the entry to the head
+ * the human approval bound, so GitHub refuses an entry whose head moved after
+ * the review. An existing entry is left alone, which makes the call idempotent
+ * across scans and after a lost response.
+ */
+export async function requestMergeQueueEnqueue(
+  config: ControllerConfig,
+  report: Readonly<{ pullRequestNumber: number; headSha: string }>,
+  pullRequest: GitHubPullRequest,
+): Promise<void> {
+  const data = await readGraphql<{
+    repository?: {
+      pullRequest?: { mergeQueueEntry?: { id?: string } | null } | null;
+    } | null;
+  }>(
+    config.api,
+    `query($owner:String!,$name:String!,$number:Int!){
+      repository(owner:$owner,name:$name){
+        pullRequest(number:$number){ mergeQueueEntry { id } }
+      }
+    }`,
+    {
+      owner: "lukemyself-hub",
+      name: "SayHear",
+      number: report.pullRequestNumber,
+    },
+  );
+  const entry = data.repository?.pullRequest?.mergeQueueEntry;
+  if (isRecord(entry) && typeof entry.id === "string") return;
+  const result = await readGraphql<{
+    enqueuePullRequest?: { mergeQueueEntry?: JsonRecord | null } | null;
+  }>(
+    config.api,
+    `mutation($input:EnqueuePullRequestInput!){enqueuePullRequest(input:$input){mergeQueueEntry{id state}}}`,
+    {
+      input: {
+        pullRequestId: recordString(pullRequest, "node_id"),
+        expectedHeadOid: report.headSha,
+      },
+    },
+  );
+  if (!isRecord(result.enqueuePullRequest?.mergeQueueEntry)) {
+    throw new Error("GitHub did not confirm the merge-queue entry.");
+  }
 }
 
 async function requestPullRequestAutoMerge(
   config: ControllerConfig,
-  report: ModelReviewReport,
+  report: Readonly<{ pullRequestNumber: number; headSha: string }>,
   repository: JsonRecord,
   pullRequest: GitHubPullRequest,
 ): Promise<void> {
   if (isRecord(pullRequest.auto_merge)) return;
   const pullRequestNodeId = recordString(pullRequest, "node_id");
-  const mergeMethod = repository.allow_merge_commit === true
-    ? "MERGE"
-    : repository.allow_squash_merge === true
-      ? "SQUASH"
-      : repository.allow_rebase_merge === true
-        ? "REBASE"
-        : null;
+  const mergeMethod = repository.allow_merge_commit === true || repository.allow_squash_merge === true || repository.allow_rebase_merge === true
+    ? mergeMethodFor(repository) : null;
   if (mergeMethod === null) {
     throw new Error("No enabled GitHub auto-merge method is available.");
   }
@@ -3114,12 +4108,14 @@ export async function handoffStalePullRequestBase(
   api: GitHubApi,
   expected: PrReviewGateInput["pullRequest"],
   actors: Readonly<{ botActorId: number; ownerActorId: number }>,
+  options: Readonly<{ kind?: "base-sync" | "merge-conflict" }> = {},
 ): Promise<Readonly<{
   status: "handed_off" | "current_base" | "state_changed" | "held_for_human" | "no_open_issue";
   currentMainSha: string;
   issueNumbers: readonly number[];
   heldIssueNumbers: readonly number[];
 }>> {
+  const kind = options.kind ?? "base-sync";
   const [pull, refs] = await Promise.all([
     api.request<GitHubPullRequest>(repositoryPath(`/pulls/${expected.number}`)),
     api.request<JsonRecord>(repositoryPath("/git/ref/heads/main")),
@@ -3133,8 +4129,12 @@ export async function handoffStalePullRequestBase(
     candidate.base.ref === "main" && candidate.head.repo?.id === SAYHEAR_REPOSITORY_ID &&
     candidate.head.sha.toLowerCase() === expected.headSha && candidate.base.sha.toLowerCase() === expected.baseSha &&
     candidate.title === expected.title && (candidate.body ?? "") === expected.body && !isRecord(candidate.auto_merge);
-  if (!matches(pull)) return result("state_changed");
-  if (pull.base.sha.toLowerCase() === currentMainSha) return result("current_base");
+  if (!matches(pull) || (kind === "merge-conflict" && pull.mergeable !== false)) {
+    return result("state_changed");
+  }
+  if (kind === "base-sync" && pull.base.sha.toLowerCase() === currentMainSha) {
+    return result("current_base");
+  }
 
   const exclusions = parseIssueClosureExclusions(pull.title, pull.body ?? "");
   if (exclusions.ambiguous) return result("held_for_human");
@@ -3158,21 +4158,38 @@ export async function handoffStalePullRequestBase(
   );
   if (held || contexts.some(({ pause }) => pause.active || pause.source === "unknown")) return result("held_for_human");
 
-  const marker = `<!-- sayhear-pr-base-sync:v1 pr=${pull.number} head=${expected.headSha} base=${expected.baseSha} main=${currentMainSha} -->`;
-  const body = [
-    `PR [#${pull.number}](https://github.com/${SAYHEAR_REPOSITORY_NAME}/pull/${pull.number}) 尚未基于当前 main，交回实现 Agent 接续。`,
-    `被核验 head: \`${expected.headSha}\`；PR base: \`${expected.baseSha}\`；当前 main: \`${currentMainSha}\`。`,
-    "",
-    "请接续原 PR 和原分支，执行前重新读取最新 main、Issue 评论、依赖与暂停状态。同步最新 main，处理冲突，并在更新后的 head/base 上重新运行可信 PR Validate 与受影响专项，完成后继续提交原 PR 审核；不要创建重复 PR。",
-    "旧 head/base 的绿色 CI、审核报告或人工绑定不能代替当前版本的验证；同步后 controller 会重新核验差异、需求摘要与授权。",
-    "如 Issue 带 ready-for-human、needs-info、needs-triage 或 wontfix，本提醒保留原人工状态，等待维护者决定，不自动交给实现 Agent。",
-    "这只是基线同步交接，不是代码缺陷 request changes，不增加三轮修改失败计数，也不解除暂停、人工决定、迁移或生产验收门禁。",
-    "",
-    marker,
-  ].join("\n");
+  const markerName = kind === "base-sync"
+    ? "sayhear-pr-base-sync:v1"
+    : "sayhear-pr-conflict-handoff:v1";
+  const marker = `<!-- ${markerName} pr=${pull.number} head=${expected.headSha} base=${expected.baseSha} main=${currentMainSha} -->`;
+  const body = kind === "base-sync"
+    ? [
+        `PR [#${pull.number}](https://github.com/${SAYHEAR_REPOSITORY_NAME}/pull/${pull.number}) 尚未基于当前 main，交回实现 Agent 接续。`,
+        `被核验 head: \`${expected.headSha}\`；PR base: \`${expected.baseSha}\`；当前 main: \`${currentMainSha}\`。`,
+        "",
+        "请接续原 PR 和原分支，执行前重新读取最新 main、Issue 评论、依赖与暂停状态。同步最新 main，处理冲突，并在更新后的 head/base 上重新运行可信 PR Validate 与受影响专项，完成后继续提交原 PR 审核；不要创建重复 PR。",
+        "旧 head/base 的绿色 CI、审核报告或人工绑定不能代替当前版本的验证；同步后 controller 会重新核验差异、需求摘要与授权。",
+        "如 Issue 带 ready-for-human、needs-info、needs-triage 或 wontfix，本提醒保留原人工状态，等待维护者决定，不自动交给实现 Agent。",
+        "这只是基线同步交接，不是代码缺陷 request changes，不增加三轮修改失败计数，也不解除暂停、人工决定、迁移或生产验收门禁。",
+        "",
+        marker,
+      ].join("\n")
+    : [
+        `PR [#${pull.number}](https://github.com/${SAYHEAR_REPOSITORY_NAME}/pull/${pull.number}) 与当前 main 存在真实合并冲突，交回实现 Agent 修复。`,
+        `被核验 head: \`${expected.headSha}\`；PR base: \`${expected.baseSha}\`；当前 main: \`${currentMainSha}\`。`,
+        "",
+        "请接续原 PR 和原分支，执行前重新读取最新 main、Issue 评论、依赖与暂停状态，解决冲突后在新 head 上运行可信 PR Validate 与受影响专项，再提交原 PR 重新审核；不要创建重复 PR。",
+        "旧 head 的绿色 CI、审核报告或人工绑定不能代替修复后版本的验证；controller 会重新核验差异、需求摘要与授权。",
+        "如 Issue 带 ready-for-human、needs-info、needs-triage 或 wontfix，本提醒保留原人工状态，等待维护者决定，不自动交给实现 Agent。",
+        "这只是冲突修复交接，不增加三轮代码审查失败计数，也不解除暂停、人工决定、迁移或生产验收门禁。",
+        "",
+        marker,
+      ].join("\n");
   const assertUnchanged = async () => {
     const current = await api.request<GitHubPullRequest>(repositoryPath(`/pulls/${pull.number}`));
-    if (!matches(current)) throw new Error("The PR changed during the base-sync handoff; fresh context is required.");
+    if (!matches(current) || (kind === "merge-conflict" && current.mergeable !== false)) {
+      throw new Error("The PR changed during the Issue handoff; fresh context is required.");
+    }
   };
   const completionMarker = marker.replace(" -->", " completed=true -->");
   const handedOff: number[] = [];
@@ -3200,7 +4217,7 @@ export async function handoffStalePullRequestBase(
       return;
     }
     const priorCompletedHandoff = existingComments.some((comment) => comment.user.id === actors.botActorId &&
-      comment.body?.includes(`<!-- sayhear-pr-base-sync:v1 pr=${pull.number} head=${expected.headSha} base=${expected.baseSha} main=`) === true &&
+      comment.body?.includes(`<!-- ${markerName} pr=${pull.number} head=${expected.headSha} base=${expected.baseSha} main=`) === true &&
       comment.body.includes(" completed=true -->"));
     if (priorCompletedHandoff && labelNames(initialIssue).includes("ongoing") && !labelNames(initialIssue).includes("ready-for-agent")) {
       await postIssueCommentOnce(api, number, marker, body, actors.botActorId);
@@ -3220,7 +4237,7 @@ export async function handoffStalePullRequestBase(
     }
     await applyIssueHandoff(api, number, "ready-for-agent", true);
     await postIssueCommentOnce(api, number, completionMarker,
-      `PR #${pull.number} 的本轮 main 同步交接已完成，评论与 ready-for-agent 标签均已回读。后续认领保留 ongoing，不重复释放。\n\n${completionMarker}`, actors.botActorId);
+      `PR #${pull.number} 的本轮 Issue 交接已完成，评论与 ready-for-agent 标签均已回读。后续认领保留 ongoing，不重复释放。\n\n${completionMarker}`, actors.botActorId);
     handedOff.push(number);
   });
   return result(heldIssueNumbers.length > 0 ? "held_for_human" : "handed_off", handedOff);
@@ -3251,6 +4268,65 @@ async function readMergedEventCommitSha(api: GitHubApi, pullRequestNumber: numbe
     if (mergeSha !== null) return mergeSha;
   }
   return null;
+}
+
+// Luke's review can be dismissed after the merge or between scans. Both the
+// post-merge Issue completion and any repeated merge request re-read the live
+// human approval so a revocation is never carried into a later action.
+function assertLiveBrowserApproval(reviews: readonly GitHubReview[], identity: CompletionIdentity): void {
+  let latest;
+  try { latest = latestLukeReview(reviews); }
+  catch { throw new CompletionMismatch("human_review_metadata_invalid"); }
+  if (!latest || latest.id !== identity.humanReviewId || latest.state !== "APPROVED" || latest.headSha !== identity.headSha) {
+    throw new CompletionMismatch("human_review_revoked");
+  }
+}
+
+export async function guardImmediateMerge(config: ControllerConfig, identity: CompletionIdentity): Promise<Readonly<{
+  report: ModelReviewReport; repository: JsonRecord; pullRequest: GitHubPullRequest;
+}>> {
+  if (identity.policyVersion !== PR_REVIEW_GATE_POLICY_VERSION || !identity.reviewIdentity || identity.mergeAction !== "merge-now" ||
+      parseIntegrationMode(config.app.integrationMode) !== (identity.integrationMode ?? "up-to-date-base")) {
+    throw new CompletionMismatch("fresh_merge_authorization_required");
+  }
+  const initial = await readSnapshot(config, identity.pullRequestNumber);
+  const saved = await readSavedReviewReport(config, initial);
+  if (!saved || saved.report.baseSha !== identity.approvedBaseSha || saved.report.headSha !== identity.headSha ||
+      saved.report.requirementDigest !== identity.requirementDigest || saved.report.policyVersion !== identity.policyVersion) {
+    throw new CompletionMismatch("saved_review_identity_mismatch");
+  }
+  const report = saved.report;
+  const snapshot = await withReviewSafety(config, await readSnapshot(config, identity.pullRequestNumber, report.declaredImpacts, report.capability), report);
+  if (snapshot.diff.digest !== identity.reviewIdentity.diffDigest || snapshot.diff.changeDigest !== identity.reviewIdentity.changeDigest ||
+      await readHeadWorkflowBlob(config.api, identity.headSha) !== identity.reviewIdentity.workflowBlobSha) throw new CompletionMismatch("review_content_mismatch");
+  if (await refreshStaleIntegration(config, snapshot)) throw new CompletionUnavailable("waiting_for_integration_validation");
+  const { gate } = evaluateSnapshot(config, snapshot, report);
+  if (gate.outcome !== "merge_candidate") throw new CompletionUnavailable(gate.reasons.some((reason) => reason.code === "stale_base_review_risk") ? "stale_base_review_risk" : "fresh_merge_gate_blocked");
+  if (browserAuthorizationRequired(snapshot.humanBinding, snapshot.gateInput.pullRequest.changedFiles)) {
+    const human = snapshot.humanBinding.receipt;
+    if (identity.humanChannel !== "browser" || !human || human.reviewId !== identity.humanReviewId || human.challenge.epoch !== identity.epoch ||
+        (identity.integrationMode === "serialized-merge" && human.challenge.context.reviewBinding !== "head-v2")) throw new CompletionMismatch("human_review_binding_changed");
+  } else if (identity.humanChannel === "browser") {
+    const human = snapshot.humanBinding.receipt;
+    if (!human || human.reviewId !== identity.humanReviewId || human.challenge.epoch !== identity.epoch) throw new CompletionMismatch("human_review_binding_changed");
+  }
+  const approval = await findExistingAppReview(config, report);
+  if (!approval || approval.id !== identity.reviewId || approval.state !== "APPROVED" || appReviewOutcomeForIdentity(approval.body, report) !== "approve") throw new CompletionMismatch("reviewer_mismatch");
+  await verifyCompletionRequirements(config.api, identity);
+  const [repository, pullRequest, main] = await Promise.all([
+    readRepositoryMergeSettings(config.api),
+    config.api.request<GitHubPullRequest>(repositoryPath(`/pulls/${identity.pullRequestNumber}`)),
+    config.api.request<JsonRecord>(repositoryPath("/git/ref/heads/main")),
+  ]);
+  if (pullRequest.state !== "open" || pullRequest.draft || pullRequest.auto_merge !== null ||
+      pullRequest.head.sha !== identity.headSha || pullRequest.head.repo?.id !== SAYHEAR_REPOSITORY_ID ||
+      pullRequest.base.ref !== "main" || !isRecord(pullRequest.base.repo) || pullRequest.base.repo.id !== SAYHEAR_REPOSITORY_ID ||
+      !isRecord(main.object) || main.object.sha !== snapshot.gateInput.repository.defaultBranchSha ||
+      await readCurrentPullRequestMergeSha(config.api, pullRequest, snapshot.gateInput.repository.defaultBranchSha) !== snapshot.gateInput.pullRequest.mergeSha ||
+      mergeActionFor(snapshot.humanBinding, pullRequest, integrationModeOf(snapshot.gateInput)) !== "merge-now") {
+    throw new CompletionUnavailable("integration_changed_before_merge");
+  }
+  return { report, repository, pullRequest };
 }
 
 export async function confirmCompletionMerge(api: GitHubApi, identity: CompletionIdentity): Promise<string | null> {
@@ -3293,10 +4369,15 @@ export async function confirmCompletionMerge(api: GitHubApi, identity: Completio
     reviews.some((candidate) => candidate.id > identity.reviewId && candidate.user.id === identity.botActorId && candidate.commit_id.toLowerCase() === identity.headSha && candidate.state === "CHANGES_REQUESTED")) {
     throw new CompletionMismatch("reviewer_mismatch");
   }
+  if (identity.humanChannel === "browser") assertLiveBrowserApproval(reviews, identity);
   return mergeSha;
 }
 
-export async function verifyCompletionRequirements(api: GitHubApi, identity: CompletionIdentity): Promise<void> {
+export async function verifyCompletionRequirements(
+  api: GitHubApi,
+  identity: CompletionIdentity,
+  projection: RequirementProjection = requirementProjectionFor(identity.policyVersion),
+): Promise<void> {
   const pull = await api.request<GitHubPullRequest>(repositoryPath(`/pulls/${identity.pullRequestNumber}`));
   const issues = await resolveLinkedIssues(api, pull);
   const [comments, reviewComments, reviews] = await Promise.all([
@@ -3306,28 +4387,72 @@ export async function verifyCompletionRequirements(api: GitHubApi, identity: Com
   ]);
   const requirements = await Promise.all(issues.map(async (issue) => ({
     number: issue.number, title: issue.title, body: issue.body ?? "", updatedAt: issue.updated_at,
-    discussionDigest: digestDiscussion((await api.pages<GitHubComment>(repositoryPath(`/issues/${issue.number}/comments`))).filter((comment) => comment.user.id !== identity.botActorId)),
+    discussionDigest: digestDiscussion((await api.pages<GitHubComment>(repositoryPath(`/issues/${issue.number}/comments`))).filter((comment) => comment.user.id !== identity.botActorId), [], projection),
   })));
   const content = requirementDigest(requirements, { number: pull.number, title: pull.title, body: pull.body ?? "", updatedAt: pull.updated_at, discussionDigest: digestDiscussion(
     [...comments, ...reviewComments].filter((comment) => comment.user.id !== identity.botActorId && !isVercelDeploymentStatus(comment)),
     reviews.filter((review) => review.user.id !== identity.botActorId),
+    projection,
   ) });
   if (content !== identity.requirementDigest) throw new CompletionMismatch("requirement_content_mismatch");
 }
 
-async function recoverControllerCompletion(config: ControllerConfig, receipt: CompletionRecord): Promise<CompletionRecord> {
+export async function recoverControllerCompletion(config: ControllerConfig, receipt: CompletionRecord, clock?: CompletionClock): Promise<CompletionRecord> {
   if (!config.completionStore) throw new Error("Trusted completion store unavailable.");
-  return recoverCompletion(config.completionStore, receipt, {
+  let latest = receipt;
+  const store = config.completionStore;
+  const trackedStore: CompletionStore = {
+    read: (number) => store.read(number), list: () => store.list(),
+    save: async (value) => {
+      latest = { ...value, ...(latest.mergeWriteState ? { mergeWriteState: latest.mergeWriteState } : {}) };
+      await store.save(latest);
+    },
+  };
+  const recovered = await recoverCompletion(trackedStore, receipt, {
     confirmMerge: async (identity) => {
       if (identity.repositoryId !== SAYHEAR_REPOSITORY_ID || identity.baseRepositoryId !== SAYHEAR_REPOSITORY_ID || identity.baseRef !== "main" ||
-        identity.botActorId !== config.botActorId || identity.appId !== config.app.appId || identity.policyVersion !== PR_REVIEW_GATE_POLICY_VERSION) throw new CompletionMismatch("trusted_identity_mismatch");
+        identity.botActorId !== config.botActorId || identity.appId !== config.app.appId ||
+        !RECEIPT_POLICY_VERSIONS.includes(identity.policyVersion)) throw new CompletionMismatch("trusted_identity_mismatch");
+      const confirmed = await confirmCompletionMerge(config.api, identity);
+      if (confirmed !== null) return confirmed;
+      // An uncertain request may still be executing on GitHub. Only a proven
+      // rejection or an intent never sent is eligible for a new guarded write.
+      if (latest.mergeWriteState !== "not-sent" && latest.mergeWriteState !== "rejected") return null;
+      const guarded = await guardImmediateMerge(config, identity);
+      latest = { ...latest, mergeWriteState: "uncertain" };
+      await store.save(latest);
+      try {
+        await applyMergeAction(config, guarded.report, guarded.repository, guarded.pullRequest, "merge-now");
+        latest = { ...latest, mergeWriteState: "accepted" };
+        await store.save(latest);
+      } catch (error) {
+        if (definitiveMergeRejection(error)) {
+          latest = { ...latest, mergeWriteState: "rejected" };
+          await store.save(latest);
+        }
+        throw error;
+      }
       return confirmCompletionMerge(config.api, identity);
     },
     completeIssues: async (identity) => {
       await verifyCompletionRequirements(config.api, identity);
       await completeLinkedIssuesAfterMerge(config.api, identity.issueNumbers, { autoMergeEnabled: false, merged: true });
     },
-  });
+  }, clock);
+  return { ...recovered, ...(latest.mergeWriteState ? { mergeWriteState: latest.mergeWriteState } : {}) };
+}
+
+export async function completionBlockingScope(api: GitHubApi, receipt: CompletionRecord): Promise<"none" | "this-pr" | "repository"> {
+  if (receipt.phase === "complete") return "none";
+  if (receipt.mergeSha !== null) return "this-pr";
+  if ((receipt.mergeWriteState !== "rejected" && receipt.mergeWriteState !== "not-sent") || receipt.identity.mergeAction !== "merge-now" ||
+      receipt.identity.policyVersion !== PR_REVIEW_GATE_POLICY_VERSION || !receipt.identity.reviewIdentity || receipt.reason === "trusted_identity_mismatch") return "repository";
+  try {
+    const pull = await api.request<GitHubPullRequest>(repositoryPath(`/pulls/${receipt.identity.pullRequestNumber}`));
+    if (pull.merged === false && pull.auto_merge === null && (pull.state === "open" || pull.state === "closed") && pull.head.sha === receipt.identity.headSha &&
+        pull.base.ref === receipt.identity.baseRef && isRecord(pull.base.repo) && pull.base.repo.id === receipt.identity.baseRepositoryId) return "this-pr";
+  } catch { /* Unreadable merge state remains repository blocking. */ }
+  return "repository";
 }
 
 async function retryPendingIssueCompletions(config: ControllerConfig, prepareOnly: boolean): Promise<Array<Readonly<Record<string, unknown>>>> {
@@ -3337,9 +4462,114 @@ async function retryPendingIssueCompletions(config: ControllerConfig, prepareOnl
     if (receipt.phase === "complete") continue;
     const recovered = prepareOnly ? receipt : await recoverControllerCompletion(config, receipt);
     results.push({ pullRequest: receipt.identity.pullRequestNumber, status: recovered.phase === "complete" ? "issues_completed" : "issue_completion_pending",
+      blocks: await completionBlockingScope(config.api, recovered),
       phase: recovered.phase, attempts: recovered.attempts, nextRetryAt: recovered.nextRetryAt, reason: recovered.reason, mergeSha: recovered.mergeSha });
   }
   return results;
+}
+
+export async function requestDeferredMerge(
+  config: ControllerConfig,
+  report: ModelReviewReport,
+  gate: Pick<PrReviewGateReport, "outcome" | "deferredEvidence">,
+  repository: JsonRecord,
+  pullRequest: GitHubPullRequest,
+): Promise<Readonly<{ outcome: string; message: string }>> {
+  if (parseIntegrationMode(config.app.integrationMode) === "serialized-merge") {
+    return { outcome: "human_decision", message: "Serialized merge cannot arm deferred auto-merge; complete required acceptance first." };
+  }
+  if (authorizationChannel(pullRequest.user) !== "legacy-root") {
+    return {
+      outcome: "human_decision",
+      message: "Deferred pre-merge checks require the legacy root channel; the current PR author cannot use deferred auto-merge.",
+    };
+  }
+  await requestPullRequestAutoMerge(config, report, repository, pullRequest);
+  const readback = await config.api.request<GitHubPullRequest>(
+    repositoryPath(`/pulls/${report.pullRequestNumber}`),
+  );
+  if (
+    !isRecord(readback.auto_merge) &&
+    (readback.merged !== true || readback.state !== "closed" ||
+      readback.head.sha.toLowerCase() !== report.headSha.toLowerCase() ||
+      readback.base.ref !== "main")
+  ) {
+    throw new Error("GitHub did not retain the requested auto-merge state.");
+  }
+  return {
+    outcome: gate.outcome,
+    message: [
+      isRecord(readback.auto_merge)
+        ? `GitHub auto-merge is enabled for PR #${report.pullRequestNumber}.`
+        : `PR #${report.pullRequestNumber} merged while the controller read back its state.`,
+      `${gate.deferredEvidence.length} pre-merge check(s) are deferred and run at acceptance; the Issues stay open until they do.`,
+    ].join(" "),
+  };
+}
+
+export async function refreshStaleIntegration(config: ControllerConfig, snapshot: Snapshot): Promise<boolean> {
+  if (integrationModeOf(snapshot.gateInput) !== "serialized-merge" || snapshot.staleIntegrationRunId === null) return false;
+  const pull = snapshot.gateInput.pullRequest;
+  if (!pull.mergeSha || pull.mergeable !== true || containsExplicitMergeHold(snapshot) || pull.issueClosureAmbiguous ||
+      snapshot.gateInput.issues.some((issue) => !pull.keepOpenIssueNumbers.includes(issue.number) && issue.state === "open" &&
+        (!issue.labels.includes("ongoing") || issue.pause.active || issue.pause.source === "unknown" ||
+          issue.labels.some((label) => ["ready-for-human", "needs-info", "needs-triage", "wontfix"].includes(label)) ||
+          (issue.blockedBy === null || issue.blockedBy.some((dependency) => !snapshot.gateInput.issues.some((target) => target.number === dependency && !pull.keepOpenIssueNumbers.includes(target.number))))))) return true;
+  if (!config.integrationRefreshStore) throw new Error("integration_refresh_store_unavailable");
+  await requestIntegrationRefresh(config.integrationRefreshStore, pull.number,
+    { headSha: pull.headSha, mainSha: snapshot.gateInput.repository.defaultBranchSha, mergeSha: pull.mergeSha },
+    snapshot.staleIntegrationRunId, {
+      recheck: async () => {
+        const [freshPull, main] = await Promise.all([
+          config.api.request<GitHubPullRequest>(repositoryPath(`/pulls/${pull.number}`)),
+          config.api.request<JsonRecord>(repositoryPath("/git/ref/heads/main")),
+        ]);
+        return freshPull.state === "open" && !freshPull.draft && freshPull.auto_merge === null &&
+          freshPull.base.ref === "main" && freshPull.head.repo?.id === SAYHEAR_REPOSITORY_ID &&
+          freshPull.head.sha === pull.headSha && freshPull.mergeable === true &&
+          isRecord(main.object) && main.object.sha === snapshot.gateInput.repository.defaultBranchSha &&
+          await readCurrentPullRequestMergeSha(config.api, freshPull, snapshot.gateInput.repository.defaultBranchSha) === pull.mergeSha;
+      },
+      labels: async () => (await config.api.pages<JsonRecord>(repositoryPath(`/issues/${pull.number}/labels`)))
+        .map((label) => recordString(label, "name")),
+      prepareLabel: async (label) => {
+        try { await config.api.request(repositoryPath(`/labels/${encodeURIComponent(label)}`)); }
+        catch (error) {
+          if (!(error instanceof GitHubApiError) || error.status !== 404) throw error;
+          await config.api.request(repositoryPath("/labels"), { method: "POST", body: { name: label, color: "ededed", description: "Current-main integration validation request" } });
+        }
+      },
+      addLabel: async (label) => {
+        await config.api.request(repositoryPath(`/issues/${pull.number}/labels`), { method: "POST", body: { labels: [label] } });
+      },
+      definitiveRejection: (error) => error instanceof GitHubApiError &&
+        [400, 401, 403, 404, 405, 409, 422].includes(error.status),
+    });
+  return true;
+}
+
+// The browser channel's only outstanding input is Luke's live approval on the
+// current head. That is a wait, not a handoff: handing the Issue back to an
+// implementation agent would let it push a new head and void the challenge the
+// PR is already waiting on. Every other `human_decision` cause still hands off.
+export function isBrowserApprovalWait(gate: PrReviewGateReport): boolean {
+  return gate.outcome === "human_decision" &&
+    gate.reasons.some((reason) => reason.code === "browser_human_approval_required");
+}
+
+// `reportReviewResult` re-reads live state and can throw on an untrusted review
+// history, an unreadable head workflow blob, or a refused App approval. One PR
+// must never abort the rest of the scan: it is reported as blocked instead, and
+// the other PRs and their Issue handoffs still run.
+async function reportReviewOutcome(
+  config: ControllerConfig,
+  report: ModelReviewReport,
+): Promise<Readonly<{ outcome: string; message: string }>> {
+  try {
+    return await reportReviewResult(config, report);
+  } catch (error) {
+    return { outcome: "blocked", message: error instanceof Error ? error.message : String(error) };
+  }
 }
 
 async function reportReviewResult(
@@ -3348,18 +4578,19 @@ async function reportReviewResult(
 ): Promise<Readonly<{ outcome: string; message: string }>> {
   const report = parseModelReviewReport(input);
   const pending = await retryPendingIssueCompletions(config, false);
-  if (pending.length > 0) return { outcome: "awaiting_verification", message: "Recovered existing completion operations; submit again only after all pending work is resolved." };
+  if (pending.some((result) => result.blocks === "repository")) return { outcome: "awaiting_verification", message: "An uncertain merge operation still blocks repository writes." };
   if (config.completionStore && await config.completionStore.read(report.pullRequestNumber)) return { outcome: "awaiting_verification", message: "This PR already has a durable merge intent; no merge will be repeated." };
   if (report.repositoryId !== SAYHEAR_REPOSITORY_ID) {
     throw new Error("The review report names a different repository.");
   }
-  const snapshot = await readSnapshot(
-    config,
-    report.pullRequestNumber,
-    report.declaredImpacts,
-    report.capability,
-  );
-  if (snapshot.gateInput.pullRequest.baseSha !== snapshot.gateInput.repository.defaultBranchSha &&
+  const snapshot = await withReviewSafety(config, await readSnapshot(
+    config, report.pullRequestNumber, report.declaredImpacts, report.capability,
+  ), report);
+  // In merge-queue mode a stale base is the normal state: the queue builds the
+  // merged result against the current main, so main moving must not dispatch an
+  // implementation agent to rebase an already-reviewed head.
+  if (integrationModeOf(snapshot.gateInput) === "up-to-date-base" &&
+    snapshot.gateInput.pullRequest.baseSha !== snapshot.gateInput.repository.defaultBranchSha &&
     report.headSha === snapshot.gateInput.pullRequest.headSha && report.baseSha === snapshot.gateInput.pullRequest.baseSha &&
     report.version === PR_REVIEW_REPORT_VERSION && report.policyVersion === PR_REVIEW_GATE_POLICY_VERSION &&
     report.requirementDigest === requirementDigest(snapshot.gateInput.issues, snapshot.gateInput.pullRequest)) {
@@ -3368,11 +4599,32 @@ async function reportReviewResult(
       ? `PR #${report.pullRequestNumber} requires main synchronization; Issues ${handoff.issueNumbers.join(", ")} were handed back.`
       : `PR #${report.pullRequestNumber} base-sync handoff stopped at ${handoff.status}.` };
   }
+  if (integrationModeOf(snapshot.gateInput) === "serialized-merge" && snapshot.baseReviewSafe !== true) {
+    return { outcome: "awaiting_verification", message: "stale_base_review_risk: current main introduces material or unknown review risk; prepare a fresh review anchored to current main." };
+  }
+  if (await refreshStaleIntegration(config, snapshot)) {
+    return { outcome: "awaiting_verification", message: "Waiting for current-main integration Validate; no Issue handoff was created." };
+  }
   const { gate } = evaluateSnapshot(config, snapshot, report);
   await upsertCheckRun(config, snapshot, report, gate);
 
+  if (gate.reasons.some((reason) => reason.code === "pull_request_conflict")) {
+    const handoff = await handoffStalePullRequestBase(
+      config.api,
+      snapshot.gateInput.pullRequest,
+      config,
+      { kind: "merge-conflict" },
+    );
+    return {
+      outcome: "awaiting_verification",
+      message: handoff.status === "handed_off"
+        ? `PR #${report.pullRequestNumber} conflicts with current main; Issues ${handoff.issueNumbers.join(", ")} were handed back for conflict repair.`
+        : `PR #${report.pullRequestNumber} conflict handoff stopped at ${handoff.status}.`,
+    };
+  }
+
   if (gate.outcome === "request_changes") {
-    const review = await submitPullRequestReview(config, report);
+    const review = await submitPullRequestReview(config, report, []);
     await recordReviewHandoff(config, snapshot, report, gate, review);
     return {
       outcome: gate.outcome,
@@ -3387,6 +4639,19 @@ async function reportReviewResult(
     };
   }
 
+  // An agent-authored PR whose only outstanding input is Luke's bound browser
+  // approval is a wait, not a handoff. A handoff would clear `ongoing`, set
+  // `ready-for-agent`, let an implementation agent claim the Issue and push a new
+  // head, which voids the frozen challenge this PR is already waiting on. The gate
+  // still reports human_decision so the check run asks Luke to act (action_required).
+  if (isBrowserApprovalWait(gate)) {
+    return {
+      outcome: "awaiting_verification",
+      message:
+        `PR #${report.pullRequestNumber} is agent-authored and touches a protected path; a live browser approval from @lukemyself-hub on the current head is required before any merge. The Issue handoff was left unchanged.`,
+    };
+  }
+
   if (gate.outcome === "awaiting_verification" || gate.outcome === "human_decision") {
     await postNonBlockingOutcome(config, snapshot, report, gate);
     return {
@@ -3395,7 +4660,11 @@ async function reportReviewResult(
     };
   }
 
-  const approval = await submitPullRequestReview(config, report);
+  const approval = await submitPullRequestReview(
+    config,
+    report,
+    gate.deferredEvidence,
+  );
   if (
     approval.state !== "APPROVED" ||
     approval.user.id !== config.botActorId ||
@@ -3403,18 +4672,16 @@ async function reportReviewResult(
   ) {
     throw new Error("GitHub did not retain the expected independent App approval.");
   }
-  const freshSnapshot = await readSnapshot(
-    config,
-    report.pullRequestNumber,
-    report.declaredImpacts,
-    report.capability,
-  );
+  const freshSnapshot = await withReviewSafety(config, await readSnapshot(
+    config, report.pullRequestNumber, report.declaredImpacts, report.capability,
+  ), report);
   const { gate: freshGate } = evaluateSnapshot(config, freshSnapshot, report);
-  if (freshGate.outcome !== "merge_candidate") {
+  if (freshGate.outcome !== gate.outcome) {
     await upsertCheckRun(config, freshSnapshot, report, freshGate);
     await postNonBlockingOutcome(config, freshSnapshot, report, {
       ...freshGate,
       outcome: "human_decision",
+      deferredEvidence: [],
       reasons: [
         {
           code: "review_state_changed",
@@ -3435,11 +4702,12 @@ async function reportReviewResult(
   );
   if (
     latestPullRequest.head.sha.toLowerCase() !== report.headSha.toLowerCase() ||
-    latestPullRequest.base.sha.toLowerCase() !== report.baseSha.toLowerCase()
+    (integrationModeOf(freshSnapshot.gateInput) === "up-to-date-base" && latestPullRequest.base.sha.toLowerCase() !== report.baseSha.toLowerCase())
   ) {
     const staleGate: PrReviewGateReport = {
       ...freshGate,
       outcome: "awaiting_verification",
+      deferredEvidence: [],
       reasons: [
         {
           code: "head_or_base_changed_before_auto_merge",
@@ -3455,11 +4723,41 @@ async function reportReviewResult(
       message: `Auto-merge was not enabled for PR #${report.pullRequestNumber} because its head or base changed.`,
     };
   }
+  if (freshGate.outcome === "merge_candidate_with_deferrals") {
+    return requestDeferredMerge(config, report, freshGate, latestRepository, latestPullRequest);
+  }
   if (!config.completionStore) throw new Error("Trusted completion store unavailable.");
   const baseRepository = latestPullRequest.base.repo;
   if (!isRecord(baseRepository) || baseRepository.id !== SAYHEAR_REPOSITORY_ID) throw new Error("The target base repository is unavailable.");
+  const browserReceipt = freshSnapshot.humanBinding.receipt;
+  if (browserAuthorizationRequired(freshSnapshot.humanBinding, freshSnapshot.gateInput.pullRequest.changedFiles) &&
+      browserReceipt === null) {
+    // Fail closed without throwing: an agent-authored PR whose browser approval
+    // is missing or no longer live must wait here, never merge and never break
+    // the rest of the scan.
+    return {
+      outcome: "awaiting_verification",
+      message: `PR #${report.pullRequestNumber} is agent-authored; a live browser approval on the current head is required before any merge.`,
+    };
+  }
+  const mergeAction = mergeActionFor(
+    freshSnapshot.humanBinding,
+    latestPullRequest,
+    integrationModeOf(freshSnapshot.gateInput),
+  );
+  if (mergeAction === "wait") {
+    // Nothing is armed and no durable intent is written while the PR is not
+    // cleanly mergeable. A saved intent would only be confirmed later, which
+    // would strand an approved merge; the saved review report lets the next
+    // scan retry the pinned merge once the state is clean.
+    return {
+      outcome: "awaiting_verification",
+      message: `PR #${report.pullRequestNumber} is approved but not cleanly mergeable; the merge waits for a clean state.`,
+    };
+  }
   const receipt: CompletionRecord = {
     version: 1, phase: "merge_unconfirmed", attempts: 0, nextRetryAt: 0, reason: null, mergeSha: null,
+    mergeWriteState: mergeAction === "merge-now" ? "not-sent" : "uncertain",
     identity: {
       repositoryId: SAYHEAR_REPOSITORY_ID, pullRequestNumber: report.pullRequestNumber,
       pullRequestNodeId: recordString(latestPullRequest, "node_id"), headSha: report.headSha,
@@ -3467,18 +4765,30 @@ async function reportReviewResult(
       baseRepositoryId: SAYHEAR_REPOSITORY_ID, baseRef: "main", botActorId: config.botActorId,
       reviewId: approval.id, appId: config.app.appId, policyVersion: PR_REVIEW_GATE_POLICY_VERSION,
       issueNumbers: freshSnapshot.gateInput.issues.filter((issue) => !freshSnapshot.gateInput.pullRequest.keepOpenIssueNumbers.includes(issue.number)).map((issue) => issue.number),
+      humanChannel: browserReceipt === null ? "app" : "browser",
+      humanReviewId: browserReceipt?.reviewId ?? approval.id,
+      epoch: browserReceipt?.challenge.epoch ?? null,
+      integrationMode: integrationModeOf(freshSnapshot.gateInput),
+      ...(mergeAction === "merge-now" ? { mergeAction: "merge-now" as const, reviewIdentity: {
+        diffDigest: freshSnapshot.diff.digest, changeDigest: freshSnapshot.diff.changeDigest,
+        workflowBlobSha: await readHeadWorkflowBlob(config.api, report.headSha),
+      } } : {}),
     },
   };
   if (await config.completionStore.read(report.pullRequestNumber)) throw new Error("An existing completion intent must be reconciled before any new merge request.");
   await config.completionStore.save(receipt);
-  try { await requestPullRequestAutoMerge(config, report, latestRepository, latestPullRequest); }
-  catch { /* The durable intent owns recovery even when the response is lost. */ }
-  const completed = await recoverControllerCompletion(config, receipt);
+  const sentReceipt = receipt;
+  if (mergeAction !== "merge-now") {
+    try { await applyMergeAction(config, report, latestRepository, latestPullRequest, mergeAction); }
+    catch { /* An armed or uncertain deferred action remains repository blocking. */ }
+  }
+  const completed = await recoverControllerCompletion(config, sentReceipt);
+  const mergeSha = completed.mergeSha === null ? "" : `; merged=${completed.mergeSha}`;
   return {
     outcome: completed.phase === "complete" ? "merge_candidate" : "awaiting_verification",
     message: completed.phase === "complete"
       ? `PR #${report.pullRequestNumber} merged and Issue completion was verified.`
-      : `PR #${report.pullRequestNumber} completion remains ${completed.phase}; ${completed.reason ?? "pending confirmation"}.`,
+      : `PR #${report.pullRequestNumber} completion remains ${completed.phase}; ${completed.reason ?? "pending confirmation"}${mergeSha}.`,
   };
 }
 
@@ -3493,7 +4803,7 @@ function controllerReviewReport(
     repositoryId: SAYHEAR_REPOSITORY_ID,
     pullRequestNumber: pullRequest.number,
     headSha: pullRequest.headSha,
-    baseSha: pullRequest.baseSha,
+    baseSha: integrationModeOf(snapshot.gateInput) === "serialized-merge" ? snapshot.gateInput.repository.defaultBranchSha : pullRequest.baseSha,
     requirementDigest: requirementDigest(
       snapshot.gateInput.issues,
       pullRequest,
@@ -3576,6 +4886,7 @@ function assertAllowedArgs(
       "--slug",
       "--production-merge-authorized",
       "--ordinary-merge-triggers-production",
+      "--integration-mode",
     ],
     status: [],
     prepare: ["--pr"],
@@ -3601,13 +4912,13 @@ function requestedPullNumber(args: Map<string, string>): number | null {
   return requiredPositiveInteger(Number(value), "--pr");
 }
 
-async function scanPullRequests(
+export async function scanPullRequests(
   config: ControllerConfig,
   onlyPullNumber: number | null,
   prepareOnly = false,
 ): Promise<readonly Readonly<Record<string, unknown>>[]> {
   const results = await retryPendingIssueCompletions(config, prepareOnly);
-  if (results.some((result) => result.status !== "issues_completed")) return results;
+  if (results.some((result) => result.blocks === "repository")) return results;
   const pullRequests = onlyPullNumber === null
     ? await config.api.pages<GitHubPullRequest>(
         repositoryPath("/pulls?state=open"),
@@ -3636,7 +4947,7 @@ async function scanPullRequests(
 
     let snapshot: Snapshot;
     try {
-      snapshot = await readSnapshot(config, pullRequest.number);
+      snapshot = await readSnapshot(config, pullRequest.number, [], undefined, { freezeBrowserChallenge: prepareOnly });
     } catch (error) {
       results.push({
         pullRequest: pullRequest.number,
@@ -3646,7 +4957,10 @@ async function scanPullRequests(
       continue;
     }
 
-    if (snapshot.gateInput.pullRequest.baseSha !== snapshot.gateInput.repository.defaultBranchSha) {
+    if (
+      integrationModeOf(snapshot.gateInput) === "up-to-date-base" &&
+      snapshot.gateInput.pullRequest.baseSha !== snapshot.gateInput.repository.defaultBranchSha
+    ) {
       const packetPath = await writeReviewPacketFile(snapshot);
       if (prepareOnly) {
         results.push({
@@ -3668,6 +4982,54 @@ async function scanPullRequests(
       continue;
     }
 
+    if (snapshot.gateInput.pullRequest.mergeable === false) {
+      if (prepareOnly) {
+        results.push({
+          pullRequest: pullRequest.number,
+          status: "pull_request_conflict",
+          handoffRequired: true,
+          headSha: snapshot.gateInput.pullRequest.headSha,
+          baseSha: snapshot.gateInput.pullRequest.baseSha,
+        });
+      } else {
+        try {
+          const handoff = await handoffStalePullRequestBase(
+            config.api,
+            snapshot.gateInput.pullRequest,
+            config,
+            { kind: "merge-conflict" },
+          );
+          results.push({
+            pullRequest: pullRequest.number,
+            status: "pull_request_conflict",
+            handedOff: handoff.status === "handed_off",
+            handoffStatus: handoff.status,
+            issueNumbers: handoff.issueNumbers,
+            heldIssueNumbers: handoff.heldIssueNumbers,
+          });
+        } catch (error) {
+          results.push({
+            pullRequest: pullRequest.number,
+            status: "conflict_handoff_incomplete",
+            reason: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+      continue;
+    }
+
+    if (!prepareOnly) {
+      try {
+        if (await refreshStaleIntegration(config, snapshot)) {
+          results.push({ pullRequest: pullRequest.number, status: "waiting_for_validation", reason: "Current-main integration validation requested or awaiting reconciliation." });
+          continue;
+        }
+      } catch (error) {
+        results.push({ pullRequest: pullRequest.number, status: "integration_refresh_blocked",
+          reason: error instanceof Error ? error.message : String(error) });
+        continue;
+      }
+    }
     const saved = await readSavedReviewReport(config, snapshot);
     if (saved) {
       if (prepareOnly) {
@@ -3679,7 +5041,7 @@ async function scanPullRequests(
         });
         continue;
       }
-      const result = await reportReviewResult(config, saved.report);
+      const result = await reportReviewOutcome(config, saved.report);
       results.push({
         pullRequest: pullRequest.number,
         status:
@@ -3713,7 +5075,7 @@ async function scanPullRequests(
         ),
       },
     );
-    if (existingReview) {
+    if (existingReview && integrationModeOf(snapshot.gateInput) !== "serialized-merge") {
       results.push({
         pullRequest: pullRequest.number,
         status: "blocked",
@@ -3754,7 +5116,7 @@ async function scanPullRequests(
         continue;
       }
       const held = controllerReviewReport(snapshot, "human_decision");
-      const result = await reportReviewResult(config, held);
+      const result = await reportReviewOutcome(config, held);
       results.push({
         pullRequest: pullRequest.number,
         status: "held_for_human",
@@ -3781,7 +5143,7 @@ async function scanPullRequests(
         snapshot,
         "awaiting_verification",
       );
-      const result = await reportReviewResult(config, incomplete);
+      const result = await reportReviewOutcome(config, incomplete);
       results.push({
         pullRequest: pullRequest.number,
         status: "incomplete_diff",
@@ -3898,6 +5260,7 @@ async function configureLocalApp(
     productionMergeAuthorized: productionMergeAuthorized === "true",
     ordinaryMergeTriggersProduction:
       ordinaryMergeTriggersProduction === "true",
+    integrationMode: parseIntegrationMode(args.get("--integration-mode")),
   };
   await assertTrustedConfigLocation().catch((error: unknown) => {
     if (
@@ -3928,7 +5291,8 @@ async function configureLocalApp(
       existing.slug === config.slug &&
       existing.productionMergeAuthorized === config.productionMergeAuthorized &&
       existing.ordinaryMergeTriggersProduction ===
-        config.ordinaryMergeTriggersProduction
+        config.ordinaryMergeTriggersProduction &&
+      parseIntegrationMode(existing.integrationMode) === config.integrationMode
     ) {
       return existing;
     }
@@ -3952,12 +5316,26 @@ async function configureLocalApp(
 async function statusReport(
   config: ControllerConfig,
 ): Promise<Readonly<Record<string, unknown>>> {
-  const [repository, branchProtection] = await Promise.all([
-    readRepositoryMergeSettings(config.api),
-    readBranchProtection(config.api),
-  ]);
+  const integrationMode = parseIntegrationMode(config.app.integrationMode);
+  const [repository, branchProtection, mergeQueueAvailable, mainWriterGuard] =
+    await Promise.all([
+      readRepositoryMergeSettings(config.api),
+      readBranchProtection(config.api),
+      integrationMode === "merge-queue"
+        ? readMergeQueueAvailability(config.api)
+        : Promise.resolve(null),
+      // Status is the operator's pre-flight check, so the default-branch writer
+      // guard is reported whatever the mode is: Luke can see exactly what the
+      // controller would enforce before he switches `serialized-merge` on.
+      readMainWriterGuard(config.api, "main"),
+    ]);
+  const mainWriterAttestation = config.mainWriterAttestation ?? null;
   return {
     repository: SAYHEAR_REPOSITORY_NAME,
+    integrationMode,
+    mergeQueueAvailable,
+    mainWriterGuard,
+    mainWriterAttestation,
     build: controllerBuildIdentity(),
     controllerSha256: createHash("sha256").update(await readFile(CONTROLLER_PATH)).digest("hex"),
     completionStates: config.completionStore ? (await config.completionStore.list()).map((record) => ({ pullRequest: record.identity.pullRequestNumber, phase: record.phase, attempts: record.attempts, nextRetryAt: record.nextRetryAt, reason: record.reason, mergeSha: record.mergeSha })) : [],
@@ -3965,6 +5343,7 @@ async function statusReport(
     reportVersion: PR_REVIEW_REPORT_VERSION,
     diffCollectionVersion: "sayhear-pr-diff:v2",
     baseSyncHandoffVersion: "sayhear-pr-base-sync:v1",
+    browserApprovalVersion: BROWSER_APPROVAL_VERSION,
     reviewApp: {
       appId: config.app.appId,
       slug: config.app.slug,

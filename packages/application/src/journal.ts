@@ -134,7 +134,7 @@ export const JOURNAL_DATE_PAGE_LIMIT = 30;
  * cannot support one truthful Statement (ADR-0011). Those dates stay readable
  * in the date list as an explicit No Journal Notice instead of disappearing.
  */
-export type JournalDateState = "current" | "outdated" | "updating" | "no_journal";
+export type JournalDateState = "current" | "outdated" | "updating" | "no_journal" | "generation_failed";
 
 export type JournalDateEntry = Readonly<{
   dailySessionId: string;
@@ -268,6 +268,7 @@ export function journalDateCursorAfter(
 export type JournalRepository = Readonly<{
   readSource(input: { dailySessionId: string; sourceRevision: number; expectedDataEpoch: number; extractionPolicyVersion: string }): Promise<JournalSourceSnapshot | null>;
   startGeneration(input: {
+    workflowLease?: Readonly<{ workflowCommandId: string; leaseToken: string }>;
     dailySessionId: string;
     userId: string | null;
     sourceRevision: number;
@@ -285,6 +286,7 @@ export type JournalRepository = Readonly<{
     actionExecutionId?: string;
   }): Promise<{ accepted: boolean; generationCommandId: string }>;
   publish(input: {
+    workflowLease?: Readonly<{ workflowCommandId: string; leaseToken: string }>;
     dailySessionId: string;
     userId: string;
     sourceRevision: number;
@@ -374,6 +376,7 @@ export type JournalValidationProvider = Readonly<{
 
 export type JournalService = Readonly<{
   generate(input: {
+    workflowLease?: Readonly<{ workflowCommandId: string; leaseToken: string }>;
     dailySessionId: string;
     sourceRevision: number;
     generationCommandId: string;
@@ -405,6 +408,7 @@ export type JournalService = Readonly<{
 }>;
 
 export type AutomaticJournalCommand = Readonly<{
+  leaseToken?: string;
   workflowCommandId: string;
   subjectId: string;
   sourceRevision: number;
@@ -443,6 +447,7 @@ export function createJournalService(dependencies: {
       if (source.dataEpoch !== undefined && source.dataEpoch !== input.expectedDataEpoch) return { outcome: "fenced" };
       await dependencies.recoveryGate?.requireOpen(source.userId as UserId);
       const generation = await dependencies.repository.startGeneration({
+        ...(input.workflowLease ? { workflowLease: input.workflowLease } : {}),
         dailySessionId,
         userId: source.userId,
         sourceRevision: source.sourceRevision,
@@ -520,6 +525,7 @@ export function createJournalService(dependencies: {
         diagnosticStatus = "unavailable";
       }
       return dependencies.repository.publish({
+        ...(input.workflowLease ? { workflowLease: input.workflowLease } : {}),
         dailySessionId,
         userId: source.userId,
         sourceRevision: source.sourceRevision,
@@ -637,6 +643,7 @@ export async function runAutomaticJournal(input: {
     modelRunAttemptId: input.modelRunAttemptId,
     expectedDataEpoch: input.command.expectedDataEpoch,
     policyVersion: input.command.policyVersion,
+    ...(input.command.leaseToken ? { workflowLease: { workflowCommandId: input.command.workflowCommandId, leaseToken: input.command.leaseToken } } : {}),
   });
 }
 

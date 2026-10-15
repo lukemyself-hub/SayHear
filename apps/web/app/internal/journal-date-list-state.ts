@@ -10,7 +10,7 @@
 export type JournalDateEntry = Readonly<{
   dailySessionId: string;
   logicalDate: string;
-  state: "current" | "outdated" | "updating" | "no_journal";
+  state: "current" | "outdated" | "updating" | "no_journal" | "generation_failed";
 }>;
 
 /**

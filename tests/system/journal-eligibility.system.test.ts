@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   asGenerationCommandId,
@@ -32,6 +32,8 @@ import {
   PostgresInternalOwnerAccessRepository,
   PostgresJournalEligibilityRepository,
   PostgresJournalRepository,
+  PostgresJournalWorkflowRecovery,
+  PostgresFastPathExtractionRepository,
   PostgresEvidenceRepository,
   PostgresOutboxDispatcherRepository,
   PostgresUserTextConversationRepository,
@@ -49,6 +51,15 @@ import {
 import { createConversationResponseHandler } from "../../apps/web/src/conversation-response-handler";
 import { createContinuousExchangeEndHandler } from "../../apps/web/src/continuous-exchange-end-handler";
 import { createRecoveryScannerHandler } from "../../apps/web/src/recovery-scanner-handler";
+import { journalEligibilityWorkflow } from "../../apps/web/src/workflows/journal-eligibility.workflow";
+
+// The Workflow step builds its own composition from the deployed config. The
+// regression below drives the real step, so it swaps in a composition built
+// from this suite's isolated database and a scripted Evidence freeze.
+const workflowComposition = vi.hoisted(() => ({ current: null as unknown }));
+vi.mock("../../apps/web/src/server-composition", () => ({
+  createServerComposition: () => workflowComposition.current,
+}));
 
 const testDatabaseUrl = process.env.TEST_DATABASE_URL;
 if (!testDatabaseUrl) {
@@ -214,6 +225,7 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
         internal_diagnostic_access_grants,
         provider_egress_consents,
         provider_egress_dispositions,
+        history_recall_results,
         compiled_context_revision_refs,
         compiled_contexts,
         model_run_attempts,
@@ -1938,6 +1950,385 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
   });
 
   // Reference the branded-id helpers so the import surface stays consistent.
+  it("releases all evidence locks during 15-second extraction so scan and real user turn can commit", async () => {
+    const id = await submitConversation({ clientEventId: "slow-event", clientTurnId: "slow-turn", text: "I went for a long walk by the ocean today." });
+    await endExchange(id);
+    const composition = buildComposition();
+    const session = await database.pool.query<{ source_revision: string }>("SELECT source_revision FROM daily_sessions WHERE daily_session_id = $1", [id]);
+    const revision = Number(session.rows[0]!.source_revision);
+    let started!: () => void;
+    const entered = new Promise<void>((resolve) => { started = resolve; });
+    const repository = new PostgresEvidenceRepository(database.pool, {
+      role: "evidence.extract",
+      async extract() {
+        started();
+        await new Promise((resolve) => setTimeout(resolve, 15_000));
+        return [{ locatorType: "whole_revision", locatorKey: "whole", role: "factual_support" }];
+      },
+    });
+    const freezing = repository.freezeUserEvidence({ dailySessionId: asDailySessionId(id), sourceRevision: revision,
+      extractionPolicyVersion: "evidence-extraction:v1", expectedDataEpoch: 1,
+      commandId: "slow-freeze-command", attemptId: "slow-freeze-attempt", champion: {
+        configVersion: "test", model: "test", provider: "openai", providerPolicyVersion: "test", snapshot: "test",
+      }, now: fixedResponseClock() });
+    await entered;
+    expect(await repository.findEvidenceSnapshot({ dailySessionId: asDailySessionId(id), sourceRevision: revision })).toBeNull();
+    const startedAt = Date.now();
+    const handler = createRecoveryScannerHandler({ scannerSecret: "test-secret",
+      conversationResponseService: composition.conversationResponseService,
+      continuousExchangeService: { scanDueInactivity: async () => ({ applied: 0, processed: 0, stale: 0 }) } as never,
+      journalEligibilityService: composition.journalEligibilityService,
+      outboxDispatcherService: createOutboxDispatcherService({ clock: fixedResponseClock, leaseDurationMs: 60_000,
+        leaseOwner: "slow-test", repository: composition.outboxRepository,
+        startWorkflow: async () => ({ workflowReceiptId: "slow-test-receipt" }) }),
+      readDerivedLatency: async () => ({ oldestPendingSeconds: 0, pendingSessions: 0 }),
+    });
+    const [scan, sameSession] = await Promise.all([
+      handler(new Request("http://localhost/api/internal/recovery/scan", { headers: { authorization: "Bearer test-secret" } })),
+      submitConversation({ clientEventId: "during-provider-event", clientTurnId: "during-provider-turn", text: "I also bought a book on the way home." }),
+    ]);
+    expect(scan.status).toBe(200);
+    expect(sameSession).toBe(id);
+    expect(Date.now() - startedAt).toBeLessThan(2_000);
+    const result = await freezing;
+    expect(result.outcome).toBe("frozen");
+    if (result.outcome !== "frozen") throw new Error("expected frozen old source");
+    expect(result.snapshot.evidenceItems).toHaveLength(1);
+    expect(result.snapshot.sourceRevision).toBe(revision);
+    expect(await composition.journalService.generate({ dailySessionId: id, sourceRevision: revision,
+      generationCommandId: "old-source-journal", modelRunAttemptId: "old-source-attempt", expectedDataEpoch: 1,
+      policyVersion: "journal-generation:v2" })).toEqual({ outcome: "fenced" });
+  }, 25_000);
+
+  it.each(["40P01", "40001"])("retries post-Provider SQL %s without repeating extraction", async (code) => {
+    const id = await submitConversation({ clientEventId: "conflict-event", clientTurnId: "conflict-turn", text: "I took a walk by the ocean this morning." });
+    await endExchange(id);
+    const revision = Number((await database.pool.query("SELECT source_revision FROM daily_sessions WHERE daily_session_id = $1", [id])).rows[0].source_revision);
+    let calls = 0;
+    const repository = new PostgresEvidenceRepository(database.pool, { role: "evidence.extract", async extract() {
+      calls++; return [{ locatorType: "whole_revision", locatorKey: "whole", role: "factual_support" }];
+    } });
+    await database.pool.query(`CREATE SEQUENCE freeze_conflict_count;
+      CREATE FUNCTION inject_freeze_conflict() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
+        IF nextval('freeze_conflict_count') <= 2 THEN RAISE EXCEPTION 'synthetic conflict' USING ERRCODE = '${code}'; END IF;
+        RETURN NEW; END $$;
+      CREATE TRIGGER inject_freeze_conflict BEFORE INSERT ON evidence_source_snapshots FOR EACH ROW EXECUTE FUNCTION inject_freeze_conflict();`);
+    try {
+      const frozen = await repository.freezeUserEvidence({ dailySessionId: asDailySessionId(id), sourceRevision: revision, extractionPolicyVersion: "evidence-extraction:v1", expectedDataEpoch: 1,
+        commandId: "conflict-command", attemptId: "conflict-attempt", champion: { configVersion: "test", model: "test", provider: "openai", providerPolicyVersion: "test", snapshot: "test" }, now: fixedResponseClock() });
+      expect(frozen.outcome).toBe("frozen");
+      expect(calls).toBe(1);
+      expect(Number((await database.pool.query("SELECT last_value FROM freeze_conflict_count")).rows[0].last_value)).toBe(3);
+      expect(Number((await database.pool.query("SELECT COUNT(*) FROM evidence_items")).rows[0].count)).toBe(1);
+    } finally {
+      await database.pool.query("DROP TRIGGER inject_freeze_conflict ON evidence_source_snapshots; DROP FUNCTION inject_freeze_conflict(); DROP SEQUENCE freeze_conflict_count;");
+    }
+  });
+
+  it.each(["epoch", "source"])("blocks revoked %s input before Provider dispatch", async (invalidation) => {
+    const id = await submitConversation({ clientEventId: "dispatch-event", clientTurnId: "dispatch-turn", text: "I took a walk by the ocean this morning." });
+    await endExchange(id);
+    const revision = Number((await database.pool.query("SELECT source_revision FROM daily_sessions WHERE daily_session_id = $1", [id])).rows[0].source_revision);
+    let calls = 0;
+    const repository = new PostgresEvidenceRepository(database.pool, { role: "evidence.extract", async extract() {
+      calls++; return [{ locatorType: "whole_revision", locatorKey: "whole", role: "factual_support" }];
+    } }, async () => {
+      if (invalidation === "epoch") await database.pool.query("UPDATE app_users SET data_epoch = data_epoch + 1 WHERE user_id = $1", [fixedInternalOwnerPrincipal.userId]);
+      else await database.pool.query("UPDATE conversation_event_revisions SET canonical_text = '', content_purged_at = CURRENT_TIMESTAMP");
+    });
+    const frozen = await repository.freezeUserEvidence({ dailySessionId: asDailySessionId(id), sourceRevision: revision, extractionPolicyVersion: "evidence-extraction:v1", expectedDataEpoch: 1,
+      commandId: "dispatch-command", attemptId: "dispatch-attempt", champion: { configVersion: "test", model: "test", provider: "openai", providerPolicyVersion: "test", snapshot: "test" }, now: fixedResponseClock() });
+    expect(frozen.outcome).toBe("stale");
+    expect(calls).toBe(0);
+    expect(Number((await database.pool.query("SELECT COUNT(*) FROM evidence_source_snapshots")).rows[0].count)).toBe(0);
+    await database.pool.query("UPDATE app_users SET data_epoch = 1 WHERE user_id = $1", [fixedInternalOwnerPrincipal.userId]);
+  });
+
+  it("reuses completed Evidence before Provider and excludes concurrent duplicate dispatch", async () => {
+    const id = await submitConversation({ clientEventId: "dedupe-event", clientTurnId: "dedupe-turn", text: "I took a walk by the ocean this morning." });
+    await endExchange(id);
+    const revision = Number((await database.pool.query("SELECT source_revision FROM daily_sessions WHERE daily_session_id = $1", [id])).rows[0].source_revision);
+    let calls = 0;
+    const repository = new PostgresEvidenceRepository(database.pool, { role: "evidence.extract", async extract() {
+      calls++; await new Promise((resolve) => setTimeout(resolve, 50));
+      return [{ locatorType: "whole_revision", locatorKey: "whole", role: "factual_support" }];
+    } });
+    const input = { dailySessionId: asDailySessionId(id), sourceRevision: revision, extractionPolicyVersion: "evidence-extraction:v1", expectedDataEpoch: 1,
+      commandId: "dedupe-command", attemptId: "dedupe-attempt", champion: { configVersion: "test", model: "test", provider: "openai" as const, providerPolicyVersion: "test", snapshot: "test" }, now: fixedResponseClock() };
+    const outcomes = await Promise.all([repository.freezeUserEvidence(input), repository.freezeUserEvidence({ ...input, attemptId: "duplicate-attempt" })]);
+    expect(outcomes.map((row) => row.outcome).sort()).toEqual(["frozen", "stale"]);
+    expect(calls).toBe(1);
+    expect((await repository.freezeUserEvidence({ ...input, attemptId: "replayed-attempt" })).outcome).toBe("frozen");
+    expect(calls).toBe(1);
+    expect(Number((await database.pool.query("SELECT COUNT(*) FROM evidence_items")).rows[0].count)).toBe(1);
+  });
+
+  it.each(["epoch", "source"])("fails closed after %s invalidates frozen Provider input", async (invalidation) => {
+    const id = await submitConversation({ clientEventId: "fence-event", clientTurnId: "fence-turn", text: "I took a walk by the ocean this morning." });
+    await endExchange(id);
+    const revision = Number((await database.pool.query("SELECT source_revision FROM daily_sessions WHERE daily_session_id = $1", [id])).rows[0].source_revision);
+    const repository = new PostgresEvidenceRepository(database.pool, { role: "evidence.extract", async extract() {
+      if (invalidation === "epoch") await database.pool.query("UPDATE app_users SET data_epoch = data_epoch + 1 WHERE user_id = $1", [fixedInternalOwnerPrincipal.userId]);
+      else await database.pool.query("UPDATE conversation_event_revisions SET canonical_text = '', content_purged_at = CURRENT_TIMESTAMP");
+      return [{ locatorType: "whole_revision", locatorKey: "whole", role: "factual_support" }];
+    } });
+    const frozen = await repository.freezeUserEvidence({ dailySessionId: asDailySessionId(id), sourceRevision: revision, extractionPolicyVersion: "evidence-extraction:v1", expectedDataEpoch: 1,
+      commandId: "fence-command", attemptId: "fence-attempt", champion: { configVersion: "test", model: "test", provider: "openai", providerPolicyVersion: "test", snapshot: "test" }, now: fixedResponseClock() });
+    expect(frozen.outcome).toBe(invalidation === "epoch" ? "not_found" : "stale");
+    expect(Number((await database.pool.query("SELECT COUNT(*) FROM evidence_source_snapshots")).rows[0].count)).toBe(0);
+    await database.pool.query("UPDATE app_users SET data_epoch = 1 WHERE user_id = $1", [fixedInternalOwnerPrincipal.userId]);
+  });
+
+  it("converges concurrent fast-path Evidence and Journal freeze with frozen membership and no duplicate locator", async () => {
+    const id = await submitConversation({ clientEventId: "parallel-event", clientTurnId: "parallel-turn", text: "I took a walk by the ocean this morning." });
+    await endExchange(id);
+    const source = (await database.pool.query<{ conversation_event_id: string; conversation_event_revision_id: string; sequence_no: string; canonical_text: string; source_revision: string }>(
+      `SELECT event.conversation_event_id, revision.conversation_event_revision_id, event.sequence_no, revision.canonical_text, session.source_revision
+       FROM conversation_events event INNER JOIN conversation_event_revisions revision ON revision.conversation_event_revision_id = event.current_revision_id
+       INNER JOIN daily_sessions session ON session.daily_session_id = event.daily_session_id WHERE event.daily_session_id = $1 AND event.actor = 'user'`, [id])).rows[0]!;
+    const repository = new PostgresEvidenceRepository(database.pool, { role: "evidence.extract", async extract() {
+      return [{ locatorType: "text_span", locatorKey: `0:${source.canonical_text.length}`, role: "factual_support" }];
+    } });
+    const fast = new PostgresFastPathExtractionRepository(database.pool);
+    const [frozen, locators] = await Promise.all([
+      repository.freezeUserEvidence({ dailySessionId: asDailySessionId(id), sourceRevision: Number(source.source_revision), extractionPolicyVersion: "evidence-extraction:v1", expectedDataEpoch: 1,
+        commandId: "parallel-command", attemptId: "parallel-attempt", champion: { configVersion: "test", model: "test", provider: "openai", providerPolicyVersion: "test", snapshot: "test" }, now: fixedResponseClock() }),
+      fast.ensureRevisionEvidence({ userId: fixedInternalOwnerPrincipal.userId, dailySessionId: id, expectedDataEpoch: 1, extractionPolicyVersion: "evidence-extraction:v1", now: fixedResponseClock(),
+        revision: { revisionId: source.conversation_event_revision_id, conversationEventId: source.conversation_event_id, sequenceNo: Number(source.sequence_no), locale: "en-US", text: source.canonical_text,
+          committedAt: fixedResponseClock(), transcriptStatus: "final", isCorrection: false, supersedesRevisionId: null },
+        evidence: [{ locatorKey: `0:${source.canonical_text.length}`, role: "factual_support" }],
+        lineage: { commandId: "parallel-fast-command", attemptId: "parallel-fast-attempt", championConfigVersion: "test", championProvider: "openai", championModel: "test", championSnapshot: "test", championProviderPolicyVersion: "test" } }),
+    ]);
+    expect(frozen.outcome).toBe("frozen");
+    expect(locators.size).toBe(1);
+    expect(Number((await database.pool.query("SELECT COUNT(*) FROM evidence_source_snapshots")).rows[0].count)).toBe(2);
+    expect(Number((await database.pool.query("SELECT COUNT(*) FROM evidence_items")).rows[0].count)).toBe(1);
+    expect((await buildComposition().journalService.generate({ dailySessionId: id, sourceRevision: Number(source.source_revision), expectedDataEpoch: 1,
+      generationCommandId: "parallel-journal-command", modelRunAttemptId: "parallel-journal-attempt", policyVersion: "journal-generation:v2" })).outcome).toBe("published");
+  });
+
+  it("bounds durable Journal retries, recovers legacy failures and admits a single manual retry", async () => {
+    const id = await submitConversation({ clientEventId: "retry-event", clientTurnId: "retry-turn", text: "I enjoyed a walk in the park this afternoon." });
+    await endExchange(id);
+    const command = (await database.pool.query<{ workflow_command_id: string; source_revision: string }>(
+      "SELECT workflow_command_id, source_revision FROM workflow_commands WHERE command_type = 'journal_eligibility' AND subject_id = $1", [id])).rows[0]!;
+    const identity = { workflowCommandId: command.workflow_command_id, subjectId: id, sourceRevision: Number(command.source_revision), expectedDataEpoch: 1 };
+    const recovery = new PostgresJournalWorkflowRecovery(database.pool);
+    await database.pool.query(`INSERT INTO journal_workflow_outcomes (workflow_command_id,user_id,daily_session_id,source_revision,expected_data_epoch,outcome,reason,created_at)
+      VALUES ($1,$2,$3,$4,1,'retryable_failed','evidence_provider_failed',CURRENT_TIMESTAMP)`,
+      [identity.workflowCommandId, fixedInternalOwnerPrincipal.userId, id, identity.sourceRevision]);
+    await recovery.recoverDue();
+    expect((await database.pool.query("SELECT status FROM outbox_events WHERE workflow_command_id = $1", [identity.workflowCommandId])).rows[0].status).toBe("pending");
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      expect(await recovery.claim(identity, `lease-${attempt}`)).toBe(true);
+      expect(await recovery.claim(identity, "duplicate-lease")).toBe(false);
+      await recovery.settle(identity, `lease-${attempt}`, "retryable_failed", "evidence_provider_failed");
+      await database.pool.query("UPDATE journal_workflow_outcomes SET next_attempt_at = CURRENT_TIMESTAMP WHERE workflow_command_id = $1 AND outcome = 'retryable_failed'", [identity.workflowCommandId]);
+    }
+    expect((await database.pool.query("SELECT outcome, reason, attempt_count FROM journal_workflow_outcomes WHERE workflow_command_id = $1", [identity.workflowCommandId])).rows[0])
+      .toEqual({ outcome: "needs_review", reason: "retry_budget_exhausted", attempt_count: 3 });
+    expect(await recovery.claim(identity, "fourth-attempt")).toBe(false);
+    const retries = await Promise.all([1, 2].map(() => recovery.retryForDate({ userId: fixedInternalOwnerPrincipal.userId, logicalDate: "2026-08-12" })));
+    expect(retries.sort()).toEqual([false, true]);
+    expect(await recovery.claim(identity, "manual-lease")).toBe(true);
+    await recovery.settle(identity, "manual-lease", "published", null);
+    expect((await database.pool.query("SELECT status FROM workflow_commands WHERE workflow_command_id = $1", [identity.workflowCommandId])).rows[0].status).toBe("completed");
+  });
+
+  it("re-arms a transient generation failure so a failed day stays recoverable and visible", async () => {
+    const id = await submitConversation({
+      clientEventId: "transient-event",
+      clientTurnId: "transient-turn",
+      text: "I spent the afternoon reading on the porch with the cat.",
+    });
+    await endExchange(id);
+    const command = (
+      await database.pool.query<{ workflow_command_id: string; source_revision: string }>(
+        "SELECT workflow_command_id, source_revision FROM workflow_commands WHERE command_type = 'journal_eligibility' AND subject_id = $1",
+        [id],
+      )
+    ).rows[0]!;
+    const identity = {
+      workflowCommandId: command.workflow_command_id,
+      subjectId: id,
+      sourceRevision: Number(command.source_revision),
+      expectedDataEpoch: 1,
+    };
+    const recovery = new PostgresJournalWorkflowRecovery(database.pool);
+
+    // Drive the real Workflow step with the Evidence freeze forced to the
+    // transient `stale` outcome a concurrent duplicate dispatch takes. The day
+    // must be re-armed, never settled into a raw terminal row the recovery
+    // surfaces cannot see.
+    workflowComposition.current = {
+      ...buildComposition(),
+      clock: fixedResponseClock,
+      evidenceService: { freeze: async () => ({ outcome: "stale" as const }) },
+      journalWorkflowRecovery: recovery,
+    };
+    const result = await journalEligibilityWorkflow({
+      workflowCommandId: identity.workflowCommandId,
+      subjectId: identity.subjectId,
+      sourceRevision: identity.sourceRevision,
+      policyVersion: JOURNAL_ELIGIBILITY_POLICY_VERSION,
+      expectedDataEpoch: identity.expectedDataEpoch,
+    });
+    expect(result.outcome).toBe("retryable_failed");
+    expect(
+      (
+        await database.pool.query(
+          "SELECT outcome, reason, attempt_count FROM journal_workflow_outcomes WHERE workflow_command_id = $1",
+          [identity.workflowCommandId],
+        )
+      ).rows[0],
+    ).toEqual({ outcome: "retryable_failed", reason: "stale", attempt_count: 1 });
+
+    // The Recovery Scan re-arms the original outbox event and command.
+    await database.pool.query(
+      "UPDATE journal_workflow_outcomes SET next_attempt_at = CURRENT_TIMESTAMP WHERE workflow_command_id = $1",
+      [identity.workflowCommandId],
+    );
+    await recovery.recoverDue();
+    expect((await database.pool.query("SELECT status FROM outbox_events WHERE workflow_command_id = $1", [identity.workflowCommandId])).rows[0]!.status).toBe("pending");
+    expect((await database.pool.query("SELECT status FROM workflow_commands WHERE workflow_command_id = $1", [identity.workflowCommandId])).rows[0]!.status).toBe("created");
+
+    // Two more attempts exhaust the durable budget and converge on the single
+    // terminal shape the recovery surfaces understand.
+    for (const attempt of [2, 3]) {
+      expect(await recovery.claim(identity, `transient-lease-${attempt}`)).toBe(true);
+      await recovery.settle(identity, `transient-lease-${attempt}`, "retryable_failed", "stale");
+      await database.pool.query(
+        "UPDATE journal_workflow_outcomes SET next_attempt_at = CURRENT_TIMESTAMP WHERE workflow_command_id = $1 AND outcome = 'retryable_failed'",
+        [identity.workflowCommandId],
+      );
+    }
+    expect(
+      (
+        await database.pool.query(
+          "SELECT outcome, reason, attempt_count FROM journal_workflow_outcomes WHERE workflow_command_id = $1",
+          [identity.workflowCommandId],
+        )
+      ).rows[0],
+    ).toEqual({ outcome: "needs_review", reason: "retry_budget_exhausted", attempt_count: 3 });
+
+    // Owner-visible surfaces now report the failed generation instead of a
+    // silently empty day.
+    const journalRepository = new PostgresJournalRepository(database.pool);
+    const dates = await journalRepository.listCurrentJournalDates({
+      userId: fixedInternalOwnerPrincipal.userId,
+      limit: 10,
+      cursor: null,
+    });
+    expect(dates.find((entry) => entry.dailySessionId === id)?.state).toBe("generation_failed");
+    expect(
+      await journalRepository.readGenerationNoticeForDate({
+        userId: fixedInternalOwnerPrincipal.userId,
+        logicalDate: "2026-08-12",
+      }),
+    ).toEqual({ logicalDate: "2026-08-12", failureCode: "retry_budget_exhausted" });
+
+    // A newer terminal row with a different reason for the same date must not
+    // shadow the budget-exhausted row and silently resolve the retry to false.
+    await database.pool.query(
+      `INSERT INTO journal_workflow_outcomes (workflow_command_id,user_id,daily_session_id,source_revision,expected_data_epoch,outcome,reason,created_at,attempt_count)
+       VALUES ('newer-non-budget-row',$1,$2,$3,1,'needs_review','not_eligible',CURRENT_TIMESTAMP + INTERVAL '1 hour',0)`,
+      [fixedInternalOwnerPrincipal.userId, id, identity.sourceRevision],
+    );
+    expect(await recovery.retryForDate({ userId: fixedInternalOwnerPrincipal.userId, logicalDate: "2026-08-12" })).toBe(true);
+  });
+
+  it("retries a budget-exhausted day even when a newer non-budget terminal row exists", async () => {
+    const id = await submitConversation({
+      clientEventId: "shadow-event",
+      clientTurnId: "shadow-turn",
+      text: "I finished the book about mountain trails this afternoon.",
+    });
+    await endExchange(id);
+    const command = (
+      await database.pool.query<{ workflow_command_id: string; source_revision: string }>(
+        "SELECT workflow_command_id, source_revision FROM workflow_commands WHERE command_type = 'journal_eligibility' AND subject_id = $1",
+        [id],
+      )
+    ).rows[0]!;
+    const recovery = new PostgresJournalWorkflowRecovery(database.pool);
+    await database.pool.query(
+      `INSERT INTO journal_workflow_outcomes (workflow_command_id,user_id,daily_session_id,source_revision,expected_data_epoch,outcome,reason,created_at,attempt_count)
+       VALUES ($1,$2,$3,$4,1,'needs_review','retry_budget_exhausted','2026-08-12T15:00:00Z',3),
+              ('newer-shadow-row',$2,$3,$4,1,'needs_review','not_eligible','2026-08-12T16:00:00Z',0)`,
+      [command.workflow_command_id, fixedInternalOwnerPrincipal.userId, id, Number(command.source_revision)],
+    );
+    expect(await recovery.retryForDate({ userId: fixedInternalOwnerPrincipal.userId, logicalDate: "2026-08-12" })).toBe(true);
+    expect(
+      (
+        await database.pool.query(
+          "SELECT outcome, reason, attempt_count FROM journal_workflow_outcomes WHERE workflow_command_id = $1",
+          [command.workflow_command_id],
+        )
+      ).rows[0],
+    ).toEqual({ outcome: "retryable_failed", reason: null, attempt_count: 0 });
+  });
+
+  it("keeps the Evidence `not_eligible` carve-out out of the failed-generation surface", async () => {
+    const id = await submitConversation({
+      clientEventId: "not-eligible-event",
+      clientTurnId: "not-eligible-turn",
+      text: "A short note that still clears the substantive expression gate.",
+    });
+    await endExchange(id);
+    const command = (
+      await database.pool.query<{ workflow_command_id: string; source_revision: string }>(
+        "SELECT workflow_command_id, source_revision FROM workflow_commands WHERE command_type = 'journal_eligibility' AND subject_id = $1",
+        [id],
+      )
+    ).rows[0]!;
+    const identity = {
+      workflowCommandId: command.workflow_command_id,
+      subjectId: id,
+      sourceRevision: Number(command.source_revision),
+      expectedDataEpoch: 1,
+    };
+    const recovery = new PostgresJournalWorkflowRecovery(database.pool);
+    workflowComposition.current = {
+      ...buildComposition(),
+      clock: fixedResponseClock,
+      evidenceService: { freeze: async () => ({ outcome: "not_eligible" as const }) },
+      journalWorkflowRecovery: recovery,
+    };
+    const result = await journalEligibilityWorkflow({
+      workflowCommandId: identity.workflowCommandId,
+      subjectId: identity.subjectId,
+      sourceRevision: identity.sourceRevision,
+      policyVersion: JOURNAL_ELIGIBILITY_POLICY_VERSION,
+      expectedDataEpoch: identity.expectedDataEpoch,
+    });
+    expect(result.outcome).toBe("needs_review");
+    expect(
+      (
+        await database.pool.query(
+          "SELECT outcome, reason, attempt_count FROM journal_workflow_outcomes WHERE workflow_command_id = $1",
+          [identity.workflowCommandId],
+        )
+      ).rows[0],
+    ).toEqual({ outcome: "needs_review", reason: "not_eligible", attempt_count: 1 });
+    const journalRepository = new PostgresJournalRepository(database.pool);
+    expect(
+      (
+        await journalRepository.listCurrentJournalDates({
+          userId: fixedInternalOwnerPrincipal.userId,
+          limit: 10,
+          cursor: null,
+        })
+      ).some((entry) => entry.dailySessionId === id && entry.state === "generation_failed"),
+    ).toBe(false);
+    expect(
+      await journalRepository.readGenerationNoticeForDate({
+        userId: fixedInternalOwnerPrincipal.userId,
+        logicalDate: "2026-08-12",
+      }),
+    ).toBeNull();
+    expect(await recovery.retryForDate({ userId: fixedInternalOwnerPrincipal.userId, logicalDate: "2026-08-12" })).toBe(false);
+  });
+
   it("uses opaque branded ids end to end", () => {
     expect(() => asDailySessionId("not-a-uuid")).toThrow();
     expect(() => asUserId("not-a-uuid")).toThrow();

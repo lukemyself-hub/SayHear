@@ -1,14 +1,17 @@
 import {
   CompiledContextIntegrityError,
   CONVERSATION_OUTPUT_FORMAT_VERSION,
+  HISTORY_REVIEW_FUNCTION_NAME,
   isWhitelistedSafetyResourceNumber,
   minimumHighRiskSafetyPostureDetector,
   normalizeCuriosityStopSignalCall,
+  normalizeHistoryReviewCall,
   normalizeProviderActionProposal,
   ProviderDispatchError,
   renderSafetyPostureResponseAnchor,
   SAFETY_POSTURE_ACTIVE_MARKER,
   type ContextCompiler,
+  type ModelRoleCallUsage,
   type ConversationTextChampion,
   type ConversationTextModel,
   type ProviderEgressPort,
@@ -100,7 +103,17 @@ export function createProviderEgressPort(dependencies: {
           : null;
       let streamedText = "";
       let anchorCompleted = false;
+      // Spend the Provider reports is settled whether or not the call goes on
+      // to complete: a call cut off by a timeout, an abort or a fence was still
+      // billed (issue #319). A completed call records its own usage with the
+      // completion, so this only covers the other outcomes.
+      let reportedUsage: ModelRoleCallUsage | null = null;
+      let completionRecorded = false;
+      try {
       for await (const event of dependencies.model.stream({
+        onUsage: (usage) => {
+          reportedUsage = usage;
+        },
         instructions: payload.instructions,
         locale: claim.context.locale,
         messages: payload.messages,
@@ -188,6 +201,7 @@ export function createProviderEgressPort(dependencies: {
               modelRunAttemptId: input.modelRunAttemptId,
               now: dependencies.clock(),
             });
+          completionRecorded = accepted;
           if (!accepted) {
             throw new ProviderDispatchError(
               "unavailable",
@@ -216,6 +230,28 @@ export function createProviderEgressPort(dependencies: {
             yield {
               proposals: normalized.proposals,
               type: "stop_signal_proposal",
+            };
+          } else if (
+            event.rawFunctionName === HISTORY_REVIEW_FUNCTION_NAME &&
+            input.toolsDisabled !== true &&
+            input.requestEventRevisionId &&
+            (input.functions ?? []).some(
+              (definition) => definition.name === HISTORY_REVIEW_FUNCTION_NAME,
+            )
+          ) {
+            // A history review is a controlled read-only proposal, not a
+            // Conversation Action: it gets its own event kind so only the
+            // Harness deterministic path can execute it (issue 314). It is
+            // accepted only if this Decision actually offered the function.
+            const normalized = normalizeHistoryReviewCall({
+              rawArguments: event.rawArguments,
+            });
+            if ("invalid" in normalized) {
+              throw new ProviderDispatchError("invalid_response");
+            }
+            yield {
+              proposal: normalized.proposal,
+              type: "history_query_proposal",
             };
           } else if (
             input.definitions &&
@@ -249,6 +285,19 @@ export function createProviderEgressPort(dependencies: {
           continue;
         }
         yield event;
+      }
+      } finally {
+        if (reportedUsage !== null && !completionRecorded) {
+          try {
+            await dependencies.repository.recordProviderUsage?.({
+              modelRunAttemptId: input.modelRunAttemptId,
+              now: dependencies.clock(),
+              usage: reportedUsage,
+            });
+          } catch {
+            // Settling usage must never mask the failure that ended the call.
+          }
+        }
       }
     },
   };

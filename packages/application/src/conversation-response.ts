@@ -19,9 +19,21 @@ import type {
 } from "./conversation-action-catalog";
 import type { ConversationActionReceipt } from "./conversation-action-gateway";
 import type { ConversationActionGateway } from "./conversation-action-gateway";
-import type { ConversationAgentHarness } from "./conversation-agent-harness";
+import type {
+  ConversationAgentHarness,
+  ConversationHarnessEvent,
+} from "./conversation-agent-harness";
+import type { HistoryRecallGateway } from "./history-recall";
 import type { CuriosityStopSignalProposal } from "./curiosity-stop-signal";
-import { type ProviderDispatchErrorCategory } from "./conversation-model";
+import {
+  ProviderDispatchError,
+  type ProviderDispatchErrorCategory,
+} from "./conversation-model";
+import {
+  createRequestDeadline,
+  createRequestInterrupt,
+  type RequestDeadline,
+} from "./request-deadline";
 import type {
   ConversationRetryTurn,
   UserTextConversationService,
@@ -137,6 +149,16 @@ export type ConversationResponseRepository = Readonly<{
       userId: UserId;
     }>[]
   >;
+  /**
+   * Settle History Answer commands that are due for recovery in a runtime that
+   * has no history branch (the deployment switch is off): they can never be
+   * run, so they end fail closed (nothing shown, nothing committed, the Turn
+   * reaches a final state and the person can Retry). Returns how many ended.
+   */
+  settleStaleHistoryAnswers?(input: {
+    dueAt: Date;
+    limit: number;
+  }): Promise<number>;
   commitCompleteResponse(input: {
     completedAt: Date;
     generationCommandId: GenerationCommandId;
@@ -157,14 +179,42 @@ export type ConversationResponseRepository = Readonly<{
         outcome: "committed";
         revisionId: ConversationEventRevisionId;
       }>
-    | Readonly<{ outcome: "fence_rejected" }>
+    | Readonly<{
+        outcome: "fence_rejected";
+        /**
+         * Why the answer lost its eligibility, when the reason is one of the
+         * request-lifecycle fences (issue #319): a newer user message exists, or
+         * the request's frozen deadline has passed.
+         */
+        reason?: "deadline_exceeded" | "superseded";
+      }>
   >;
+  /**
+   * Cheap, read-only probe used before the first token becomes visible: is
+   * this command's answer still allowed to be shown? A newer user message
+   * retires it; so does its deadline (issue #319). The commit fence stays the
+   * correctness boundary; this only keeps a retired answer off the screen.
+   */
+  checkResponseFreshness?(input: {
+    generationCommandId: GenerationCommandId;
+    now: Date;
+    userId: UserId;
+  }): Promise<"current" | "deadline_exceeded" | "superseded">;
   settleResponseFailure(input: {
     category: ProviderDispatchErrorCategory;
     generationCommandId: GenerationCommandId;
     interrupted: boolean;
     jitter: number;
     modelRunAttemptId: ModelRunAttemptId;
+    /**
+     * The reply call completed without any visible text (a proven
+     * `empty_output`, never a malformed stream). The first attempt of a
+     * Command gets one technical retry for it, inside the request deadline and
+     * under the same rules as any other technical retry (ADR-0083).
+     */
+    emptyReply?: boolean;
+    /** The request ended (deadline or cancel): never schedule a retry (#319). */
+    noRetry?: boolean;
     settledAt: Date;
     userId: UserId;
   }): Promise<
@@ -207,6 +257,8 @@ export type ConversationResponseService = Readonly<{
     }>
   >;
   scanPendingActionFinalizations?(): Promise<number>;
+  /** Answer History Answer commands whose request never finished (#314). */
+  scanPendingHistoryAnswers?(): Promise<number>;
 }>;
 
 export function createConversationResponseService(dependencies: {
@@ -217,11 +269,38 @@ export function createConversationResponseService(dependencies: {
   conversationService: UserTextConversationService;
   harness: ConversationAgentHarness;
   harnessPolicy: ConversationHarnessPolicy;
+  /** Lists History Answer commands that still need to be answered (#314). */
+  historyRecall?: HistoryRecallGateway;
   jitter?: () => number;
   recoveryScanLimit?: number;
   recoveryGate?: RecoveryGate;
+  /**
+   * End-to-end budget of one chat request in milliseconds (ADR-0152: 60000).
+   * It is frozen as an absolute deadline when the request is accepted and
+   * shared by every step; unset keeps the legacy unbounded behavior (issue
+   * #319). It is separate from the Provider transport timeout.
+   */
+  requestBudgetMs?: number;
   repository: ConversationResponseRepository;
 }): ConversationResponseService {
+  const requestBudgetMs = dependencies.requestBudgetMs;
+  if (
+    requestBudgetMs !== undefined &&
+    (!Number.isInteger(requestBudgetMs) || requestBudgetMs <= 0)
+  ) {
+    throw new Error("requestBudgetMs must be a positive integer.");
+  }
+  // The newest accepted request per owner in this process. A newer user message
+  // retires the older in-flight request at once; across processes the database
+  // commit fence does the same (issue #319).
+  const inFlightByUser = new Map<string, AbortController>();
+  function beginRequest(): RequestDeadline | undefined {
+    if (requestBudgetMs === undefined) return undefined;
+    return createRequestDeadline({
+      clock: dependencies.clock,
+      deadlineAt: new Date(dependencies.clock().getTime() + requestBudgetMs),
+    });
+  }
   const recoveryScanLimit = dependencies.recoveryScanLimit ?? 100;
   const jitter = dependencies.jitter ?? Math.random;
   if (
@@ -232,6 +311,18 @@ export function createConversationResponseService(dependencies: {
     throw new Error(
       "recoveryScanLimit must be an integer from 1 through 1000.",
     );
+  }
+  function historyAnswerInput(deadline?: RequestDeadline) {
+    return {
+      catalog: dependencies.catalog,
+      ...(deadline ? { deadline } : {}),
+      harnessPolicy: {
+        ...dependencies.harnessPolicy,
+        maxHistoryQueries: 0 as const,
+        maxStateChangingActions: 0 as const,
+        toolsDisabled: true,
+      },
+    };
   }
   async function* streamResponse(
     userId: UserId,
@@ -244,6 +335,7 @@ export function createConversationResponseService(dependencies: {
         >
       | null,
     signal?: AbortSignal,
+    deadline?: RequestDeadline,
   ): AsyncIterable<ConversationResponseStreamEvent> {
     // Claim request-lifecycle ownership of the Decision Command before emitting
     // any stream event, so a consumer that cancels immediately after the
@@ -266,6 +358,40 @@ export function createConversationResponseService(dependencies: {
     // Framework sessions never cross back through this seam (issue #24 AC6).
     let possiblyVisible = false;
     let settled = ownership === "shared";
+    // Forward a later stage (Action Finalization or History Answer) onto the
+    // public stream. The wire contract is unchanged: more deltas, then one
+    // committed or failed event.
+    async function* forwardStage(
+      stageEvents: AsyncIterable<
+        ConversationHarnessEvent
+      >,
+    ): AsyncIterable<ConversationResponseStreamEvent> {
+      for await (const stageEvent of stageEvents) {
+        if (stageEvent.type === "decision_delta") {
+          possiblyVisible = true;
+          yield { delta: stageEvent.delta, type: "assistant_delta" };
+        } else if (stageEvent.type === "decision_committed") {
+          settled = true;
+          yield {
+            createdAt: stageEvent.assistantCreatedAt,
+            eventId: stageEvent.assistantEventId,
+            revisionId: stageEvent.assistantEventRevisionId,
+            type: "assistant_committed",
+          };
+        } else if (stageEvent.type === "decision_failed") {
+          settled = true;
+          yield {
+            category: stageEvent.category,
+            type: stageEvent.interrupted
+              ? "response_interrupted"
+              : "response_failed",
+          };
+        } else {
+          settled = true;
+          yield { category: "invalid_response", type: "response_failed" };
+        }
+      }
+    }
     try {
       if (initialEvent) {
         yield initialEvent;
@@ -287,13 +413,37 @@ export function createConversationResponseService(dependencies: {
       // The Service compiles request-lifecycle Context and hands the
       // already-compiled CompiledContext reference to the Harness (ADR-0093,
       // architecture 08-10 §8.1).
-      const context = await dependencies.contextCompiler.compile({
-        generationCommandId: turn.generation.commandId,
-        interactionTurnId: turn.turn.id,
-        userId,
-      });
+      let context: Awaited<ReturnType<ContextCompiler["compile"]>>;
+      try {
+        context = await interruptible(
+          dependencies.contextCompiler.compile({
+            generationCommandId: turn.generation.commandId,
+            interactionTurnId: turn.turn.id,
+            userId,
+          }),
+          signal,
+          deadline,
+        );
+      } catch (error) {
+        if (!(error instanceof ProviderDispatchError)) throw error;
+        // The request ended (deadline or cancel) while the Context was being
+        // read: settle honestly and say so, without starting anything new.
+        await dependencies.repository.settleResponseFailure({
+          category: error.category,
+          generationCommandId: turn.generation.commandId,
+          interrupted: false,
+          jitter: normalizedJitter(jitter()),
+          modelRunAttemptId: turn.generation.attemptId,
+          settledAt: dependencies.clock(),
+          userId,
+        });
+        settled = true;
+        yield { category: error.category, type: "response_failed" };
+        return;
+      }
       for await (const event of dependencies.harness.runDecision(
         {
+          ...(deadline ? { deadline } : {}),
           ...(context.actionReferenceHandles === undefined
             ? {}
             : { actionReferenceHandles: context.actionReferenceHandles }),
@@ -341,64 +491,57 @@ export function createConversationResponseService(dependencies: {
             if (!dependencies.harness.runFinalizationCommand) {
               throw new Error("Action Finalization orchestration is unavailable.");
             }
-            for await (const finalizationEvent of dependencies.harness.runFinalizationCommand(
-              {
-                actionExecutionId: event.receipt.actionExecutionId,
-                generationCommandId: finalizationCommandId,
-                interactionTurnId: turn.turn.id,
-                modelRunAttemptId: finalizationAttemptId,
-                requestEventRevisionId: requestEventRevisionId!,
-                receipt: {
-                  admission: event.receipt.admission,
-                  disposition: event.receipt.disposition,
-                  execution: event.receipt.execution,
-                  sequence: event.receipt.receiptSequence,
+            yield* forwardStage(
+              dependencies.harness.runFinalizationCommand(
+                {
+                  actionExecutionId: event.receipt.actionExecutionId,
+                  generationCommandId: finalizationCommandId,
+                  interactionTurnId: turn.turn.id,
+                  modelRunAttemptId: finalizationAttemptId,
+                  requestEventRevisionId: requestEventRevisionId!,
+                  receipt: {
+                    admission: event.receipt.admission,
+                    disposition: event.receipt.disposition,
+                    execution: event.receipt.execution,
+                    sequence: event.receipt.receiptSequence,
+                  },
+                  userId,
                 },
-                userId,
-              },
-              {
-                catalog: dependencies.catalog,
-                harnessPolicy: {
-                  ...dependencies.harnessPolicy,
-                  maxStateChangingActions: 0,
-                  toolsDisabled: true,
+                {
+                  catalog: dependencies.catalog,
+                  ...(deadline ? { deadline } : {}),
+                  harnessPolicy: {
+                    ...dependencies.harnessPolicy,
+                    maxStateChangingActions: 0,
+                    toolsDisabled: true,
+                  },
                 },
-              },
-              signal,
-            )) {
-              if (finalizationEvent.type === "decision_delta") {
-                possiblyVisible = true;
-                yield {
-                  delta: finalizationEvent.delta,
-                  type: "assistant_delta",
-                };
-              } else if (finalizationEvent.type === "decision_committed") {
-                settled = true;
-                yield {
-                  createdAt: finalizationEvent.assistantCreatedAt,
-                  eventId: finalizationEvent.assistantEventId,
-                  revisionId: finalizationEvent.assistantEventRevisionId,
-                  type: "assistant_committed",
-                };
-              } else if (finalizationEvent.type === "decision_failed") {
-                settled = true;
-                yield {
-                  category: finalizationEvent.category,
-                  type: finalizationEvent.interrupted
-                    ? "response_interrupted"
-                    : "response_failed",
-                };
-              } else {
-                settled = true;
-                yield {
-                  category: "invalid_response",
-                  type: "response_failed",
-                };
-              }
-            }
+                signal,
+              ),
+            );
           } else {
             settled = true;
           }
+        } else if (event.type === "history_recall_admitted") {
+          // Issue #314: the Decision ended in a controlled read-only history
+          // query that is already executed and frozen. The independent History
+          // Answer command now produces the one complete response.
+          if (!dependencies.harness.runHistoryAnswerCommand) {
+            throw new Error("History Answer orchestration is unavailable.");
+          }
+          yield* forwardStage(
+            dependencies.harness.runHistoryAnswerCommand(
+              {
+                generationCommandId: event.receipt.answer.generationCommandId,
+                interactionTurnId: turn.turn.id,
+                modelRunAttemptId: event.receipt.answer.modelRunAttemptId,
+                requestEventRevisionId: requestEventRevisionId!,
+                userId,
+              },
+              historyAnswerInput(deadline),
+              signal,
+            ),
+          );
         } else {
           settled = true;
           yield {
@@ -424,42 +567,75 @@ export function createConversationResponseService(dependencies: {
 
   return {
     async *respond(userId, input, signal) {
-      await dependencies.recoveryGate?.requireOpen(userId);
-      const turn = await dependencies.conversationService.submit(userId, input);
-      yield* streamResponse(
-        userId,
-        turn,
-        turn.message.revisionId,
-        {
-          generationCommandId: turn.generation.commandId,
-          message: turn.message,
-          modelRunAttemptId: turn.generation.attemptId,
-          turnId: turn.turn.id,
-          type: "user_committed",
-          userEventRevisionId: turn.message.revisionId,
-        },
-        signal,
-      );
+      const deadline = beginRequest();
+      const mine = new AbortController();
+      try {
+        await dependencies.recoveryGate?.requireOpen(userId);
+        const turn = await dependencies.conversationService.submit(
+          userId,
+          input,
+          deadline ? { requestDeadlineAt: deadline.deadlineAt } : undefined,
+        );
+        if (!turn.replayed) {
+          // Accepting a newer message retires the older in-flight answer: its
+          // Provider call is cancelled, and the database fence rejects it even
+          // if the cancel never lands.
+          inFlightByUser.get(userId)?.abort();
+          inFlightByUser.set(userId, mine);
+        }
+        yield* streamResponse(
+          userId,
+          turn,
+          turn.message.revisionId,
+          {
+            generationCommandId: turn.generation.commandId,
+            message: turn.message,
+            modelRunAttemptId: turn.generation.attemptId,
+            turnId: turn.turn.id,
+            type: "user_committed",
+            userEventRevisionId: turn.message.revisionId,
+          },
+          signal ? AbortSignal.any([signal, mine.signal]) : mine.signal,
+          deadline,
+        );
+      } finally {
+        deadline?.release();
+        if (inFlightByUser.get(userId) === mine) inFlightByUser.delete(userId);
+      }
     },
     async *retry(userId, input, signal) {
-      await dependencies.recoveryGate?.requireOpen(userId);
-      const retry: ConversationRetryTurn =
-        await dependencies.conversationService.retry(userId, input);
-      yield* streamResponse(
-        userId,
-        retry,
-        null,
-        {
-          generationCommandId: retry.generation.commandId,
-          modelRunAttemptId: retry.generation.attemptId,
-          originalTurnId: retry.originalTurnId,
-          retryActionEventId: retry.retryActionEventId,
-          retryRequestId: retry.retryRequestId,
-          turnId: retry.turn.id,
-          type: "retry_committed",
-        },
-        signal,
-      );
+      const deadline = beginRequest();
+      const mine = new AbortController();
+      try {
+        await dependencies.recoveryGate?.requireOpen(userId);
+        const retry: ConversationRetryTurn =
+          await dependencies.conversationService.retry(
+            userId,
+            input,
+            deadline ? { requestDeadlineAt: deadline.deadlineAt } : undefined,
+          );
+        inFlightByUser.get(userId)?.abort();
+        inFlightByUser.set(userId, mine);
+        yield* streamResponse(
+          userId,
+          retry,
+          null,
+          {
+            generationCommandId: retry.generation.commandId,
+            modelRunAttemptId: retry.generation.attemptId,
+            originalTurnId: retry.originalTurnId,
+            retryActionEventId: retry.retryActionEventId,
+            retryRequestId: retry.retryRequestId,
+            turnId: retry.turn.id,
+            type: "retry_committed",
+          },
+          signal ? AbortSignal.any([signal, mine.signal]) : mine.signal,
+          deadline,
+        );
+      } finally {
+        deadline?.release();
+        if (inFlightByUser.get(userId) === mine) inFlightByUser.delete(userId);
+      }
     },
     async scanStaleResponses() {
       const now = dependencies.clock();
@@ -574,6 +750,39 @@ export function createConversationResponseService(dependencies: {
       }
       return processed;
     },
+    async scanPendingHistoryAnswers() {
+      if (!dependencies.historyRecall) {
+        // The history branch is not part of this runtime (switch off): a
+        // command a crashed process left behind can never be answered, so it
+        // is closed instead of leaving its Turn responding forever.
+        return (
+          (await dependencies.repository.settleStaleHistoryAnswers?.({
+            dueAt: dependencies.clock(),
+            limit: recoveryScanLimit,
+          })) ?? 0
+        );
+      }
+      const pending = await dependencies.historyRecall.listPendingAnswers({
+        limit: recoveryScanLimit,
+      });
+      if (!dependencies.harness.runHistoryAnswerCommand) return 0;
+      let processed = 0;
+      for (const command of pending) {
+        for await (const event of dependencies.harness.runHistoryAnswerCommand(
+          command,
+          historyAnswerInput(),
+        )) {
+          if (
+            event.type === "decision_committed" ||
+            event.type === "decision_failed"
+          ) {
+            processed += 1;
+            break;
+          }
+        }
+      }
+      return processed;
+    },
   };
 }
 
@@ -608,4 +817,21 @@ async function* streamExistingResponse(
     return;
   }
   yield { category: "unavailable", type: "response_failed" };
+}
+
+/**
+ * Waits for `work` but gives up as soon as the request is cancelled or its
+ * deadline passes, so a database read that cannot be cancelled still cannot
+ * hold the request past its budget (issue #319).
+ */
+async function interruptible<T>(
+  work: Promise<T>,
+  signal: AbortSignal | undefined,
+  deadline: RequestDeadline | undefined,
+): Promise<T> {
+  const interrupt = createRequestInterrupt(signal, deadline);
+  work.catch(() => undefined);
+  // A request that already ended never gets the result, even a ready one.
+  interrupt.throwIfInterrupted();
+  return interrupt.guard(work);
 }

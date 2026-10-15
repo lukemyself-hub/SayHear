@@ -1,0 +1,62 @@
+{
+  "schemaVersion": "continuity-acceptance-oracle:v1",
+  "id": "H03",
+  "title": "H03 Holdout: one sitting across midnight and a repeated autumn hour, a message from abroad and one with no recorded zone",
+  "capability": "Holdout counterpart of the midnight and clock-change class. A single conversation runs from 23:45 on Saturday 24 October to 01:40 on Sunday 25 October UK time, through the hour that happens twice when British Summer Time ends. It stays one Daily Session, yet a look back is organised by when each message was actually expressed. An earlier message was sent from Singapore and another has no recorded timezone. Session ownership is preserved, real instants decide order, and what is unknown stays unknown.",
+  "spec": ["#301 R1", "#307", "ADR-0012", "ADR-0152"],
+  "ownerTickets": ["#314", "#315"],
+  "language": "en",
+  "fixture": { "version": "final-1", "sha256": "5527ee501bbdd8dc71ce8a190c8d649dda64ed7af66e27ffe8a0d915fb6db99f" },
+  "facts": {
+    "allowed": [
+      { "id": "a-before", "statement": "Before midnight: the birthday guests had only just left, the person had washed dozens of glasses and was sitting in the kitchen beside the finished cake.", "sources": ["n1:user"] },
+      { "id": "a-after", "statement": "After midnight: a sibling stayed on with the remaining fortified wine, said he will move north for work in the new year, went to bed, and the person tidied up and stayed awake thinking about their father's Sunday meals.", "sources": ["n2:user", "n3:user", "n4:user", "n6:user"] }
+    ],
+    "forbidden": [
+      { "id": "f-all-one-day", "statement": "Treating the whole conversation as said on Saturday 24 October because it belongs to that Daily Session.", "sources": ["n2:user", "n7:user"] },
+      { "id": "f-wall-clock-order", "statement": "Putting the leftover pastry after the remark about the clocks because 1:25 reads later than 1:15.", "sources": ["n5:user", "n7:user"] },
+      { "id": "f-invented-zone", "statement": "Stating a definite local hour or place for the message about the houseplants, whose timezone was never recorded.", "sources": ["legacy:user"] }
+    ]
+  },
+  "topics": [],
+  "time": [
+    { "id": "tm-split", "statement": "Only the first message of that conversation was expressed before midnight, at 23:45 on 24 October UK time; every later one was expressed on 25 October.", "sources": ["n1:user", "n2:user"] },
+    { "id": "tm-pastry-first", "statement": "The leftover pastry was mentioned at 01:25 summer time, fifty minutes of real time before the clocks remark at 01:15 winter time.", "sources": ["n5:user", "n7:user"] },
+    { "id": "tm-arrival", "statement": "The arrival was expressed at 00:20 on Wednesday 21 October in Singapore, which is the late afternoon of Tuesday 20 October in the timezone of the question; either date is correct only if its timezone is made clear.", "sources": ["landing:user"] }
+  ],
+  "expectedBehavior": [
+    "Split the night at the real midnight, not at the session boundary.",
+    "Say the pastry came first, by real elapsed time.",
+    "Give the arrival with its timezone made explicit.",
+    "Do not invent a local time for the message without a recorded timezone."
+  ],
+  "failureSignals": [
+    "Everything is reported as Saturday night before midnight.",
+    "The clocks remark is placed before the pastry.",
+    "The arrival is given as a bare date with the wrong implied timezone."
+  ],
+  "sourceEligibility": [
+    { "source": "landing:user", "eligibility": "allowed", "reason": "Retained original expression, sent from another timezone." },
+    { "source": "legacy:user", "eligibility": "allowed", "reason": "Retained original expression with no recorded timezone." },
+    { "source": "n1:user", "eligibility": "allowed", "reason": "Original expression before midnight." },
+    { "source": "n2:user", "eligibility": "allowed", "reason": "Original expression after midnight." },
+    { "source": "n5:user", "eligibility": "allowed", "reason": "Original expression in the first pass of the repeated hour." },
+    { "source": "n7:user", "eligibility": "allowed", "reason": "Original expression in the second pass of the repeated hour." }
+  ],
+  "criteria": [
+    { "id": "O-commit", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The first question streams and commits.", "check": { "type": "turn_committed", "step": "night" } },
+    { "id": "O-commit-order", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The second question streams and commits.", "check": { "type": "turn_committed", "step": "order" } },
+    { "id": "O-commit-trip", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The third question streams and commits.", "check": { "type": "turn_committed", "step": "trip" } },
+    { "id": "O-one-session", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The conversation that crossed midnight and the clock change stays one Daily Session dated 24 October.", "check": { "type": "session_ownership", "expect": [ { "source": "n1:user", "logicalDate": "2026-10-24" }, { "source": "n2:user", "logicalDate": "2026-10-24" }, { "source": "n7:user", "logicalDate": "2026-10-24" } ] } },
+    { "id": "O-travel-ownership", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The message sent from Singapore is filed under its own local date.", "check": { "type": "session_ownership", "expect": [ { "source": "landing:user", "logicalDate": "2026-10-21" } ] } },
+    { "id": "O-night-sources", "kind": "objective", "modes": ["real-model"], "description": "Messages from both sides of midnight reach the Provider for the first question.", "check": { "type": "outbound_includes", "step": "night", "sources": ["n1:user", "n2:user"] } },
+    { "id": "O-sources", "kind": "objective", "modes": ["real-model"], "description": "Both messages being ordered reach the Provider.", "check": { "type": "outbound_includes", "step": "order", "sources": ["n5:user", "n7:user"] } },
+    { "id": "O-travel-source", "kind": "objective", "modes": ["real-model"], "description": "The arrival message reaches the Provider for the question about the trip.", "check": { "type": "outbound_includes", "step": "trip", "sources": ["landing:user"] } },
+    { "id": "O-night-deadline", "kind": "objective", "modes": ["real-model"], "owner": "#319", "description": "Response-time contract for the first question.", "check": { "type": "deadline", "step": "night", "firstVisibleTextMaxMs": 3000, "completeMaxMs": 10000 } },
+    { "id": "O-order-deadline", "kind": "objective", "modes": ["real-model"], "owner": "#319", "description": "Response-time contract for the second question.", "check": { "type": "deadline", "step": "order", "firstVisibleTextMaxMs": 3000, "completeMaxMs": 10000 } },
+    { "id": "O-trip-deadline", "kind": "objective", "modes": ["real-model"], "owner": "#319", "description": "Response-time contract for the third question.", "check": { "type": "deadline", "step": "trip", "firstVisibleTextMaxMs": 3000, "completeMaxMs": 10000 } },
+    { "id": "S-midnight", "kind": "semantic", "description": "The night is divided at the real midnight.", "step": "night", "required": ["a-before", "a-after", "tm-split"], "forbidden": ["f-all-one-day"] },
+    { "id": "S-repeated-hour", "kind": "semantic", "description": "Order follows real time through the repeated hour.", "step": "order", "required": ["tm-pastry-first"], "forbidden": ["f-wall-clock-order"] },
+    { "id": "S-travel", "kind": "semantic", "description": "The arrival day is given with its timezone, and no zone is invented where none was recorded.", "step": "trip", "required": ["tm-arrival"], "forbidden": ["f-invented-zone"] }
+  ]
+}

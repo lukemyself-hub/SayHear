@@ -1,0 +1,177 @@
+{
+  "schemaVersion": "continuity-acceptance-oracle:v1",
+  "id": "U05",
+  "title": "U05 Unseen: an answer arrives with a cue to an older pending matter",
+  "capability": "Second, unseen counterpart of the older-natural-continuation class, written after the owner ruled that a continuation with no cue at all is not an acceptance requirement. Two things are awaiting an answer: a housing application made four months ago, whose result was to come by text message, and a job application made this week, whose answer was to come by email. After a remark about walking past new housing blocks, the person says a text message from the housing office has arrived and has not been opened. The message is connected to the old application; the outcome is not invented and the person is not asked to tell the back story again.",
+  "spec": [
+    "#301 R4",
+    "ADR-0152"
+  ],
+  "ownerTickets": [
+    "#317"
+  ],
+  "language": "zh",
+  "fixture": {
+    "version": "final-2",
+    "sha256": "6c4e73753d5b7fba9a2abba8d8b298063d77d3e3328d314768b4c225f1fb2e5d"
+  },
+  "facts": {
+    "allowed": [
+      {
+        "id": "a-flat-reply",
+        "statement": "The text message is about the subsidised rental flat the person applied for in June, whose ballot result was to be sent by text message.",
+        "sources": [
+          "flat-a:user",
+          "flat-b:user",
+          "cued:input"
+        ]
+      }
+    ],
+    "forbidden": [
+      {
+        "id": "f-cued-job",
+        "statement": "Connecting the text message to the proofreading job at the children's publisher, despite the sender, the channel and the talk of the housing blocks.",
+        "sources": [
+          "job-a:user"
+        ]
+      },
+      {
+        "id": "f-retell",
+        "statement": "Asking the person to explain from the beginning what they had applied for.",
+        "sources": []
+      },
+      {
+        "id": "f-outcome",
+        "statement": "Stating or implying whether a flat has been allocated; what the message says has not been told.",
+        "sources": []
+      }
+    ]
+  },
+  "topics": [],
+  "time": [],
+  "expectedBehavior": [
+    "Recognise the message as the answer about the housing ballot and stay with the nerves of not having opened it.",
+    "Asking what it says is welcome but not required; inventing what it says is not allowed.",
+    "Never ask for the back story again."
+  ],
+  "failureSignals": [
+    "The June messages never reach the Provider.",
+    "The message is attributed to the job application, or a clarification is asked although the cue is clear.",
+    "A result is announced or congratulations are offered."
+  ],
+  "sourceEligibility": [
+    {
+      "source": "flat-a:user",
+      "eligibility": "allowed",
+      "reason": "Retained original expression of the older pending matter."
+    },
+    {
+      "source": "flat-b:user",
+      "eligibility": "allowed",
+      "reason": "Retained original expression; says how the answer would arrive."
+    },
+    {
+      "source": "job-a:user",
+      "eligibility": "allowed",
+      "reason": "Recent pending matter, inside the default background."
+    },
+    {
+      "source": "job-b:user",
+      "eligibility": "allowed",
+      "reason": "Recent pending matter, inside the default background."
+    }
+  ],
+  "criteria": [
+    {
+      "id": "O-walk-commit",
+      "kind": "objective",
+      "modes": [
+        "deterministic",
+        "real-model"
+      ],
+      "description": "The ordinary remark streams and commits.",
+      "check": {
+        "type": "turn_committed",
+        "step": "walk"
+      }
+    },
+    {
+      "id": "O-cued-commit",
+      "kind": "objective",
+      "modes": [
+        "deterministic",
+        "real-model"
+      ],
+      "description": "The cued announcement streams and commits.",
+      "check": {
+        "type": "turn_committed",
+        "step": "cued"
+      }
+    },
+    {
+      "id": "O-cued-recent",
+      "kind": "objective",
+      "modes": [
+        "deterministic",
+        "real-model"
+      ],
+      "description": "The recent pending matter is in the background of the announcement.",
+      "check": {
+        "type": "outbound_includes",
+        "step": "cued",
+        "sources": [
+          "job-a:user",
+          "job-b:user"
+        ]
+      }
+    },
+    {
+      "id": "O-cued-older",
+      "kind": "objective",
+      "modes": [
+        "real-model"
+      ],
+      "owner": "#317",
+      "description": "The older pending matter reaches the Provider for the cued announcement.",
+      "check": {
+        "type": "outbound_includes",
+        "step": "cued",
+        "sources": [
+          "flat-a:user",
+          "flat-b:user"
+        ]
+      }
+    },
+    {
+      "id": "O-cued-context",
+      "kind": "objective",
+      "modes": [
+        "deterministic",
+        "real-model"
+      ],
+      "description": "What was said a moment earlier reaches the Provider for the cued announcement.",
+      "check": {
+        "type": "outbound_includes_input",
+        "step": "cued",
+        "inputs": [
+          "walk"
+        ]
+      }
+    },
+    {
+      "id": "S-cued",
+      "kind": "semantic",
+      "owner": "#317",
+      "description": "The announcement is connected to the old application and the outcome is not invented.",
+      "step": "cued",
+      "required": [
+        "a-flat-reply"
+      ],
+      "forbidden": [
+        "f-cued-job",
+        "f-retell",
+        "f-outcome"
+      ]
+    }
+  ]
+}

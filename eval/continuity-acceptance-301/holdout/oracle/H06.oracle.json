@@ -1,0 +1,52 @@
+{
+  "schemaVersion": "continuity-acceptance-oracle:v1",
+  "id": "H06",
+  "title": "H06 Holdout: two people sharing a first name, two similar presentations, and a guess the assistant once made",
+  "capability": "Holdout counterpart of the same-name disambiguation class. An old university flatmate and a newly arrived designer share a given name. The flatmate was preparing to present his company to investors; the person separately and quietly presented a private project to a single backer. The assistant once guessed the designer was leading design on the project and the guess was never confirmed. When the name comes up again, people and events are not spliced together, the person's own presentation is not handed to the flatmate, and the assistant's guess is not promoted to a fact.",
+  "spec": ["#301 R4", "#301 R5", "ADR-0152"],
+  "ownerTickets": ["#317", "#318"],
+  "language": "code-switch",
+  "fixture": { "version": "final-1", "sha256": "e0316f07627df4bec48065cf746d038c884ec56c11f5ae40c29f4631cf263974" },
+  "facts": {
+    "allowed": [
+      { "id": "a-flatmate-pitch", "statement": "The former flatmate with that name was preparing to present his young company to a venture fund, and the person went through his slides with him twice.", "sources": ["roommate:user", "roommate-after:user"] },
+      { "id": "a-designer-known", "statement": "The other one is a designer who recently joined the neighbouring team and tore the person's wireframes apart at a design review, asking for the whole flow to be redone.", "sources": ["designer:user"] },
+      { "id": "a-role-open", "statement": "Whether he leads design on the project was asked once by the assistant and left unanswered.", "sources": ["designer:assistant", "designer-reply:user"] }
+    ],
+    "forbidden": [
+      { "id": "f-lead-fact", "statement": "Stating that the designer is the design lead, or otherwise in charge, on the person's project.", "sources": ["designer:assistant"] },
+      { "id": "f-merge-people", "statement": "Describing one individual who is both the flatmate and the designer.", "sources": ["roommate:user", "designer:user"] },
+      { "id": "f-swap-pitch", "statement": "Attributing the forty-minute session with a single private backer to the flatmate, or the venture fund presentation to the person.", "sources": ["own-pitch:user"] },
+      { "id": "f-result", "statement": "Saying whether the fund said yes; only that there is news was said.", "sources": [] }
+    ]
+  },
+  "topics": [],
+  "time": [],
+  "expectedBehavior": [
+    "First turn: an invitation for a drink plus news about a presentation points to the flatmate; connect to the slide sessions, or check lightly if unsure, without inventing the outcome.",
+    "Second turn: say what is known (a new designer on the neighbouring team, the review) and that his role on the project was never confirmed."
+  ],
+  "failureSignals": [
+    "The older messages about the flatmate never reach the Provider.",
+    "The designer is called the design lead.",
+    "The person's own presentation is described as the flatmate's."
+  ],
+  "sourceEligibility": [
+    { "source": "roommate:user", "eligibility": "allowed", "reason": "Retained original expression about the flatmate." },
+    { "source": "roommate-after:user", "eligibility": "allowed", "reason": "Retained original expression about the flatmate." },
+    { "source": "designer:user", "eligibility": "allowed", "reason": "Retained original expression about the designer." },
+    { "source": "designer-reply:user", "eligibility": "allowed", "reason": "Shows the assistant's question was left unanswered." },
+    { "source": "own-pitch:user", "eligibility": "allowed", "reason": "Recent original expression, inside the default background." }
+  ],
+  "criteria": [
+    { "id": "O-commit", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The first turn streams and commits.", "check": { "type": "turn_committed", "step": "ping" } },
+    { "id": "O-commit-role", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The second turn streams and commits.", "check": { "type": "turn_committed", "step": "role" } },
+    { "id": "O-recent", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The person's own recent presentation is in the background.", "check": { "type": "outbound_includes", "step": "ping", "sources": ["own-pitch:user"] } },
+    { "id": "O-flatmate-source", "kind": "objective", "modes": ["real-model"], "owner": "#317", "description": "The month-old messages about the flatmate reach the Provider.", "check": { "type": "outbound_includes", "step": "ping", "sources": ["roommate:user", "roommate-after:user"] } },
+    { "id": "O-designer-source", "kind": "objective", "modes": ["real-model"], "owner": "#317", "description": "The messages about the designer reach the Provider.", "check": { "type": "outbound_includes", "step": "role", "sources": ["designer:user", "designer-reply:user"] } },
+    { "id": "O-ping-deadline", "kind": "objective", "modes": ["real-model"], "owner": "#319", "description": "Response-time contract for the first turn.", "check": { "type": "deadline", "step": "ping", "firstVisibleTextMaxMs": 3000, "completeMaxMs": 10000 } },
+    { "id": "O-role-deadline", "kind": "objective", "modes": ["real-model"], "owner": "#319", "description": "Response-time contract for the second turn.", "check": { "type": "deadline", "step": "role", "firstVisibleTextMaxMs": 3000, "completeMaxMs": 10000 } },
+    { "id": "S-ping", "kind": "semantic", "owner": "#317", "description": "The news is connected to the right person and the right event.", "step": "ping", "required": ["a-flatmate-pitch"], "forbidden": ["f-merge-people", "f-swap-pitch", "f-result"] },
+    { "id": "S-role", "kind": "semantic", "owner": "#318", "description": "What is known is stated and the assistant's own guess is not turned into a fact.", "step": "role", "required": ["a-designer-known", "a-role-open"], "forbidden": ["f-lead-fact", "f-merge-people"] }
+  ]
+}

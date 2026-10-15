@@ -30,7 +30,16 @@ export {
   PostgresRecentContextSource,
   RECENT_CONTEXT_CANDIDATE_SQL,
 } from "./postgres-recent-context-source";
+export {
+  EXPERIENCE_SEARCH_CONTEXT_SQL,
+  EXPERIENCE_SEARCH_HITS_SQL,
+  HISTORY_RECALL_PAGE_SQL,
+  PostgresExperienceSearchSource,
+  PostgresHistoryRecallRepository,
+  PostgresHistoryRecallSource,
+} from "./postgres-history-recall";
 export { PostgresRecentContextPolicyRepository } from "./postgres-recent-context-policy-repository";
+export { PostgresHistoryRecallPolicyRepository } from "./postgres-history-recall-policy-repository";
 export {
   PostgresConversationActionRepository,
   PostgresJournalRegenerationActionRepository,
@@ -99,3 +108,5 @@ export {
   type EvidenceStepUpDenialReason,
   type EvidenceStepUpIssuerContext,
 } from "./postgres-evidence-step-up-repository";
+
+export { PostgresJournalWorkflowRecovery } from "./postgres-journal-workflow-recovery";

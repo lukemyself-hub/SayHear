@@ -1,3 +1,4 @@
+import { retryPostgresTransaction } from "./postgres-transaction-retry";
 import type {
   CurrentJournal,
   JournalDateEntry,
@@ -10,6 +11,7 @@ import type {
 } from "@sayhear/application";
 import type { Pool } from "pg";
 
+import { lockSessionOwnerEpoch } from "./postgres-owner-epoch-fence";
 import { createUuidV7 } from "./uuid-v7";
 
 export class PostgresJournalRepository implements JournalRepository {
@@ -28,11 +30,13 @@ export class PostgresJournalRepository implements JournalRepository {
           item.extraction_policy_version,
           revision.canonical_text, revision.locale
         FROM evidence_source_snapshots snapshot
-        LEFT JOIN evidence_items item ON item.evidence_source_snapshot_id = snapshot.evidence_source_snapshot_id
+        LEFT JOIN evidence_model_run_attempts frozen_run ON frozen_run.evidence_source_snapshot_id = snapshot.evidence_source_snapshot_id AND frozen_run.status = 'completed'
+        LEFT JOIN evidence_items item ON item.user_id = snapshot.user_id AND (item.evidence_item_id = ANY(frozen_run.frozen_evidence_item_ids) OR (frozen_run.frozen_evidence_item_ids IS NULL AND item.evidence_source_snapshot_id = snapshot.evidence_source_snapshot_id))
         LEFT JOIN conversation_event_revisions revision ON revision.conversation_event_revision_id = item.source_revision_id
         INNER JOIN app_users owner ON owner.user_id = snapshot.user_id
         WHERE snapshot.daily_session_id = $1 AND snapshot.source_revision = $2
           AND owner.status = 'active' AND owner.data_epoch = $3
+          AND (frozen_run.evidence_model_run_attempt_id IS NOT NULL OR EXISTS (SELECT 1 FROM journal_versions version WHERE version.evidence_source_snapshot_id = snapshot.evidence_source_snapshot_id AND version.user_id = snapshot.user_id AND version.status = 'published'))
           AND item.extraction_policy_version = $4
           AND (item.evidence_item_id IS NULL OR (item.status = 'active' AND revision.content_purged_at IS NULL))
         ORDER BY item.created_at`, [input.dailySessionId, input.sourceRevision, input.expectedDataEpoch, input.extractionPolicyVersion]);
@@ -65,9 +69,20 @@ export class PostgresJournalRepository implements JournalRepository {
   }
 
   public async startGeneration(input: Parameters<JournalRepository["startGeneration"]>[0]): Promise<{ accepted: boolean; generationCommandId: string }> {
+    return retryPostgresTransaction(() => this.startGenerationOnce(input));
+  }
+
+  private async startGenerationOnce(input: Parameters<JournalRepository["startGeneration"]>[0]): Promise<{ accepted: boolean; generationCommandId: string }> {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
+      await lockSessionOwnerEpoch(client, input.dailySessionId);
+      if (input.workflowLease) {
+        const lease = await client.query(`SELECT 1 FROM journal_workflow_outcomes WHERE workflow_command_id = $1
+          AND lease_token = $2 AND lease_expires_at > CURRENT_TIMESTAMP AND outcome = 'retryable_failed' FOR UPDATE`,
+          [input.workflowLease.workflowCommandId, input.workflowLease.leaseToken]);
+        if (lease.rowCount !== 1) { await client.query("ROLLBACK"); return { accepted: false, generationCommandId: input.generationCommandId }; }
+      }
       const owner = await client.query<{ user_id: string; status: string; data_epoch: string; source_revision: string; activity_state: string }>(
         `SELECT session.user_id, owner.status, owner.data_epoch::text, session.source_revision, session.activity_state
          FROM daily_sessions session INNER JOIN app_users owner ON owner.user_id = session.user_id
@@ -133,9 +148,20 @@ export class PostgresJournalRepository implements JournalRepository {
   }
 
   public async publish(input: Parameters<JournalRepository["publish"]>[0]): ReturnType<JournalRepository["publish"]> {
+    return retryPostgresTransaction(() => this.publishOnce(input));
+  }
+
+  private async publishOnce(input: Parameters<JournalRepository["publish"]>[0]): ReturnType<JournalRepository["publish"]> {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
+      await lockSessionOwnerEpoch(client, input.dailySessionId);
+      if (input.workflowLease) {
+        const lease = await client.query(`SELECT 1 FROM journal_workflow_outcomes WHERE workflow_command_id = $1
+          AND lease_token = $2 AND lease_expires_at > CURRENT_TIMESTAMP AND outcome = 'retryable_failed' FOR UPDATE`,
+          [input.workflowLease.workflowCommandId, input.workflowLease.leaseToken]);
+        if (lease.rowCount !== 1) { await client.query("ROLLBACK"); return { outcome: "fenced" }; }
+      }
       const now = new Date();
       const session = await client.query<{ user_id: string; source_revision: string; activity_state: string }>(
         "SELECT user_id, source_revision, activity_state FROM daily_sessions WHERE daily_session_id = $1 FOR UPDATE",
@@ -301,7 +327,7 @@ export class PostgresJournalRepository implements JournalRepository {
         for (const evidenceId of statement.evidenceItemIds) {
           await client.query(`INSERT INTO journal_statement_evidence_links (journal_statement_id, evidence_item_id, user_id, source_revision, evidence_source_snapshot_id, evidence_role)
             SELECT $1, evidence_item_id, user_id, $5, evidence_source_snapshot_id, evidence_role FROM evidence_items
-            WHERE evidence_item_id = $2 AND user_id = $3 AND evidence_source_snapshot_id = $4`,
+            WHERE evidence_item_id = $2 AND user_id = $3 AND (evidence_source_snapshot_id = $4 OR evidence_item_id = ANY((SELECT frozen_evidence_item_ids FROM evidence_model_run_attempts WHERE evidence_source_snapshot_id = $4 AND user_id = $3 AND status = 'completed')::uuid[]))`,
             [created.rows[0]!.id, evidenceId, input.userId, input.sourceSnapshotId, input.sourceRevision]);
         }
       }
@@ -371,9 +397,14 @@ export class PostgresJournalRepository implements JournalRepository {
   }
 
   public async recordValidationFailure(input: Parameters<NonNullable<JournalRepository["recordValidationFailure"]>>[0]): Promise<void> {
+    return retryPostgresTransaction(() => this.recordValidationFailureOnce(input));
+  }
+
+  private async recordValidationFailureOnce(input: Parameters<NonNullable<JournalRepository["recordValidationFailure"]>>[0]): Promise<void> {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
+      await lockSessionOwnerEpoch(client, input.dailySessionId);
       const owner = await client.query<{ user_id: string; status: string; data_epoch: string }>(
         `SELECT session.user_id, owner.status, owner.data_epoch::text
          FROM daily_sessions session INNER JOIN app_users owner ON owner.user_id = session.user_id
@@ -616,7 +647,7 @@ export class PostgresJournalRepository implements JournalRepository {
       daily_session_id: string;
       journal_source_revision: string | null;
       logical_date: string;
-      listing: "no_journal" | "published";
+      listing: "no_journal" | "published" | "generation_failed";
       source_revision: string;
     }>(
       `WITH journal_dates AS (
@@ -665,6 +696,16 @@ export class PostgresJournalRepository implements JournalRepository {
              WHERE journal.daily_session_id = date_outcome.daily_session_id
                AND journal.deleted_at IS NULL
            )
+         UNION ALL
+         SELECT session.daily_session_id, session.logical_date, session.activity_state, session.source_revision,
+           NULL, 'generation_failed'::text FROM daily_sessions session
+         INNER JOIN app_users owner ON owner.user_id = session.user_id
+         WHERE session.user_id = $1 AND owner.status = 'active' AND EXISTS (
+           SELECT 1 FROM journal_workflow_outcomes failure WHERE failure.daily_session_id = session.daily_session_id
+             AND failure.source_revision = session.source_revision AND failure.expected_data_epoch = owner.data_epoch
+             AND failure.outcome = 'needs_review' AND failure.reason = 'retry_budget_exhausted'
+             AND failure.lease_token IS NULL AND failure.next_attempt_at IS NULL)
+           AND NOT EXISTS (SELECT 1 FROM journals journal WHERE journal.daily_session_id = session.daily_session_id AND journal.deleted_at IS NULL)
        )
        SELECT listing_day.daily_session_id, listing_day.logical_date::text,
           listing_day.activity_state, listing_day.source_revision::text,
@@ -689,8 +730,8 @@ export class PostgresJournalRepository implements JournalRepository {
       dailySessionId: row.daily_session_id,
       logicalDate: row.logical_date,
       state:
-        row.listing === "no_journal"
-          ? "no_journal"
+        row.listing === "no_journal" || row.listing === "generation_failed"
+          ? row.listing
           : currentJournalState({
               activity_state: row.activity_state,
               journal_source_revision: row.journal_source_revision ?? "",
@@ -755,6 +796,17 @@ export class PostgresJournalRepository implements JournalRepository {
     userId: string;
     logicalDate: string;
   }): Promise<import("@sayhear/application").JournalGenerationNotice | null> {
+    const failure = await this.pool.query<{ logical_date: string }>(
+      `SELECT session.logical_date::text FROM journal_workflow_outcomes failure
+       INNER JOIN daily_sessions session ON session.daily_session_id = failure.daily_session_id
+       INNER JOIN app_users owner ON owner.user_id = session.user_id
+       WHERE session.user_id = $1 AND session.logical_date = $2::date AND owner.status = 'active'
+         AND owner.data_epoch = failure.expected_data_epoch AND session.source_revision = failure.source_revision
+         AND failure.outcome = 'needs_review' AND failure.reason = 'retry_budget_exhausted'
+         AND failure.lease_token IS NULL AND failure.next_attempt_at IS NULL
+       ORDER BY failure.created_at DESC LIMIT 1`, [input.userId, input.logicalDate],
+    );
+    if (failure.rows[0]) return { logicalDate: failure.rows[0].logical_date, failureCode: "retry_budget_exhausted" };
     const result = await this.pool.query<{ logical_date: string; status: "validated" | "validation_failed" | "needs_review"; failure_code: string | null }>(
       `SELECT session.logical_date::text, validation.status, validation.failure_code
        FROM journal_validation_results validation
@@ -778,7 +830,7 @@ function currentJournalState(row: {
   activity_state: "active" | "quiescent" | "finalized";
   journal_source_revision: string;
   source_revision: string;
-}): Exclude<JournalDateState, "no_journal"> {
+}): Exclude<JournalDateState, "no_journal" | "generation_failed"> {
   return Number(row.source_revision) === Number(row.journal_source_revision)
     ? "current"
     : row.activity_state === "quiescent"

@@ -204,6 +204,12 @@ export type ConversationHarnessPolicy = Readonly<{
   version: string;
   maxDecisionStages: 1;
   maxStateChangingActions: 0 | 1;
+  /**
+   * Number of controlled read-only history queries one Decision may propose
+   * (issue #314, ADR-0093). A history query is not a state-changing Action and
+   * never counts against `maxStateChangingActions`. Absent means zero.
+   */
+  maxHistoryQueries?: 0 | 1;
   toolsDisabled?: boolean;
 }>;
 
@@ -249,6 +255,18 @@ export const CATALOG_V2_CONVERSATION_HARNESS_POLICY: ConversationHarnessPolicy =
   Object.freeze({
     version: "conversation-harness:v3",
     maxDecisionStages: 1,
+    maxStateChangingActions: 1,
+  });
+
+/**
+ * Catalog v2 execution plus one controlled read-only history query per Decision
+ * (issue #314, ADR-0093/0094). Rollback re-pins conversation-harness:v3.
+ */
+export const HISTORY_RECALL_CONVERSATION_HARNESS_POLICY: ConversationHarnessPolicy =
+  Object.freeze({
+    version: "conversation-harness:v4",
+    maxDecisionStages: 1,
+    maxHistoryQueries: 1,
     maxStateChangingActions: 1,
   });
 

@@ -192,6 +192,39 @@ describe("runtime safety configuration", () => {
     ).toBe("test");
   });
 
+  it("allows a file-driven controlled clock only in the test deployment", () => {
+    expect(() =>
+      assertSafeRuntimeConfiguration({
+        SAYHEAR_DEPLOYMENT: "production",
+        SAYHEAR_TEST_NOW_FILE: "/tmp/acceptance-clock",
+      }),
+    ).toThrow("only in the test environment");
+  });
+
+  it("re-reads the controlled instant from the clock file on every call", () => {
+    const clockFile = join(temporaryDirectory(), "now");
+    const environment = {
+      ...testRuntimeEnvironment(),
+      SAYHEAR_TEST_NOW_FILE: clockFile,
+    };
+    writeFileSync(clockFile, "2026-07-27T16:00:00.000Z\n");
+    const configuration = loadRuntimeConfiguration(environment);
+    expect(configuration.clock().toISOString()).toBe("2026-07-27T16:00:00.000Z");
+    writeFileSync(clockFile, "2026-07-28T07:30:00.000Z");
+    expect(configuration.clock().toISOString()).toBe("2026-07-28T07:30:00.000Z");
+
+    // An invalid instant never silently falls back to wall time, and the
+    // static and file-backed clocks cannot both be configured.
+    writeFileSync(clockFile, "not-a-date");
+    expect(() => configuration.clock()).toThrow("SAYHEAR_TEST_NOW_FILE");
+    expect(() =>
+      loadRuntimeConfiguration({
+        ...environment,
+        SAYHEAR_TEST_NOW: "2026-07-27T16:00:00.000Z",
+      }),
+    ).toThrow("SAYHEAR_TEST_NOW_FILE and SAYHEAR_TEST_NOW cannot both be set");
+  });
+
   it("keeps deterministic completion faults test-only", () => {
     expect(() =>
       assertSafeRuntimeConfiguration({
@@ -245,7 +278,6 @@ describe("runtime safety configuration", () => {
     writeFileSync(file, "2026-07-27T16:00:00.000Z");
     const environment = {
       ...testRuntimeEnvironment(),
-      SAYHEAR_TEST_NOW: "2026-07-01T00:00:00.000Z",
       SAYHEAR_TEST_NOW_FILE: file,
     };
     // The file is authoritative and is re-read per load, so a driver can
@@ -372,6 +404,22 @@ describe("runtime safety configuration", () => {
     expect(resolved?.gitCommit).toBe("a".repeat(40));
   });
 
+  it.each(["", "  "])(
+    "uses the explicit deployment SHA when Vercel supplies a blank Git SHA (%j)",
+    (vercelSha) => {
+      const manifest = buildActiveG1Manifest("a".repeat(40));
+      expect(
+        resolveOneA3bG1ReleaseManifest({
+          SAYHEAR_1A_3B_G1_RELEASE_MANIFEST: JSON.stringify(manifest),
+          VERCEL_GIT_COMMIT_SHA: vercelSha,
+          SAYHEAR_DEPLOYED_GIT_COMMIT_SHA: "c".repeat(40),
+          SAYHEAR_EPISODE_BUILD_ENABLED: "true",
+          SAYHEAR_REFLECTION_ENABLED: "true",
+        })?.gitCommit,
+      ).toBe(manifest.gitCommit);
+    },
+  );
+
   it("still requires a deployment identity before a G1 write switch can open", () => {
     const manifest = buildActiveG1Manifest("a".repeat(40));
     expect(() =>
@@ -405,13 +453,13 @@ describe("runtime safety configuration", () => {
       SAYHEAR_CONTEXT_HMAC_SECRET: "context", SAYHEAR_DEPLOYMENT: "test", SAYHEAR_PROVIDER_ADAPTER: "deterministic",
       SAYHEAR_TEST_PROVIDER_CHUNKS: '["ok"]',
     };
-    expect(loadRuntimeConfiguration(base).writeSwitches).toEqual({ episodeBuildEnabled: false, evidenceExtractionEnabled: true, fastPathExtractionEnabled: true, journalPublishEnabled: true, memoryConsolidationEnabled: true, memoryRetrievalEnabled: true, reflectionEnabled: false });
+    expect(loadRuntimeConfiguration(base).writeSwitches).toEqual({ episodeBuildEnabled: false, historyRecallEnabled: false, evidenceExtractionEnabled: true, fastPathExtractionEnabled: true, journalPublishEnabled: true, memoryConsolidationEnabled: true, memoryRetrievalEnabled: true, reflectionEnabled: false });
     expect(loadRuntimeConfiguration({ ...base, SAYHEAR_EVIDENCE_EXTRACTION_ENABLED: "false" }).writeSwitches)
-      .toEqual({ episodeBuildEnabled: false, evidenceExtractionEnabled: false, fastPathExtractionEnabled: true, journalPublishEnabled: true, memoryConsolidationEnabled: true, memoryRetrievalEnabled: true, reflectionEnabled: false });
+      .toEqual({ episodeBuildEnabled: false, historyRecallEnabled: false, evidenceExtractionEnabled: false, fastPathExtractionEnabled: true, journalPublishEnabled: true, memoryConsolidationEnabled: true, memoryRetrievalEnabled: true, reflectionEnabled: false });
     expect(loadRuntimeConfiguration({ ...base, SAYHEAR_JOURNAL_PUBLISH_ENABLED: "false" }).writeSwitches)
-      .toEqual({ episodeBuildEnabled: false, evidenceExtractionEnabled: true, fastPathExtractionEnabled: true, journalPublishEnabled: false, memoryConsolidationEnabled: true, memoryRetrievalEnabled: true, reflectionEnabled: false });
+      .toEqual({ episodeBuildEnabled: false, historyRecallEnabled: false, evidenceExtractionEnabled: true, fastPathExtractionEnabled: true, journalPublishEnabled: false, memoryConsolidationEnabled: true, memoryRetrievalEnabled: true, reflectionEnabled: false });
     expect(loadRuntimeConfiguration({ ...base, SAYHEAR_MEMORY_CONSOLIDATION_ENABLED: "false" }).writeSwitches)
-      .toEqual({ episodeBuildEnabled: false, evidenceExtractionEnabled: true, fastPathExtractionEnabled: true, journalPublishEnabled: true, memoryConsolidationEnabled: false, memoryRetrievalEnabled: true, reflectionEnabled: false });
+      .toEqual({ episodeBuildEnabled: false, historyRecallEnabled: false, evidenceExtractionEnabled: true, fastPathExtractionEnabled: true, journalPublishEnabled: true, memoryConsolidationEnabled: false, memoryRetrievalEnabled: true, reflectionEnabled: false });
   });
 
   it("configures OpenCode Go as an exact honest identity with no baseUrl and no silent rename", () => {
@@ -462,6 +510,67 @@ describe("runtime safety configuration", () => {
     });
     expect(explicit.provider.champion.model).toBe("deepseek-v4-flash");
     expect(explicit.provider.champion.provider).toBe("opencode-go");
+  });
+
+  it("bounds a chat request at 30 seconds independently of the background-role Provider timeout (issue #319)", () => {
+    const base = {
+      CRON_SECRET: "cron",
+      DATABASE_URL: "postgres://test",
+      GITHUB_CLIENT_ID: "id",
+      GITHUB_CLIENT_SECRET: "secret",
+      NEXTAUTH_SECRET: "auth",
+      OPENCODE_GO_API_KEY: "go-key",
+      PURGE_MARKER_DATABASE_URL: "postgres://test-marker",
+      SAYHEAR_BACKUP_CONFIGURATION_FINGERPRINT: "fingerprint",
+      SAYHEAR_BACKUP_POLICY_VERSION: "backup:v1",
+      SAYHEAR_CONTEXT_HMAC_SECRET: "context",
+      SAYHEAR_DEPLOYMENT: "test",
+      SAYHEAR_PROVIDER_ADAPTER: "opencode-go",
+    };
+    const defaults = loadRuntimeConfiguration(base);
+    expect(defaults.conversationRequest).toEqual({
+      budgetMs: 60_000,
+      providerTimeoutMs: 60_000,
+    });
+    // The shared role timeout is untouched by the conversation path.
+    expect(defaults.provider.timeoutMs).toBe(60_000);
+
+    // A slow background role (memory extraction needs minutes) must never
+    // loosen the chat stop condition, and the reverse holds too.
+    const longRoles = loadRuntimeConfiguration({
+      ...base,
+      SAYHEAR_PROVIDER_TIMEOUT_MS: "180000",
+    });
+    expect(longRoles.provider.timeoutMs).toBe(180_000);
+    expect(longRoles.provider.roleAdapters["opencode-go"]?.timeoutMs).toBe(180_000);
+    expect(longRoles.conversationRequest.providerTimeoutMs).toBe(60_000);
+
+    const tighter = loadRuntimeConfiguration({
+      ...base,
+      SAYHEAR_CONVERSATION_PROVIDER_TIMEOUT_MS: "20000",
+      SAYHEAR_CONVERSATION_REQUEST_BUDGET_MS: "25000",
+    });
+    expect(tighter.conversationRequest).toEqual({
+      budgetMs: 25_000,
+      providerTimeoutMs: 20_000,
+    });
+    expect(tighter.provider.timeoutMs).toBe(60_000);
+
+    // The product stop condition can be tightened, never loosened.
+    for (const value of ["60001", "0", "-5", "1.5", "abc"]) {
+      expect(() =>
+        loadRuntimeConfiguration({
+          ...base,
+          SAYHEAR_CONVERSATION_REQUEST_BUDGET_MS: value,
+        }),
+      ).toThrow("SAYHEAR_CONVERSATION_REQUEST_BUDGET_MS");
+    }
+    expect(() =>
+      loadRuntimeConfiguration({
+        ...base,
+        SAYHEAR_CONVERSATION_PROVIDER_TIMEOUT_MS: "60001",
+      }),
+    ).toThrow("SAYHEAR_CONVERSATION_PROVIDER_TIMEOUT_MS");
   });
 
   it("accepts only the four known Provider adapters and keeps the unset openai default", () => {

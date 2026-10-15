@@ -1,0 +1,257 @@
+{
+  "budget": {
+    "blockers": [
+      "Real-model mode must be explicitly enabled with SAYHEAR_ACCEPTANCE_REAL_MODEL=enabled in addition to --mode real-model."
+    ],
+    "capUsdMicros": 10000000,
+    "estimatedCostUsdMicros": 153600,
+    "inputTokenUpperBound": 128000,
+    "mode": "real-model",
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "outputTokenUpperBound": 96000,
+    "paidRequestUpperBound": 8,
+    "remainingUsdMicros": 9155596,
+    "requestsPerStepUpperBound": 4,
+    "shape": {
+      "generationSteps": 1,
+      "scheduledScans": 2,
+      "seedTurns": 2
+    },
+    "status": "blocked",
+    "unknownCostEntries": 0,
+    "waivedPreconditions": [
+      {
+        "by": "Luke",
+        "date": "2026-10-11",
+        "statement": "Relayed to the T08 agent by the coordinating agent as Luke's words: \"#307 的遗留问题,应当在 T01–T07 开发期间解决了(包括耗时问题和回忆历史消息等),因此 T08 可以正常启动\" and \"授权 T08 调用 OpenCode Go 跑真实 DeepSeek V4.1 Flash 模型\". This is a decision to proceed. It is not a record that the #307 online acceptance was completed: #307 was closed with its online acceptance not passed.",
+        "id": "issue-307-online-acceptance"
+      }
+    ]
+  },
+  "case": {
+    "caseId": "S01",
+    "criteria": [
+      {
+        "description": "Seeded history is read back verbatim through the normal history API.",
+        "evidence": [],
+        "id": "INV-seed-readback",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "All 2 seeded turns are present exactly once.",
+        "status": "pass"
+      },
+      {
+        "description": "No oracle text, scenario title or expected answer appears in any Provider request.",
+        "evidence": [],
+        "id": "INV-oracle-not-in-outbound",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "Scanned 316 outbound strings; none carries oracle text.",
+        "status": "pass"
+      },
+      {
+        "description": "Authoritative history contains every message exactly once.",
+        "evidence": [],
+        "id": "INV-no-duplicate-messages",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "6 messages, no duplicates.",
+        "status": "pass"
+      },
+      {
+        "description": "The turn streams and commits.",
+        "evidence": [
+          "steps[t1].chat.httpStatus=200",
+          "steps[t1].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-commit",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "Authoritative history holds the user message once, followed by exactly the streamed reply.",
+        "evidence": [
+          "finalHistory has 1 message(s) with id 01a0a2af-69c0-7e8e-b475-e9a838c0957e",
+          "next message: assistant \"还没开始干活，力气先在车厢里耗掉一截，到工位那会儿基本就是空的了。\\n\\n是今天格外挤，还是这两天本来就没怎么缓过来？\""
+        ],
+        "id": "O-history",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Authoritative history holds the user message once, followed by exactly the streamed reply.",
+        "status": "pass"
+      },
+      {
+        "description": "Yesterday's user messages reach the Provider as default background.",
+        "evidence": [
+          "d1-a:user: providerRequest=present, inspector.referencedEvents=present",
+          "d1-b:user: providerRequest=present, inspector.referencedEvents=present"
+        ],
+        "id": "O-background",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Every required source reached the Provider and is recorded by the Inspector.",
+        "status": "pass"
+      },
+      {
+        "description": "Token usage is recorded for the attempt.",
+        "evidence": [
+          "steps[t1].inspection.inputTokens=4629",
+          "steps[t1].inspection.outputTokens=725"
+        ],
+        "id": "O-usage",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Token usage is recorded for the attempt.",
+        "status": "pass"
+      },
+      {
+        "description": "First visible text within 3 s and the complete reply within 10 s (CLI network).",
+        "evidence": [
+          "steps[t1].chat.timing.firstVisibleTextMs=6656.930416 (CLI network, limit 3000)",
+          "steps[t1].chat.timing.committedMs=6868.0616660000005 (CLI network, limit 10000)"
+        ],
+        "id": "O-deadline",
+        "kind": "objective",
+        "owner": null,
+        "reason": "CLI-observed timings exceed the limits or the turn never completed.",
+        "status": "fail"
+      },
+      {
+        "description": "The reply addresses this morning's remark and neither advises nor forces yesterday in.",
+        "evidence": [],
+        "id": "S-reply",
+        "kind": "semantic",
+        "owner": null,
+        "reason": "No independent review was supplied for this answer.",
+        "status": "needs-review"
+      }
+    ],
+    "mode": "real-model",
+    "pipelineOnly": [],
+    "reviewer": null,
+    "runId": "run-d10003fb-90ae-40dd-b8f3-b8162c9f86db",
+    "status": "fail"
+  },
+  "diagnosis": [
+    {
+      "diagnosis": {
+        "disagreements": [],
+        "payloadReadStatus": null,
+        "readState": "unread",
+        "sources": [
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: no history branch",
+              "provider payload: message 1",
+              "time of message 1: 2026-09-14 (expected 2026-09-14)",
+              "semantic review: none yet; the source reached the model intact, its use is not judged"
+            ],
+            "fault": "undetermined",
+            "source": "d1-a:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-5",
+              "requestSequence": 5
+            }
+          },
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: no history branch",
+              "provider payload: message 2",
+              "time of message 2: 2026-09-14 (expected 2026-09-14)",
+              "semantic review: none yet; the source reached the model intact, its use is not judged"
+            ],
+            "fault": "undetermined",
+            "source": "d1-b:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-5",
+              "requestSequence": 5
+            }
+          }
+        ]
+      },
+      "stepId": "t1"
+    }
+  ],
+  "identity": {
+    "fixtureSha256": "2d0e724ded65dab98ecb4811d40a016e555e901c1b6193980ac56bfa4d88b1bd",
+    "fixtureVersion": "dev-1",
+    "gitCommit": "3b85255ef083197381bd669259569b0706c0c086",
+    "gitDirty": false,
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "historyRecallGovernance": "active",
+    "recentContextGovernance": "active",
+    "runId": "run-d10003fb-90ae-40dd-b8f3-b8162c9f86db",
+    "oracleSha256": "fb04e518b68a1b4735bb56ac004e20cecb87226062e556ceb9e50c7cd39cdc08",
+    "title": "Smoke: ordinary turn with yesterday in the default background"
+  },
+  "remainingRisks": [
+    "This is a development fixture. Final validation needs separately authored fixtures frozen before tuning.",
+    "Timings are CLI network observations, not browser rendering times (T08 #321 covers the browser)."
+  ],
+  "reproducibilityDigest": "dca3955bb7f05991107c4f1112c46df170941b02c03b6a46b1c2429e8013b74c",
+  "schemaVersion": "continuity-acceptance-report:v1",
+  "sourceManifest": [
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "d1-a:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "d1-a:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "d1-b:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "d1-b:assistant"
+        }
+      ],
+      "stepId": "t1"
+    }
+  ],
+  "timings": [
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 21.18820800000003,
+      "cliCommittedMs": 6868.0616660000005,
+      "cliFirstVisibleTextMs": 6656.930416,
+      "cliStreamClosedMs": 6868.15175,
+      "providerLatencyMs": 0,
+      "stepId": "t1"
+    }
+  ],
+  "transcript": [
+    {
+      "assistant": "还没开始干活，力气先在车厢里耗掉一截，到工位那会儿基本就是空的了。\n\n是今天格外挤，还是这两天本来就没怎么缓过来？",
+      "at": "2026-09-15T01:30:00.000Z",
+      "stepId": "t1",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "早上地铁特别挤，到公司的时候已经有点没力气了。"
+    }
+  ],
+  "usage": {
+    "inputTokens": 4629,
+    "outputTokens": 725,
+    "paidCostUsdMicros": null,
+    "providerRequests": 1
+  }
+}

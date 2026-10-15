@@ -39,10 +39,21 @@ import {
   type CuriosityStopSignalProposal,
 } from "./curiosity-stop-signal";
 import {
+  HISTORY_REVIEW_FUNCTION,
+  type HistoryAnswerCommandRef,
+  type HistoryQueryProposal,
+  type HistoryRecallGateway,
+  type HistoryRecallReceipt,
+} from "./history-recall";
+import {
   ProviderDispatchError,
   type ProviderDispatchErrorCategory,
   type ProviderEgressPort,
 } from "./conversation-model";
+import {
+  createRequestInterrupt,
+  type RequestDeadline,
+} from "./request-deadline";
 
 /**
  * The application-owned Conversation Agent Harness (ADR-0093, ADR-0094).
@@ -75,6 +86,7 @@ import {
 export type ConversationAgentHarnessRepository = Pick<
   ConversationResponseRepository,
   | "claimResponseExecution"
+  | "checkResponseFreshness"
   | "claimStaleResponseExecution"
   | "commitActionDecision"
   | "commitCompleteResponse"
@@ -113,6 +125,12 @@ export type ConversationDecisionCommand = Readonly<{
   catalog: ConversationActionCatalog;
   catalogVersion: string;
   compiledContextId: CompiledContextId;
+  /**
+   * The request's absolute deadline (issue #319). Every step the Harness
+   * starts, including backoff and the acceptance commit, shares what is left;
+   * after it passes nothing new starts and no late result is shown or kept.
+   */
+  deadline?: RequestDeadline;
   generationCommandId: GenerationCommandId;
   harnessPolicy: ConversationHarnessPolicy;
   interactionTurnId: InteractionTurnId;
@@ -148,6 +166,14 @@ export type ConversationHarnessEvent =
   | Readonly<{
       receipt: ConversationActionReceipt;
       type: "action_admitted";
+    }>
+  | Readonly<{
+      /**
+       * The Decision ended in a controlled read-only history query that was
+       * executed and frozen; the caller now runs the History Answer command.
+       */
+      receipt: HistoryRecallReceipt;
+      type: "history_recall_admitted";
     }>;
 
 export type ConversationAgentHarness = Readonly<{
@@ -167,10 +193,24 @@ export type ConversationAgentHarness = Readonly<{
     command: ConversationDecisionCommand,
     signal?: AbortSignal,
   ): AsyncIterable<ConversationHarnessEvent>;
+  /**
+   * Run the independent History Answer command (issue #314): its own frozen
+   * Context, tools disabled, the ordinary Complete Response acceptance point.
+   */
+  runHistoryAnswerCommand?(
+    command: HistoryAnswerCommandRef,
+    input: Readonly<{
+      catalog: ConversationActionCatalog;
+      deadline?: RequestDeadline;
+      harnessPolicy: ConversationHarnessPolicy;
+    }>,
+    signal?: AbortSignal,
+  ): AsyncIterable<ConversationHarnessEvent>;
   runFinalizationCommand?(
     command: ConversationActionFinalizationCommand,
     input: Readonly<{
       catalog: ConversationActionCatalog;
+      deadline?: RequestDeadline;
       harnessPolicy: ConversationHarnessPolicy;
     }>,
     signal?: AbortSignal,
@@ -182,10 +222,25 @@ export function createConversationAgentHarness(dependencies: {
   delay?: (delayMs: number) => Promise<void>;
   actionGateway?: ConversationActionGateway;
   egressPort: ProviderEgressPort;
+  /** Executes the controlled read-only history query (issue #314). */
+  historyRecall?: HistoryRecallGateway;
+  /**
+   * Content-free note that a history proposal was dropped because a
+   * Trust-Control Action won the same Decision (ADR-0092).
+   */
+  onHistoryQuerySuppressed?: (info: Readonly<{
+    generationCommandId: string;
+    reason: "trust_control_priority";
+  }>) => void;
   jitter?: () => number;
+  /**
+   * How long one first-token freshness probe may take before it counts as
+   * failed (default 1500 ms). Tests shorten it.
+   */
+  freshnessProbeTimeoutMs?: number;
   onUnexpectedFailure?: (failure: Readonly<{
     generationCommandId: string;
-    stage: "provider" | "action_admission" | "action_commit" | "response_commit";
+    stage: "provider" | "action_admission" | "action_commit" | "response_commit" | "history_admission";
     databaseErrorCode: string | null;
   }>) => void;
   contextCompiler?: Pick<ContextCompiler, "compile">;
@@ -205,10 +260,47 @@ export function createConversationAgentHarness(dependencies: {
     let completeText = "";
     let completion: CompleteResponseMetadata | null = null;
     let pendingActionProposal: ConversationActionProposal | null = null;
-    let stage: "provider" | "action_admission" | "action_commit" | "response_commit" = "provider";
+    let stage: "provider" | "action_admission" | "action_commit" | "response_commit" | "history_admission" = "provider";
+    let pendingHistoryProposal: HistoryQueryProposal | null = null;
+    let historySuppressed = false;
     const stopSignalProposals: CuriosityStopSignalProposal[] = [];
 
+    const interrupt = createRequestInterrupt(signal, command.deadline);
+    // One read-only, idempotent probe, bounded by the request's own deadline
+    // and cancellation and by a short timeout of its own.
+    const probeFreshness = () =>
+      interrupt.guard(
+        withTimeout(
+          Promise.resolve<"current" | "deadline_exceeded" | "superseded">(
+            dependencies.repository.checkResponseFreshness?.({
+              generationCommandId: command.generationCommandId,
+              now: dependencies.clock(),
+              userId: command.userId,
+            }) ?? "current",
+          ),
+          dependencies.freshnessProbeTimeoutMs ?? FRESHNESS_PROBE_TIMEOUT_MS,
+        ),
+      );
+    async function assertStillCurrent(): Promise<void> {
+      let freshness: "current" | "deadline_exceeded" | "superseded";
+      try {
+        freshness = await probeFreshness();
+      } catch (first) {
+        // The request ended while probing: that is its own, final answer.
+        if (first instanceof ProviderDispatchError) throw first;
+        // A probe is a single query and usually fails for a moment only, so it
+        // is asked once more. If it still cannot be answered the reply is not
+        // shown: the Provider-side first token is already recorded, so the
+        // attempt ends as an interruption (nothing displayed, nothing
+        // committed, explicit Retry) and the unexpected-failure callback gets
+        // the SQLSTATE. The commit fence remains the correctness guarantee.
+        freshness = await probeFreshness();
+      }
+      if (freshness === "superseded") throw new ProviderDispatchError("aborted");
+      if (freshness === "deadline_exceeded") throw new ProviderDispatchError("timeout");
+    }
     try {
+      interrupt.throwIfInterrupted();
       if (!validateConversationActionCatalog(command.catalog).valid) {
         throw new ProviderDispatchError("invalid_response");
       }
@@ -225,7 +317,18 @@ export function createConversationAgentHarness(dependencies: {
               command.catalog,
               command.actionReferenceHandles,
             );
-      for await (const event of dependencies.egressPort.stream({
+      // The read-only history review is offered only when this Decision can
+      // actually execute it: a history-enabled policy, a request revision to
+      // fence on (not on Retry/recovery turns) and an execution gateway.
+      const historyReviewOffered =
+        command.harnessPolicy.toolsDisabled !== true &&
+        command.harnessPolicy.maxHistoryQueries === 1 &&
+        command.requestEventRevisionId !== undefined &&
+        dependencies.historyRecall !== undefined &&
+        // Independent operator governance (#320): disabled means the function
+        // is never offered and the turn is an ordinary reply.
+        (await dependencies.historyRecall.isEnabled?.() ?? true);
+      for await (const event of interrupt.race(dependencies.egressPort.stream({
         compiledContextId: command.compiledContextId,
         ...(command.requestEventRevisionId
           ? { requestEventRevisionId: command.requestEventRevisionId }
@@ -239,16 +342,23 @@ export function createConversationAgentHarness(dependencies: {
                   eligibleDefinitions,
                 ),
                 CURIOSITY_STOP_SIGNAL_FUNCTION,
+                ...(historyReviewOffered ? [HISTORY_REVIEW_FUNCTION] : []),
               ],
         generationCommandId: command.generationCommandId,
         modelRunAttemptId: command.modelRunAttemptId,
         userId: command.userId,
-        ...(signal ? { signal } : {}),
+        ...(interrupt.signal ? { signal: interrupt.signal } : {}),
         toolsDisabled: command.harnessPolicy.toolsDisabled === true,
-      })) {
+      }))) {
+        interrupt.throwIfInterrupted();
         if (event.type === "delta") {
-          if (pendingActionProposal) {
+          if (pendingActionProposal || pendingHistoryProposal) {
             throw new ProviderDispatchError("invalid_response");
+          }
+          if (!possiblyVisible) {
+            // The first visible token is the point of no return: a retired
+            // answer must not reach the screen (issue #319).
+            await assertStillCurrent();
           }
           possiblyVisible = true;
           completeText += event.delta;
@@ -269,6 +379,11 @@ export function createConversationAgentHarness(dependencies: {
             throw new ProviderDispatchError("invalid_response");
           }
           actionSeen = true;
+          if (pendingHistoryProposal !== null) {
+            // ADR-0092: the Trust-Control Action wins deterministically.
+            pendingHistoryProposal = null;
+            historySuppressed = true;
+          }
           const proposal = event.proposal;
           if (
             proposal.requestEventRevisionId !== command.requestEventRevisionId ||
@@ -279,10 +394,28 @@ export function createConversationAgentHarness(dependencies: {
             throw new ProviderDispatchError("invalid_response");
           }
           pendingActionProposal = proposal;
+        } else if (event.type === "history_query_proposal") {
+          if (actionSeen || pendingActionProposal !== null) {
+            // A Trust-Control Action already won this Decision; the read-only
+            // proposal is dropped, never executed (ADR-0092).
+            historySuppressed = true;
+            continue;
+          }
+          if (
+            !historyReviewOffered ||
+            pendingHistoryProposal !== null ||
+            completeText.length > 0 ||
+            stopSignalProposals.length > 0 ||
+            completion !== null
+          ) {
+            throw new ProviderDispatchError("invalid_response");
+          }
+          pendingHistoryProposal = event.proposal;
         } else if (event.type === "stop_signal_proposal") {
           if (
             actionSeen ||
             pendingActionProposal !== null ||
+            pendingHistoryProposal !== null ||
             completion !== null ||
             command.harnessPolicy.toolsDisabled === true ||
             stopSignalProposals.length + event.proposals.length >
@@ -292,12 +425,26 @@ export function createConversationAgentHarness(dependencies: {
           }
           stopSignalProposals.push(...event.proposals);
         } else {
-          if (pendingActionProposal && event.type !== "completed") {
+          if (
+            (pendingActionProposal || pendingHistoryProposal) &&
+            event.type !== "completed"
+          ) {
             throw new ProviderDispatchError("invalid_response");
           }
           completion = event;
         }
       }
+      if (historySuppressed) {
+        try {
+          dependencies.onHistoryQuerySuppressed?.({
+            generationCommandId: command.generationCommandId,
+            reason: "trust_control_priority",
+          });
+        } catch {
+          // Observability cannot change the Decision.
+        }
+      }
+      interrupt.throwIfInterrupted();
       if (pendingActionProposal) {
         stage = "action_admission";
         const receipt = await dependencies.actionGateway!.admit({
@@ -310,7 +457,11 @@ export function createConversationAgentHarness(dependencies: {
           },
           proposal: pendingActionProposal,
         });
-        if (receipt.admission === "accepted") {
+        if (receipt.admission === "accepted" || receipt.finalization) {
+          // The Decision produced a valid proposal that was evaluated; its
+          // command and attempt end here whatever the admission was, so a
+          // clarification or an honest "not found" reply (issue #312) cannot
+          // leave the Decision running forever.
           stage = "action_commit";
           await dependencies.repository.commitActionDecision?.({
             completedAt: dependencies.clock(),
@@ -318,14 +469,74 @@ export function createConversationAgentHarness(dependencies: {
             modelRunAttemptId: command.modelRunAttemptId,
             userId: command.userId,
           });
+        } else {
+          // Turned down with no reply owed: nothing will ever answer this turn,
+          // so settle it now instead of leaving it for the recovery window.
+          stage = "action_commit";
+          await dependencies.repository.settleResponseFailure({
+            category: "policy_blocked",
+            generationCommandId: command.generationCommandId,
+            interrupted: false,
+            jitter: normalizedJitter(jitter()),
+            modelRunAttemptId: command.modelRunAttemptId,
+            noRetry: true,
+            settledAt: dependencies.clock(),
+            userId: command.userId,
+          });
         }
         yield { receipt, type: "action_admitted" };
         return;
       }
-      if (completion === null || completeText.length === 0) {
+      if (pendingHistoryProposal !== null) {
+        stage = "history_admission";
+        // The lookup shares the request's deadline: it is bounded by what is
+        // left of it, and the Harness stops waiting the moment it is reached.
+        // A lookup that finishes later still meets the commit fence, which no
+        // longer accepts a Decision that was settled as failed.
+        const receipt = await interrupt.guard(
+          dependencies.historyRecall!.admit({
+            context: {
+              decisionCommandId: command.generationCommandId,
+              modelRunAttemptId: command.modelRunAttemptId,
+              requestEventRevisionId: command.requestEventRevisionId!,
+              userId: command.userId,
+            },
+            ...(command.deadline ? { deadline: command.deadline } : {}),
+            proposal: pendingHistoryProposal,
+          }),
+        );
+        if ("outcome" in receipt) {
+          // The owner, epoch, request revision or Decision state no longer
+          // permit the review: fail closed through the ordinary settlement.
+          throw new ProviderDispatchError("policy_blocked");
+        }
+        yield { receipt, type: "history_recall_admitted" };
+        return;
+      }
+      if (completion === null) {
         throw new ProviderDispatchError("invalid_response");
       }
+      if (completeText.length === 0) {
+        // A completed call with no visible text: the same proven cause an
+        // adapter reports itself, eligible for the one empty-reply retry.
+        throw new ProviderDispatchError(
+          "invalid_response",
+          "The Provider completed without any visible text.",
+          true,
+          {
+            cachedTokens: null,
+            inputTokens: completion.inputTokens,
+            kind: "empty_output",
+            outputLength: 0,
+            outputTokens: completion.outputTokens,
+            providerReason: null,
+            reasoningTokens: null,
+            totalTokens: null,
+          },
+        );
+      }
 
+      interrupt.throwIfInterrupted();
       stage = "response_commit";
       const committed = await dependencies.repository.commitCompleteResponse({
         completedAt: dependencies.clock(),
@@ -339,7 +550,13 @@ export function createConversationAgentHarness(dependencies: {
         userId: command.userId,
       });
       if (committed.outcome === "fence_rejected") {
-        throw new ProviderDispatchError("policy_blocked");
+        throw new ProviderDispatchError(
+          committed.reason === "superseded"
+            ? "aborted"
+            : committed.reason === "deadline_exceeded"
+              ? "timeout"
+              : "policy_blocked",
+        );
       }
       yield {
         assistantCreatedAt: committed.createdAt,
@@ -372,22 +589,57 @@ export function createConversationAgentHarness(dependencies: {
       const category =
         error instanceof ProviderDispatchError ? error.category : "unknown";
       const interrupted = possiblyVisible || category === "unknown";
+      // A request that ended (deadline or cancel) is never retried (#319).
+      const requestEnded = interrupt.ended();
+      // Nothing was shown and the Provider proved it produced no visible
+      // text: worth one more try. Any other invalid response is not.
+      const emptyReply =
+        error instanceof ProviderDispatchError &&
+        error.category === "invalid_response" &&
+        error.failure?.kind === "empty_output" &&
+        !possiblyVisible;
       const failure = await dependencies.repository.settleResponseFailure({
         category,
+        ...(emptyReply ? { emptyReply: true } : {}),
         generationCommandId: command.generationCommandId,
         interrupted,
         jitter: normalizedJitter(jitter()),
         modelRunAttemptId: command.modelRunAttemptId,
+        ...(requestEnded ? { noRetry: true } : {}),
         settledAt: dependencies.clock(),
         userId: command.userId,
       });
       if (failure.outcome === "retry_scheduled") {
-        await delay(
-          Math.max(
-            0,
-            failure.retryAt.getTime() - dependencies.clock().getTime(),
-          ),
-        );
+        try {
+          await interrupt.sleep(
+            delay,
+            Math.max(
+              0,
+              failure.retryAt.getTime() - dependencies.clock().getTime(),
+            ),
+          );
+        } catch (sleepError) {
+          if (!(sleepError instanceof ProviderDispatchError)) throw sleepError;
+          // The request ended while waiting to retry: close the pending retry
+          // instead of resuming it later.
+          const closed = await dependencies.repository.settleResponseFailure({
+            category: sleepError.category,
+            generationCommandId: command.generationCommandId,
+            interrupted,
+            jitter: normalizedJitter(jitter()),
+            modelRunAttemptId: command.modelRunAttemptId,
+            noRetry: true,
+            settledAt: dependencies.clock(),
+            userId: command.userId,
+          });
+          yield {
+            category: closed.outcome === "settled" ? closed.category : sleepError.category,
+            interrupted:
+              closed.outcome === "settled" ? closed.status === "interrupted" : interrupted,
+            type: "decision_failed",
+          };
+          return;
+        }
         const recovery =
           await dependencies.repository.claimStaleResponseExecution({
             expectedModelRunAttemptId: command.modelRunAttemptId,
@@ -440,7 +692,7 @@ export function createConversationAgentHarness(dependencies: {
     }
   }
 
-  return {
+  const harnessApi: ConversationAgentHarness = {
     runDecision(command, signal) {
       return runDecisionAttempt(command, signal);
     },
@@ -450,12 +702,58 @@ export function createConversationAgentHarness(dependencies: {
       }
       return runDecisionAttempt(command, signal);
     },
+    async *runHistoryAnswerCommand(command, input, signal) {
+      if (input.harnessPolicy.toolsDisabled !== true) {
+        throw new Error("History Answer must disable tools.");
+      }
+      yield* runStageCommand(
+        {
+          generationCommandId: asGenerationCommandId(command.generationCommandId),
+          interactionTurnId: command.interactionTurnId,
+          modelRunAttemptId: asModelRunAttemptId(command.modelRunAttemptId),
+          requestEventRevisionId: command.requestEventRevisionId,
+          userId: command.userId,
+        },
+        input,
+        signal,
+      );
+    },
     async *runFinalizationCommand(command, input, signal) {
       if (input.harnessPolicy.toolsDisabled !== true) {
         throw new Error("Action Finalization must disable tools.");
       }
+      yield* runStageCommand(
+        {
+          generationCommandId: asGenerationCommandId(command.generationCommandId),
+          interactionTurnId: command.interactionTurnId,
+          modelRunAttemptId: asModelRunAttemptId(command.modelRunAttemptId),
+          requestEventRevisionId: command.requestEventRevisionId,
+          userId: command.userId,
+        },
+        input,
+        signal,
+      );
+    },
+  };
+
+  async function* runStageCommand(
+    command: Readonly<{
+      generationCommandId: GenerationCommandId;
+      interactionTurnId: InteractionTurnId;
+      modelRunAttemptId: ModelRunAttemptId;
+      requestEventRevisionId: ConversationEventRevisionId;
+      userId: UserId;
+    }>,
+    input: Readonly<{
+      catalog: ConversationActionCatalog;
+      deadline?: RequestDeadline;
+      harnessPolicy: ConversationHarnessPolicy;
+    }>,
+    signal?: AbortSignal,
+  ): AsyncIterable<ConversationHarnessEvent> {
+    {
       if (!dependencies.contextCompiler) {
-        throw new Error("Action Finalization requires a Context Compiler.");
+        throw new Error("A stage command requires a Context Compiler.");
       }
       const ownership = await dependencies.repository.claimResponseExecution({
         generationCommandId: asGenerationCommandId(command.generationCommandId),
@@ -526,12 +824,14 @@ export function createConversationAgentHarness(dependencies: {
           interactionTurnId: command.interactionTurnId,
           modelRunAttemptId: asModelRunAttemptId(command.modelRunAttemptId),
           requestEventRevisionId: command.requestEventRevisionId,
+          ...(input.deadline ? { deadline: input.deadline } : {}),
           userId: command.userId,
         },
         signal,
       );
-    },
-  };
+    }
+  }
+  return harnessApi;
 }
 
 function normalizedJitter(value: number): number {
@@ -564,3 +864,27 @@ async function* streamExistingDecision(
   }
   yield { category: "unavailable", interrupted: false, type: "decision_failed" };
 }
+
+const FRESHNESS_PROBE_TIMEOUT_MS = 1_500;
+
+/** Reject when the work takes longer than `ms`; the timer never keeps the process alive. */
+function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error("The freshness probe timed out.")),
+      ms,
+    );
+    timer.unref?.();
+    work.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+

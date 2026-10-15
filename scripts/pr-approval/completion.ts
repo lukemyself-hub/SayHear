@@ -1,8 +1,6 @@
-import { createSign, createVerify, randomUUID } from "node:crypto";
-import { constants } from "node:fs";
-import { lstat, mkdir, open, readdir, rename, unlink } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
-
+import { SignedJsonStore } from "./signed-store.ts";
+import type { IntegrationMode } from "../pr-review-gate.ts";
+import { parseIntegrationMode } from "../pr-review-gate.ts";
 export type CompletionIdentity = Readonly<{
   repositoryId: number;
   pullRequestNumber: number;
@@ -17,6 +15,17 @@ export type CompletionIdentity = Readonly<{
   appId: number;
   policyVersion: string;
   issueNumbers: readonly number[];
+  // Absent on v4 receipts, which always used the App review channel.
+  humanChannel?: "app" | "browser";
+  humanReviewId?: number;
+  epoch?: string | null;
+  integrationMode?: IntegrationMode;
+  reviewIdentity?: Readonly<{
+    diffDigest: string;
+    changeDigest: string;
+    workflowBlobSha: string;
+  }>;
+  mergeAction?: "merge-now";
 }>;
 export type CompletionPhase = "merge_unconfirmed" | "issues_pending" | "complete" | "needs_attention";
 export type CompletionRecord = Readonly<{
@@ -27,6 +36,8 @@ export type CompletionRecord = Readonly<{
   nextRetryAt: number;
   reason: string | null;
   mergeSha: string | null;
+  // Absence means an older operation whose delivery must be reconciled.
+  mergeWriteState?: "not-sent" | "uncertain" | "rejected" | "accepted";
 }>;
 export class CompletionMismatch extends Error {}
 export class CompletionUnavailable extends Error {
@@ -66,6 +77,11 @@ function digest(value: unknown, length: number): string {
 export function parseCompletionRecord(value: unknown): CompletionRecord {
   if (!record(value) || value.version !== 1 || !record(value.identity)) throw new Error("completion_schema_invalid");
   const identity = value.identity;
+  const reviewIdentity = identity.reviewIdentity;
+  if (reviewIdentity !== undefined && !record(reviewIdentity)) throw new Error("completion_schema_invalid");
+  if (identity.mergeAction !== undefined && identity.mergeAction !== "merge-now") throw new Error("completion_schema_invalid");
+  if (value.mergeWriteState !== undefined &&
+      !["not-sent", "uncertain", "rejected", "accepted"].includes(string(value.mergeWriteState))) throw new Error("completion_schema_invalid");
   if (!Array.isArray(identity.issueNumbers) || identity.issueNumbers.length === 0 || identity.issueNumbers.length > 100) throw new Error("completion_schema_invalid");
   const phase = value.phase;
   if (phase !== "merge_unconfirmed" && phase !== "issues_pending" && phase !== "complete" && phase !== "needs_attention") throw new Error("completion_schema_invalid");
@@ -79,12 +95,33 @@ export function parseCompletionRecord(value: unknown): CompletionRecord {
       botActorId: positive(identity.botActorId), reviewId: positive(identity.reviewId), appId: positive(identity.appId),
       policyVersion: string(identity.policyVersion),
       issueNumbers: identity.issueNumbers.map(positive),
+      humanChannel: identity.humanChannel === "browser" ? "browser" : "app",
+      humanReviewId: identity.humanReviewId === undefined ? positive(identity.reviewId) : positive(identity.humanReviewId),
+      epoch: identity.epoch === undefined || identity.epoch === null ? null : string(identity.epoch),
+      integrationMode: completionIntegrationMode(identity.integrationMode),
+      ...(record(reviewIdentity) ? { reviewIdentity: {
+        diffDigest: digest(reviewIdentity.diffDigest, 64),
+        changeDigest: digest(reviewIdentity.changeDigest, 64),
+        workflowBlobSha: digest(reviewIdentity.workflowBlobSha, 40),
+      } } : {}),
+      ...(identity.mergeAction === "merge-now" ? { mergeAction: "merge-now" as const } : {}),
     },
     phase, attempts: integer(value.attempts), nextRetryAt: integer(value.nextRetryAt),
     reason: value.reason === null ? null : string(value.reason), mergeSha: value.mergeSha === null ? null : digest(value.mergeSha, 40),
+    ...(value.mergeWriteState === "not-sent" || value.mergeWriteState === "uncertain" ||
+      value.mergeWriteState === "rejected" || value.mergeWriteState === "accepted"
+      ? { mergeWriteState: value.mergeWriteState } : {}),
   };
   if ((phase === "issues_pending" || phase === "complete") && result.mergeSha === null) throw new Error("completion_schema_invalid");
   return result;
+}
+
+function completionIntegrationMode(value: unknown): IntegrationMode {
+  try {
+    return parseIntegrationMode(value);
+  } catch {
+    throw new Error("completion_schema_invalid");
+  }
 }
 
 export interface CompletionStore {
@@ -93,71 +130,9 @@ export interface CompletionStore {
   save(value: CompletionRecord): Promise<void>;
 }
 
-// Signatures give the user-owned directory integrity without granting the
-// controller root privileges. Recovery still independently checks GitHub.
-export class SignedCompletionStore implements CompletionStore {
-  constructor(private readonly directory: string, private readonly privateKey: string, private readonly publicKey: string) {}
-  private path(number: number): string { return resolve(this.directory, `pr-${positive(number)}.json`); }
-  private async assertDirectory(): Promise<void> {
-    await mkdir(this.directory, { recursive: true, mode: 0o700 });
-    const info = await lstat(this.directory);
-    if (!info.isDirectory() || info.isSymbolicLink() || info.uid !== process.getuid?.() || (info.mode & 0o077) !== 0) throw new Error("completion_directory_untrusted");
-    let parent = dirname(this.directory);
-    while (parent !== dirname(parent)) {
-      const parentInfo = await lstat(parent);
-      if (!parentInfo.isDirectory() || parentInfo.isSymbolicLink() || ((parentInfo.mode & 0o022) !== 0 && (parentInfo.mode & 0o1000) === 0) ||
-        (parentInfo.uid !== 0 && parentInfo.uid !== process.getuid?.())) throw new Error("completion_directory_untrusted");
-      parent = dirname(parent);
-    }
-  }
-  async read(number: number): Promise<CompletionRecord | null> {
-    await this.assertDirectory();
-    let handle;
-    try { handle = await open(this.path(number), constants.O_RDONLY | constants.O_NOFOLLOW); }
-    catch (error) { if (record(error) && error.code === "ENOENT") return null; throw error; }
-    try {
-      const info = await handle.stat();
-      if (!info.isFile() || info.uid !== process.getuid?.() || (info.mode & 0o077) !== 0 || info.size > 32_000) throw new Error("completion_file_untrusted");
-      const bytes = Buffer.alloc(32_001);
-      const { bytesRead } = await handle.read(bytes, 0, bytes.length, 0);
-      if (bytesRead > 32_000) throw new Error("completion_file_untrusted");
-      const envelope: unknown = JSON.parse(bytes.subarray(0, bytesRead).toString("utf8"));
-      if (!record(envelope) || typeof envelope.payload !== "string" || typeof envelope.signature !== "string") throw new Error("completion_signature_invalid");
-      const verifier = createVerify("RSA-SHA256").update(envelope.payload).end();
-      if (!verifier.verify(this.publicKey, envelope.signature, "base64")) throw new Error("completion_signature_invalid");
-      const value = parseCompletionRecord(JSON.parse(envelope.payload));
-      if (value.identity.pullRequestNumber !== number) throw new Error("completion_path_mismatch");
-      return value;
-    } finally { await handle.close(); }
-  }
-  async save(value: CompletionRecord): Promise<void> {
-    await this.assertDirectory();
-    const payload = JSON.stringify(parseCompletionRecord(value));
-    const signature = createSign("RSA-SHA256").update(payload).end().sign(this.privateKey, "base64");
-    const temporary = `${this.path(value.identity.pullRequestNumber)}.${randomUUID()}.tmp`;
-    const handle = await open(temporary, "wx", 0o600);
-    try {
-      await handle.writeFile(JSON.stringify({ payload, signature }));
-      await handle.sync();
-    } finally { await handle.close(); }
-    try {
-      await rename(temporary, this.path(value.identity.pullRequestNumber));
-      const directoryHandle = await open(this.directory, "r");
-      try { await directoryHandle.sync(); } finally { await directoryHandle.close(); }
-    } finally { await unlink(temporary).catch(() => undefined); }
-  }
-  async list(): Promise<CompletionRecord[]> {
-    await this.assertDirectory();
-    const names = await readdir(this.directory);
-    const results: CompletionRecord[] = [];
-    for (const name of names) {
-      const match = /^pr-([1-9]\d*)\.json$/.exec(name);
-      if (!match) continue;
-      if (results.length >= 1_000) throw new Error("completion_record_limit");
-      const value = await this.read(Number(match[1]));
-      if (value) results.push(value);
-    }
-    return results;
+export class SignedCompletionStore extends SignedJsonStore<CompletionRecord> implements CompletionStore {
+  constructor(directory: string, privateKey: string, publicKey: string) {
+    super(directory, privateKey, publicKey, parseCompletionRecord, (value) => value.identity.pullRequestNumber, "completion");
   }
 }
 

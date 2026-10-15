@@ -26,5 +26,7 @@ export async function GET(request: Request): Promise<Response> {
     },
     loadRecentContextGovernance: () =>
       composition.recentContextGovernanceRepository.findEffectiveState(),
+    loadHistoryRecallGovernance: () =>
+      composition.historyRecallGovernanceRepository.findEffectiveState(),
   });
 }

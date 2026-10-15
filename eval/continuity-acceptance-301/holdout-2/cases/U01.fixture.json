@@ -1,0 +1,231 @@
+{
+  "schemaVersion": "continuity-acceptance-fixture:v1",
+  "id": "U01",
+  "fixtureVersion": "final-2",
+  "stage": "final",
+  "languageVariant": "en",
+  "defaults": {
+    "locale": "en-US",
+    "timezone": "America/Chicago"
+  },
+  "history": [
+    {
+      "key": "pump-1",
+      "at": "2026-09-16T12:05:00.000Z",
+      "user": "Woke up at six to the sound of water. The sump pump in the basement gave out some time in the night with all that rain, and there were about two inches standing across the whole floor by the time I got down the stairs. The boxes of Christmas decorations were sitting in it, and so was the bottom shelf of Dale's record collection, which he has not found out about yet because he is on the early shift this week and left before any of it was visible.",
+      "assistant": "Two inches across the whole floor before breakfast. That is a rough way to be woken."
+    },
+    {
+      "key": "pump-2",
+      "at": "2026-09-16T12:20:00.000Z",
+      "user": "I waded over in my rain boots and the pump was humming away but not moving any water at all. Our neighbour across the alley, Mrs Okafor, saw me hauling wet cardboard out to the kerb and came over with her wet vac without my even asking. She stayed for forty minutes, went up and down those stairs with the full drum more times than I did, and would not take so much as a cup of coffee for it.",
+      "assistant": "Forty minutes with a wet vac, unasked. That is a good neighbour to have across the alley."
+    },
+    {
+      "key": "pump-3",
+      "at": "2026-09-16T12:45:00.000Z",
+      "user": "Called three plumbers before eight. Two went to voicemail and the third, a man called Ruben, said the float switch had probably stuck and that the whole unit is fifteen years old anyway, so it is not worth repairing. He can fit a new one on Friday morning and quoted four hundred and eighty dollars including the part. I said yes on the spot because I did not have it in me to shop around.",
+      "assistant": "A yes on the spot seems fair when the floor is under water. Friday is not far."
+    },
+    {
+      "key": "pump-4",
+      "at": "2026-09-16T13:05:00.000Z",
+      "user": "In the meantime he told me to rent a utility pump from the hardware store on Kedzie so the water does not come back up if it rains again tonight. So that is another thirty-five dollars a day until Friday, and I had to carry the dehumidifier down from the spare room and leave it running with the basement door propped open, which means the whole house now smells like a wet dog.",
+      "assistant": "A rented pump and a house that smells of wet dog. At least the water has somewhere to go tonight."
+    },
+    {
+      "key": "pump-5",
+      "at": "2026-09-16T13:20:00.000Z",
+      "user": "I took photographs of everything for the insurance before I left, though I honestly do not know whether a failed pump is even covered, as opposed to a burst pipe. I will have to dig the policy out at the weekend. I left a note on the kitchen table for Dale about his records, so that he hears it from me and does not just walk down there by himself and find them.",
+      "assistant": "The note was a kindness. Better he reads it at the table than finds the shelf on his own."
+    },
+    {
+      "key": "pump-6",
+      "at": "2026-09-16T13:32:00.000Z",
+      "user": "One more thing about the basement before I stop. When I was dragging the boxes out I found the tin with my grandmother's recipe cards at the bottom of one of them, and the cards on the outside of the stack are ruined, the ink has run right off them. The ones in the middle are damp but I can still read them. I have laid them out one by one on the ironing board with a tea towel over the top, and I am trying not to think about which ones were on the outside.",
+      "assistant": "The ones in the middle can still be read. That is worth an ironing board for a few days."
+    },
+    {
+      "key": "inv-1",
+      "at": "2026-09-16T14:40:00.000Z",
+      "user": "Got to the shop an hour late and walked straight into a mess. A bride came in to collect two hundred wedding invitations and every single one of them says the fourteenth of November when the wedding is on the twenty-first. She was in tears at the counter, and her mother, standing next to her, was not in tears at all, which was a good deal worse.",
+      "assistant": "Two hundred invitations with the wrong Saturday on them. And a mother who is past crying."
+    },
+    {
+      "key": "inv-2",
+      "at": "2026-09-16T15:05:00.000Z",
+      "user": "My first thought was that we had keyed it in wrong when we took the order, so I pulled the order sheet, and the order sheet says the twenty-first, clear as day. Then I thought the press operator must have picked up an old plate from an earlier job, but Tomasz walked me over and showed me the plate, and it matches the file he was sent to the letter. So it was neither of the obvious things.",
+      "assistant": "Order sheet right, plate faithful to its file. So the mistake was hiding somewhere between the two."
+    },
+    {
+      "key": "inv-3",
+      "at": "2026-09-16T15:40:00.000Z",
+      "user": "Priyanka from the front desk sat down with me and we went back through the email thread one message at a time. It turns out the customer approved a proof three weeks ago, then wrote again to change the date, and we did make a corrected proof for her. But the file that went to the press was the first proof, because both files had been saved under exactly the same name in two different folders, and the job ticket pointed at the older folder.",
+      "assistant": "Same name, two folders, and the ticket pointing at the wrong one. A quiet little trap."
+    },
+    {
+      "key": "inv-4",
+      "at": "2026-09-16T16:10:00.000Z",
+      "user": "So it is ours, not hers. I told the bride we would reprint the whole run at no charge and have them boxed and ready by Monday, and I threw in the matching thank-you cards for nothing. Her mother finally unclenched her handbag. Tomasz has said he will stay late tomorrow to run the job, and I am going to stand over the first sheet off the press myself.",
+      "assistant": "You owned it and made it right before she had to ask. Monday will go better than today did."
+    },
+    {
+      "key": "inv-5",
+      "at": "2026-09-16T16:25:00.000Z",
+      "user": "I have asked Priyanka to write up a rule that from now on every revised proof gets a version number in the file name, and the old one gets moved out of the way. It is such a small thing, and it would have saved us about six hundred dollars in card stock and one very long morning. Nineteen years in that building and we have never once written that down.",
+      "assistant": "A version number in a file name. The cheap fixes always turn up right after the expensive lesson."
+    },
+    {
+      "key": "inv-6",
+      "at": "2026-09-16T16:40:00.000Z",
+      "user": "What stays with me from the whole business is how quickly I was ready to blame somebody. I had Tomasz half convicted in my head before I had even looked at the plate, and he has run that press without a single wrong date for as long as I have known him. I went back and told him so, and he just shrugged and said everybody looks at the press first because the press is the loudest thing in the building. I bought him a coffee anyway.",
+      "assistant": "You went back and said it. He shrugged, and you bought the coffee regardless."
+    },
+    {
+      "key": "mum-1",
+      "at": "2026-09-16T17:35:00.000Z",
+      "user": "My sister Renata rang while I was eating a sandwich in the back room. Mum scraped the side of the car against a pillar in the parking garage at the clinic last week and did not tell either of us. Renata only found out because she went round with some shopping and saw a long yellow streak down the passenger door, and Mum tried to say it had been there for years.",
+      "assistant": "She kept it to herself until the paint gave her away. That must have been hard for Renata to see."
+    },
+    {
+      "key": "mum-2",
+      "at": "2026-09-16T17:45:00.000Z",
+      "user": "Renata thinks it is time Mum stopped driving altogether. I am not so sure. It is one scrape, and that garage is tight enough that I have very nearly done the same thing in it myself. But she is eighty-one, and she did hide it, and if I am honest the hiding bothers me a great deal more than the scrape does.",
+      "assistant": "The hiding is the part that sticks with you, more than the door."
+    },
+    {
+      "key": "mum-3",
+      "at": "2026-09-16T17:55:00.000Z",
+      "user": "The real argument was about which of us says it to her. Renata says it ought to be me, because Mum listens to me. I said it ought to be her, because she lives ten minutes away and I am two hours up the interstate and will not be the one driving her to appointments afterwards. We went round that three times and neither of us budged an inch.",
+      "assistant": "Three times round and nobody moved. Neither of you wants to be the one holding that sentence."
+    },
+    {
+      "key": "mum-4",
+      "at": "2026-09-16T18:05:00.000Z",
+      "user": "Where we left it is that we will both go over on Sunday week and start by asking her to have her eyes tested, and see how she takes that before anybody uses the words stop driving. It felt like a dodge while we were agreeing to it, but it was the only thing the two of us could both say yes to, and I would rather go in together than have her feel ganged up on by phone.",
+      "assistant": "Going together, and starting smaller than the thing you fear. It may be a dodge and a sensible first step at once."
+    },
+    {
+      "key": "mum-5",
+      "at": "2026-09-16T18:15:00.000Z",
+      "user": "After we hung up I sat there with half a sandwich and remembered that it was Mum who taught me to drive, in that same clinic car park as it happens, on Sunday mornings when it was empty. She never raised her voice once, not even when I put the old Buick into a hedge. I do not know what to do with that memory yet. It does not change what has to be said to her, but it changes how I want to say it.",
+      "assistant": "She taught you there without ever raising her voice. No wonder you want to choose your words."
+    },
+    {
+      "key": "test-1",
+      "at": "2026-09-16T21:20:00.000Z",
+      "user": "Nadia had her driving test at three. She has been practising in the church car park with Dale every single evening for a month, cones and all. She texted me one word afterwards, and the word was no. I read it standing at the guillotine and had to put the blade guard down and go and sit in the stock room for a minute.",
+      "assistant": "One word, after a month of evenings in that car park. I am sorry."
+    },
+    {
+      "key": "test-2",
+      "at": "2026-09-16T21:35:00.000Z",
+      "user": "When I rang her she said the drive itself was fine, and the examiner even told her so, but she clipped the cone on the parallel park, tried to correct it, and ended up with the back wheel up on the kerb. That is an automatic fail no matter what came before it. She was trying very hard to sound as though she did not mind, which is how I knew how much she did.",
+      "assistant": "A good drive undone at the kerb. And she was working hard to sound fine about it."
+    },
+    {
+      "key": "test-3",
+      "at": "2026-09-16T21:50:00.000Z",
+      "user": "The next slot they could give her is not for five weeks. She says she would rather not talk about it tonight and has gone round to her friend Bea's house. I am going to leave her be, and I am not going to make her favourite dinner as though somebody had died. She can have the ordinary Wednesday pasta like everyone else.",
+      "assistant": "Ordinary Wednesday pasta sounds right. She will talk when she is ready."
+    },
+    {
+      "key": "test-4",
+      "at": "2026-09-16T22:05:00.000Z",
+      "user": "Dale came home, read my note about the records, went down to look, and came back up very quiet. Then he saw Nadia's text on my phone and all he said was that he must have taught her the parallel park wrong. So now I have two of them in the house blaming themselves for a kerb. I told him that she passed everything he taught her on the open road and that the cone was only nerves, and he nodded, but I do not think he believed a word of it.",
+      "assistant": "Two people blaming themselves over one kerb. You said the true thing even if it did not land tonight."
+    },
+    {
+      "key": "shop-1",
+      "at": "2026-09-17T02:30:00.000Z",
+      "user": "Now that the house is quiet I keep coming back to the thing I have been avoiding all month. Walt wants to retire in the spring. He told me four weeks ago that he would sooner sell the shop to me than to a stranger, and he named a figure, one hundred and eighty-five thousand dollars, with the two presses and what is left of the lease included. I have worked there nineteen years and I still have not given him any kind of an answer.",
+      "assistant": "Four weeks of carrying that around without answering. It is a big thing to be asked."
+    },
+    {
+      "key": "shop-2",
+      "at": "2026-09-17T02:42:00.000Z",
+      "user": "The case for it is that I already run the place in everything but name. I do the quotes, I do the ordering, I deal with the difficult customers, as this morning showed. If somebody else buys it, the best I can hope for is to keep doing all of that for a new boss who may well want to bring in his own people. The worst is that one of the chains buys it for the customer list and has the doors closed by Christmas.",
+      "assistant": "So saying no is not the same as things staying as they are. Either way the shop changes hands."
+    },
+    {
+      "key": "shop-3",
+      "at": "2026-09-17T02:55:00.000Z",
+      "user": "The case against starts with the money. We have about forty thousand in savings, and that is supposed to be Nadia's college and the new roof. The bank would want the house as security for the rest of it. Dale says he will back whatever I decide, and I believe him, but I watched his face when I said the word security and he went very quiet and started loading the dishwasher.",
+      "assistant": "He said yes with his mouth and something else with the dishwasher. The house is a lot to put on the table."
+    },
+    {
+      "key": "shop-4",
+      "at": "2026-09-17T03:08:00.000Z",
+      "user": "Then there is the business itself. Wedding and funeral stationery keeps us going, but the business-card and flyer work has halved in five years, because people order it online for a third of what we can charge. The big press dates from 1998 and Tomasz is the only person alive who can coax it through a long run. If he leaves, or it dies, I would be looking at sixty thousand dollars for a replacement on top of everything else.",
+      "assistant": "Flat in one half, shrinking in the other, and a press that depends on one man. You are not looking at it through rose glass."
+    },
+    {
+      "key": "shop-5",
+      "at": "2026-09-17T03:20:00.000Z",
+      "user": "On the other hand, Walt has never once tried anything new. We do not sell online at all. We turn away small custom jobs every week, things like menus for the new restaurants along Milwaukee Avenue, because he thinks they are not worth the set-up time. I have a notebook with three years of ideas in it that I stopped showing him, because he would nod and then put it in the drawer under the till.",
+      "assistant": "Three years of ideas in a notebook nobody opened. That is a lot of the shop that has never been tried."
+    },
+    {
+      "key": "shop-6",
+      "at": "2026-09-17T03:33:00.000Z",
+      "user": "And today of all days I am not sure I want to be the person the buck stops with. When that bride was crying, it was me who decided to swallow the six hundred dollars, and that was easy, because it was Walt's six hundred dollars. If it had been my own money I think I would still have done exactly the same thing. But I would have felt it in my stomach for the rest of the day.",
+      "assistant": "Same decision, but paid for out of your own pocket. You noticed the difference before it was yours to feel."
+    },
+    {
+      "key": "shop-7",
+      "at": "2026-09-17T03:45:00.000Z",
+      "user": "I keep thinking about my father, too. He had the chance to buy the hardware store he managed, and he let it go because my mother was frightened of the loan. He never complained about it, not once, but he went on talking about that store until the week he died. I do not want to be seventy and still describing a shop I did not buy to anyone who will sit still.",
+      "assistant": "He never complained and never stopped talking about it. That has stayed with you."
+    },
+    {
+      "key": "shop-8",
+      "at": "2026-09-17T03:57:00.000Z",
+      "user": "But I also do not want to do it only so as not to be like him. That is not a reason, it is a ghost. If I take the ghost out of the room, what is left is a business with flat sales, an old press, and exactly one thing going for it, which is that I know every inch of it and every customer by their first name.",
+      "assistant": "With the ghost out of the room you can see the shop as it is. And you still count what you know as worth something."
+    },
+    {
+      "key": "shop-9",
+      "at": "2026-09-17T04:09:00.000Z",
+      "user": "Walt said he could wait until the end of October for an answer. Renata's husband is an accountant, and he has offered to look over the last three years of books if I can get hold of them, which I have not asked Walt for yet, because asking feels like half saying yes. Maybe that is the next step, though. Only the books, not an answer.",
+      "assistant": "Only the books, not an answer. That is a step that commits you to nothing but knowing more."
+    },
+    {
+      "key": "shop-10",
+      "at": "2026-09-17T04:20:00.000Z",
+      "user": "Anyway, I have not decided anything, and I am not going to tonight. I only notice that when I imagine telling Walt no, I feel relief for about a minute and then something heavier comes in behind it. And when I imagine telling him yes, I feel sick, and then underneath the sick there is something that might be excitement. I am going to bed.",
+      "assistant": "Nothing decided, and two feelings noticed. Sleep well."
+    },
+    {
+      "key": "shop-11",
+      "at": "2026-09-17T04:26:00.000Z",
+      "user": "I lied, I am still awake. Lying here I worked out that if I did buy the place, the first thing I would do is put the menu work and the small custom jobs on a website and see whether the restaurants on Milwaukee Avenue bite. That is the second page of the notebook. It is strange to notice that I already know what the first three months would look like when I have not even agreed to look at the books.",
+      "assistant": "You have not said yes, and you already know your first three months. That is worth noticing."
+    },
+    {
+      "key": "shop-12",
+      "at": "2026-09-17T04:33:00.000Z",
+      "user": "And the other thing I worked out is that I have not once asked Dale what he actually wants, as opposed to what he is willing to put up with. He has said he will back me. That is not the same as being asked. I will ask him on Saturday when Nadia is out, properly, at the table and not over the dishwasher. Now I really am going to sleep.",
+      "assistant": "Backing you and being asked are different things, and you saw it. Good night."
+    },
+    {
+      "key": "today-1",
+      "at": "2026-09-17T13:10:00.000Z",
+      "user": "Came out this morning to a parking ticket under the wiper, sixty dollars for being on the wrong side of the street for street cleaning. I had completely forgotten it was the third Thursday.",
+      "assistant": "Sixty dollars for the third Thursday. Not the morning you needed."
+    }
+  ],
+  "steps": [
+    {
+      "id": "recap",
+      "type": "say",
+      "at": "2026-09-18T00:40:00.000Z",
+      "text": "Walk me back through yesterday, would you? What was everything I told you about?"
+    },
+    {
+      "id": "detail",
+      "type": "say",
+      "at": "2026-09-18T00:43:00.000Z",
+      "text": "That mix-up with the invitations. What turned out to have caused it, and who helped me get to the bottom of it?"
+    }
+  ]
+}

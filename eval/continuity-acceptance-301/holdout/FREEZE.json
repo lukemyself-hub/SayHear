@@ -1,0 +1,58 @@
+{
+  "schemaVersion": "continuity-holdout-freeze:v1",
+  "frozenOn": "2026-10-11",
+  "cases": {
+    "H01": {
+      "fixtureSha256": "d40c53fd23474b9924850cf09934248df8ba28f57526caebed73c62e9e7359c0",
+      "oracleSha256": "c43310d2d4ebb5e5240e98f55bef4b5f5bbb030d0c4b250c6bd056ea5f1c6d8f"
+    },
+    "H02": {
+      "fixtureSha256": "c0d1d7a67fbfc20276359ea9ab1a4fb44e9967b026412db3faf9ff184b703b7f",
+      "oracleSha256": "9b99811ee5ff1805a6a422469d1c0432908f7e7bb97e910db74524ecc266d384"
+    },
+    "H03": {
+      "fixtureSha256": "5527ee501bbdd8dc71ce8a190c8d649dda64ed7af66e27ffe8a0d915fb6db99f",
+      "oracleSha256": "c7bc9f6fd880c19497ab3b6acdf2db87c021aaae685f9a648191fc8636714da7"
+    },
+    "H04": {
+      "fixtureSha256": "c021cf10a819ed029a1e1ba1a3bc2e5408de20bede2aa09d86c53c1d7f5df94c",
+      "oracleSha256": "e7f8df67fe3c784c5b900c719216d01e11f648e42b23eb564bd44a7ad521ac8c"
+    },
+    "H05": {
+      "fixtureSha256": "edf3388e43829ef00332e2b1a1227c448b6c8655e12328d8ae40647e83281455",
+      "oracleSha256": "86764806b2cda9c35d738a046d4c575912a089cda075d5b3932f3955f7cd8dd6"
+    },
+    "H06": {
+      "fixtureSha256": "e0316f07627df4bec48065cf746d038c884ec56c11f5ae40c29f4631cf263974",
+      "oracleSha256": "a432cb5f80be22691386bb13e0a8a421ed6d709bf7a2307b6d51f4ec33b74312"
+    },
+    "H07": {
+      "fixtureSha256": "ba315566baf06305ffe16934fc54cbb89b2df93455b9ab92da083eced8dc8d0a",
+      "oracleSha256": "97168357e27caa2f02494b7798407f6c5019382e5bab540b256610512477a207"
+    },
+    "H08": {
+      "fixtureSha256": "7fcf619a07d4e5dc060387882747b76eb7727e6e6a59abc80e6117032ea9fc09",
+      "oracleSha256": "522888c6ec6ac5ac1e846329a0d8363b2556419ae44f7aa7ceefae32fe42d246"
+    },
+    "H09": {
+      "fixtureSha256": "a208c4a9fe53a60bc676684eab212d317d9d4144cedd1d6431b8d4f8df5e3342",
+      "oracleSha256": "2a46f5728086c8971f64061ada88980135c0b2ecf547755c55d99ae926269204"
+    },
+    "H10": {
+      "fixtureSha256": "64409e2d99d602c3a012ee077ad36d173d238155660b38b00cbf784f282b6881",
+      "oracleSha256": "2a376a6c428cc96af5c07198f75fcf197539477f89682d23b21e295ecc6f0be2"
+    },
+    "H11": {
+      "fixtureSha256": "a9172e11797d24d0250329c53fa06033dede10be762e4cad5e1c6c2656863ef0",
+      "oracleSha256": "0f4122e18fcc0ae4d7deccdd0de29911078d96263cdcd7852fed6e08f8d8f007"
+    },
+    "H12": {
+      "fixtureSha256": "3eee929a3ae0097678b17403b816720e2cd4916b2ff8ba9bda873950eec752c7",
+      "oracleSha256": "94cc66f83497e63b4629c72b87fa8934e0520ce0dd468b9722ffdc94d7ce5a12"
+    },
+    "HL1": {
+      "fixtureSha256": "5bd7013d8eb5d70eeb95c280801eb9d024d44f504f6e0fe2171dcbab156341a1",
+      "oracleSha256": "d0c5bcd200a45b03dd3bec51a575dc78e206d1ce7c233e317742c4dea0d21523"
+    }
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "caseId": "H05",
+  "findings": [
+    {
+      "criterionId": "S-bare",
+      "itemId": "a-two-pending",
+      "reason": "Neither pending matter is named.",
+      "verdict": "fail"
+    },
+    {
+      "criterionId": "S-bare",
+      "itemId": "f-assume-choir",
+      "reason": "The wording is neutral about which matter it is.",
+      "verdict": "pass"
+    },
+    {
+      "criterionId": "S-bare",
+      "itemId": "f-assume-plot",
+      "reason": "Not attributed to the older matter.",
+      "verdict": "pass"
+    },
+    {
+      "criterionId": "S-bare",
+      "itemId": "f-retell",
+      "reason": "It does not ask for the back story.",
+      "verdict": "pass"
+    },
+    {
+      "criterionId": "S-cued",
+      "itemId": "a-plot-reply",
+      "reason": "The letter is never connected to the request for a growing plot; the older messages did not reach the Provider.",
+      "verdict": "fail"
+    },
+    {
+      "criterionId": "S-cued",
+      "itemId": "f-cued-choir",
+      "quote": "not an email. After all that inbox-checking",
+      "reason": "The letter is treated as the answer to the emailed request to the singing group.",
+      "verdict": "fail"
+    },
+    {
+      "criterionId": "S-cued",
+      "itemId": "f-retell",
+      "reason": "It does not ask for the back story.",
+      "verdict": "pass"
+    },
+    {
+      "criterionId": "S-cued",
+      "itemId": "f-outcome",
+      "reason": "No outcome is invented.",
+      "verdict": "pass"
+    }
+  ],
+  "reviewer": "agent:claude-opus-5.5-t08",
+  "rubricVersion": "continuity-rubric:v1",
+  "runId": "run-7e6058cb-4417-49bb-b510-31e5c0f474fb",
+  "schemaVersion": "continuity-acceptance-review:v1"
+}
