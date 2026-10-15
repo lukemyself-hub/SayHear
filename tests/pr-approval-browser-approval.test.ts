@@ -500,9 +500,13 @@ describe("channel routing in the controller", () => {
   it("refuses to guess a requirement projection for an unknown policy version", () => {
     expect(requirementProjectionFor(PR_REVIEW_GATE_POLICY_VERSION)).toBe("review-exclusive-v5");
     expect(requirementProjectionFor(PR_REVIEW_GATE_INSTALLED_POLICY_VERSION)).toBe("review-exclusive-v5");
+    expect(requirementProjectionFor("sayhear-pr-review-gate:v8")).toBe("review-exclusive-v5");
+    expect(requirementProjectionFor("sayhear-pr-review-gate:v6")).toBe("review-exclusive-v5");
     expect(requirementProjectionFor("sayhear-pr-review-gate:v5")).toBe("review-exclusive-v5");
     expect(requirementProjectionFor("sayhear-pr-review-gate:v4")).toBe("review-inclusive-v4");
+    // v7 was reviewed on main but never installed, so it never wrote a receipt.
     expect(() => requirementProjectionFor("sayhear-pr-review-gate:v7")).toThrow();
+    expect(() => requirementProjectionFor("sayhear-pr-review-gate:v10")).toThrow();
   });
 
   it("exempts a protected path once the approval names it", () => {
@@ -560,6 +564,22 @@ describe("channel routing in the controller", () => {
     // The root channel keeps its historical deferred auto-merge behavior.
     expect(mergeActionFor(humanBinding("legacy-root"), { mergeable: null, mergeable_state: "unknown" })).toBe("arm-auto-merge");
     expect(mergeActionFor(humanBinding("unknown"), {})).toBe("arm-auto-merge");
+    // Under merge-queue integration the queue performs the merge, so both
+    // channels enter the queue instead of pinning a merge commit.
+    expect(mergeActionFor(browser, { mergeable: true, mergeable_state: "clean" }, "merge-queue")).toBe("enqueue");
+    expect(mergeActionFor(humanBinding("legacy-root"), { mergeable: true, mergeable_state: "clean" }, "merge-queue")).toBe("enqueue");
+    // A not-yet-clean PR is never judged clean just because the queue exists.
+    expect(mergeActionFor(browser, { mergeable: null, mergeable_state: "unknown" }, "merge-queue")).toBe("wait");
+    expect(mergeActionFor(humanBinding("legacy-root"), { mergeable: false, mergeable_state: "dirty" }, "merge-queue")).toBe("wait");
+    // Under serialized merge the controller pins one merge against the current
+    // main, so an out-of-date base that reports `behind` still merges, and the
+    // deferred intent is never armed on either channel.
+    expect(mergeActionFor(browser, { mergeable: true, mergeable_state: "behind" }, "serialized-merge")).toBe("merge-now");
+    expect(mergeActionFor(humanBinding("legacy-root"), { mergeable: true, mergeable_state: "behind" }, "serialized-merge")).toBe("merge-now");
+    expect(mergeActionFor(humanBinding("legacy-root"), { mergeable: true, mergeable_state: "clean" }, "serialized-merge")).toBe("merge-now");
+    expect(mergeActionFor(browser, { mergeable: false, mergeable_state: "dirty" }, "serialized-merge")).toBe("wait");
+    expect(mergeActionFor(humanBinding("legacy-root"), { mergeable: true, mergeable_state: "blocked" }, "serialized-merge")).toBe("wait");
+    expect(mergeActionFor(browser, { mergeable: null, mergeable_state: "unknown" }, "serialized-merge")).toBe("wait");
   });
 
   it("performs the browser merge at the call site without ever arming deferred auto-merge", async () => {
@@ -593,6 +613,46 @@ describe("channel routing in the controller", () => {
     );
     expect(requests).toContain("POST /graphql");
     expect(requests.some((call) => call.endsWith("/pulls/400/merge"))).toBe(false);
+  });
+
+  it("enters the merge queue on the reviewed head instead of pinning a merge", async () => {
+    const calls: Array<{ path: string; body: unknown }> = [];
+    function queueApi(existingEntry: boolean): GitHubApi {
+      return {
+        request: async <T>(path: string, options?: { method?: string; body?: unknown }) => {
+          calls.push({ path, body: options?.body });
+          expect(path).toBe("/graphql");
+          const query = String((options?.body as { query?: string } | undefined)?.query ?? "");
+          return (query.includes("EnqueuePullRequestInput")
+            ? { data: { enqueuePullRequest: { mergeQueueEntry: { id: "MQE_1", state: "AWAITING_CHECKS" } } } }
+            : { data: { repository: { pullRequest: { mergeQueueEntry: existingEntry ? { id: "MQE_1" } : null } } } }) as T;
+        },
+        pages: async <T>() => [] as T[],
+        bytes: async () => new Uint8Array(),
+      };
+    }
+    const report = { pullRequestNumber: 400, headSha: HEAD };
+
+    await applyMergeAction(
+      bindingConfig(new MemoryBrowserStore(), [], queueApi(false)), report, { allow_merge_commit: true },
+      pullRequestFixture(AUTHOR), "enqueue",
+    );
+
+    const mutations = calls.filter((call) => String((call.body as { query?: string }).query).includes("EnqueuePullRequestInput"));
+    expect(mutations).toHaveLength(1);
+    expect((mutations[0]!.body as { variables?: unknown }).variables).toEqual({
+      input: { pullRequestId: "PR_node", expectedHeadOid: HEAD },
+    });
+
+    // Idempotent: an entry that already exists is left alone, and nothing is
+    // ever sent to the pinned merge endpoint on this path.
+    calls.length = 0;
+    await applyMergeAction(
+      bindingConfig(new MemoryBrowserStore(), [], queueApi(true)), report, { allow_merge_commit: true },
+      pullRequestFixture(AUTHOR), "enqueue",
+    );
+    expect(calls).toHaveLength(1);
+    expect(calls.every((call) => call.path === "/graphql")).toBe(true);
   });
 
   it("re-issues the pinned browser merge on recovery but never merges a revoked approval", async () => {
@@ -630,9 +690,9 @@ describe("channel routing in the controller", () => {
     expect(requests).toEqual([]);
   });
 
-  it("exposes the v8 policy and unchanged browser capability in the build identity", () => {
+  it("exposes the v9 policy and unchanged browser capability in the build identity", () => {
     const identity = controllerBuildIdentity();
-    expect(identity.policyVersion).toBe("sayhear-pr-review-gate:v8");
+    expect(identity.policyVersion).toBe("sayhear-pr-review-gate:v9");
     expect(PR_REVIEW_REPORT_VERSION).toBe("sayhear-pr-review-report:v4");
     expect(identity.browserApprovalVersion).toBe("sayhear-pr-browser-approval:v1");
   });

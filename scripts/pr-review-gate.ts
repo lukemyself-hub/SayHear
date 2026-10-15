@@ -13,16 +13,75 @@ import {
 } from "./daily-release-validation.ts";
 
 // v7 was reviewed and landed on main but never installed, so no signed record
-// can carry it. v6 is the last installed identity; its receipts stay readable.
-export const PR_REVIEW_GATE_POLICY_VERSION = "sayhear-pr-review-gate:v8";
+// can carry it. v8 is the installed identity and v6 the one before it; both
+// stay declared so their receipts keep reading back while v9 gates new work.
+export const PR_REVIEW_GATE_POLICY_VERSION = "sayhear-pr-review-gate:v9";
 export const PR_REVIEW_GATE_LEGACY_POLICY_VERSION = "sayhear-pr-review-gate:v4";
 export const PR_REVIEW_GATE_PREVIOUS_POLICY_VERSION = "sayhear-pr-review-gate:v5";
-export const PR_REVIEW_GATE_INSTALLED_POLICY_VERSION = "sayhear-pr-review-gate:v6";
+export const PR_REVIEW_GATE_INSTALLED_POLICY_VERSION = "sayhear-pr-review-gate:v8";
+export const PR_REVIEW_GATE_OLDER_INSTALLED_POLICY_VERSION = "sayhear-pr-review-gate:v6";
 export const PR_REVIEW_REPORT_VERSION = "sayhear-pr-review-report:v4";
 export const SAYHEAR_REPOSITORY_ID = 1312399710;
 export const SAYHEAR_REPOSITORY_NAME = "lukemyself-hub/SayHear";
 export const PR_VALIDATE_WORKFLOW_PATH = ".github/workflows/pr-validate.yml";
 export const PR_REVIEW_GATE_CHECK_NAME = "pr-review-gate";
+
+/**
+ * How a PR proves it integrates with the current main before it merges.
+ *
+ * `up-to-date-base` requires the PR base to equal main.
+ *
+ * `merge-queue` binds the approval to the head SHA and hands the merged result
+ * to GitHub's merge queue, which builds and validates it on the latest main.
+ *
+ * `serialized-merge` also binds the approval to the head SHA and blocks only on
+ * a real conflict, but the controller issues the merge itself. It needs
+ * `requiresUpToDate` turned off, or GitHub refuses every stale-base merge.
+ */
+export type IntegrationMode =
+  | "up-to-date-base"
+  | "merge-queue"
+  | "serialized-merge";
+
+/**
+ * Who is allowed to update the default branch.
+ *
+ * `serialized-merge` merges a stale-base PR against whatever main is at the
+ * moment of the merge request. GitHub recomputes that merge then, so the merge
+ * itself cannot miss intervening commits, but nothing stops another writer from
+ * advancing main in the window between the controller's last read and its merge
+ * request. The repository therefore has to prove that the only actor able to
+ * update main is the approval App.
+ *
+ * Only rulesets that restrict updates to the default branch count. A ruleset
+ * that happens to name the App but governs tags, another branch, or a different
+ * rule cannot satisfy this, and anything unreadable fails closed.
+ */
+export type MainWriterGuard = Readonly<{
+  /** False when the rulesets could not be read; the guard then never passes. */
+  readable: boolean;
+  /** At least one active ruleset restricts updates to the default branch. */
+  restrictsDefaultBranchUpdates: boolean;
+  /** Actor ids that may bypass such a restriction, deduplicated and sorted. */
+  bypassActorIds: readonly number[];
+  /**
+   * False when GitHub withheld the bypass set from this App.
+   *
+   * The list endpoint behind `/rulesets` answers with summaries only, and the
+   * detail endpoint returns `bypass_actors` only to a caller holding
+   * administration access. A missing set is therefore unproven, never empty:
+   * the guard refuses to read "I could not see the bypass actors" as "there are
+   * none".
+   */
+  bypassActorsEnumerated: boolean;
+  /**
+   * GitHub's own `current_user_can_bypass` for the approval App on the
+   * restricting ruleset, kept for the audit trail. Null when GitHub omits it.
+   */
+  appBypassMode: string | null;
+  /** Ids of the rulesets that contributed, for the audit trail. */
+  rulesetIds: readonly number[];
+}>;
 
 const FIXED_BASELINE_IDS = new Set<string>(FIXED_PR_CI_BASELINE);
 const ENUMERATED_OFFLINE_EVALUATION_PATHS = new Set([
@@ -170,6 +229,15 @@ export type PrReviewGateInput = Readonly<{
     headSha: string;
     baseSha: string;
     mergeSha: string | null;
+    /**
+     * GitHub's mergeability for this PR against the *current* base tip. The
+     * merge-queue integration mode reads this instead of comparing
+     * `baseSha` to `repository.defaultBranchSha`, so an approval is not
+     * invalidated merely because main moved: only a real conflict or an
+     * unknown mergeability state blocks the merge candidate.
+     */
+    mergeable?: boolean | null;
+    mergeableState?: string | null;
     baseRef: string;
     headRepositoryId: number | null;
     authorId: number;
@@ -238,6 +306,35 @@ export type PrReviewGateInput = Readonly<{
     anotherApprovalInFlight: boolean;
     productionMergeAuthorized: boolean | null;
     ordinaryMergeTriggersProduction: boolean | null;
+    /**
+     * How integration against the current main is proven before a merge.
+     * `up-to-date-base` is the historical rule: the PR base must equal main.
+     * `merge-queue` binds the approval to the head SHA and lets the GitHub
+     * merge queue build and validate the merged result on the latest main.
+     * `serialized-merge` binds the approval to the head SHA too and blocks only
+     * on a real conflict, but the controller issues the merge itself. It needs
+     * `requiresUpToDate` turned off for GitHub to accept a stale base.
+     * The mode comes from the trusted controller config, never from PR text.
+     * An absent value keeps `up-to-date-base`, so a runtime that predates this
+     * field can never relax a check by omission.
+     */
+    integrationMode?: IntegrationMode;
+    /**
+     * Whether the repository actually serves a merge queue for the default
+     * branch. `null` and an absent value both mean it could not be read.
+     * Merge-queue mode fails closed unless this is exactly `true`, so a
+     * deployment that turns the mode on without enabling the queue never
+     * reaches a merge.
+     */
+    mergeQueueAvailable?: boolean | null;
+    /**
+     * Who can update the default branch. `serialized-merge` issues the merge
+     * itself against whatever main is at that moment, so it needs this guard to
+     * prove that no other writer can advance main first. An absent or `null`
+     * value means the guard was not verified, and `serialized-merge` fails
+     * closed rather than assuming the default branch is App-only.
+     */
+    mainWriterGuard?: MainWriterGuard | null;
   }>;
 }>;
 
@@ -701,6 +798,19 @@ export function parsePrReviewGateInput(value: unknown): PrReviewGateInput {
       ? null
       : requiredSha(pullRequest.mergeSha, "pullRequest.mergeSha");
 
+  const mergeable = pullRequest.mergeable === null || pullRequest.mergeable === undefined
+    ? null
+    : requiredBoolean(pullRequest.mergeable, "pullRequest.mergeable");
+  const mergeableState = pullRequest.mergeableState === null || pullRequest.mergeableState === undefined
+    ? null
+    : requiredString(pullRequest.mergeableState, "pullRequest.mergeableState");
+  const integrationMode = optionalIntegrationMode(runtime.integrationMode);
+  const mergeQueueAvailable =
+    runtime.mergeQueueAvailable === undefined || runtime.mergeQueueAvailable === null
+      ? undefined
+      : requiredBoolean(runtime.mergeQueueAvailable, "runtime.mergeQueueAvailable");
+  const mainWriterGuard = optionalMainWriterGuard(runtime.mainWriterGuard);
+
   const installed = runtime.reviewAppInstalledForRepository;
   if (installed !== null && typeof installed !== "boolean") {
     throw new Error("runtime.reviewAppInstalledForRepository must be boolean or null.");
@@ -752,6 +862,8 @@ export function parsePrReviewGateInput(value: unknown): PrReviewGateInput {
       headSha: requiredSha(pullRequest.headSha, "pullRequest.headSha"),
       baseSha: requiredSha(pullRequest.baseSha, "pullRequest.baseSha"),
       mergeSha,
+      mergeable,
+      mergeableState,
       baseRef: requiredString(pullRequest.baseRef, "pullRequest.baseRef"),
       headRepositoryId:
         pullRequest.headRepositoryId === null
@@ -840,8 +952,128 @@ export function parsePrReviewGateInput(value: unknown): PrReviewGateInput {
       ),
       productionMergeAuthorized: productionAuthorized,
       ordinaryMergeTriggersProduction: productionMerge,
+      ...(integrationMode === undefined ? {} : { integrationMode }),
+      ...(mergeQueueAvailable === undefined ? {} : { mergeQueueAvailable }),
+      ...(mainWriterGuard === undefined ? {} : { mainWriterGuard }),
     },
   };
+}
+
+function optionalMainWriterGuard(
+  value: unknown,
+): PrReviewGateInput["runtime"]["mainWriterGuard"] {
+  if (value === undefined || value === null) return undefined;
+  if (!isRecord(value)) throw new Error("runtime.mainWriterGuard must be an object.");
+  const bypassActorIds = parseNumberArrayOrEmpty(
+    value.bypassActorIds,
+    "runtime.mainWriterGuard.bypassActorIds",
+  );
+  const rulesetIds = parseNumberArrayOrEmpty(
+    value.rulesetIds,
+    "runtime.mainWriterGuard.rulesetIds",
+  );
+  return {
+    readable: requiredBoolean(value.readable, "runtime.mainWriterGuard.readable"),
+    restrictsDefaultBranchUpdates: requiredBoolean(
+      value.restrictsDefaultBranchUpdates,
+      "runtime.mainWriterGuard.restrictsDefaultBranchUpdates",
+    ),
+    bypassActorIds,
+    // Required, so a snapshot that forgets to prove the bypass set fails the
+    // parse instead of silently looking like an App-only main.
+    bypassActorsEnumerated: requiredBoolean(
+      value.bypassActorsEnumerated,
+      "runtime.mainWriterGuard.bypassActorsEnumerated",
+    ),
+    appBypassMode: optionalStringOrNull(
+      value.appBypassMode,
+      "runtime.mainWriterGuard.appBypassMode",
+    ),
+    rulesetIds,
+  };
+}
+
+function optionalStringOrNull(value: unknown, label: string): string | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "string") throw new Error(`${label} must be a string.`);
+  return value;
+}
+
+function optionalIntegrationMode(
+  value: unknown,
+): PrReviewGateInput["runtime"]["integrationMode"] {
+  if (value === undefined || value === null) return undefined;
+  return parseIntegrationMode(value);
+}
+
+/**
+ * The one place an integration mode is accepted. The mode comes from the
+ * root-owned controller config, never from PR text or a comment, and an absent
+ * value keeps the historical `up-to-date-base` rule so nothing relaxes by
+ * omission.
+ */
+export function parseIntegrationMode(value: unknown): IntegrationMode {
+  if (value === undefined || value === null || value === "up-to-date-base") {
+    return "up-to-date-base";
+  }
+  if (value === "merge-queue") return "merge-queue";
+  if (value === "serialized-merge") return "serialized-merge";
+  throw new Error(
+    `integrationMode must be "up-to-date-base", "merge-queue", or "serialized-merge".`,
+  );
+}
+
+/**
+ * The trusted integration mode for this snapshot. An absent value keeps the
+ * historical `up-to-date-base` rule, so nothing relaxes by omission.
+ */
+export function integrationModeOf(
+  input: Pick<PrReviewGateInput, "runtime">,
+): IntegrationMode {
+  return input.runtime.integrationMode ?? "up-to-date-base";
+}
+
+/**
+ * Whether the approval binds to the head SHA instead of demanding the PR base
+ * equal main. Both head-bound modes survive main moving on its own. They differ
+ * only in who performs the merge and what the repository has to provide.
+ */
+function headBoundApproval(input: Pick<PrReviewGateInput, "runtime">): boolean {
+  return integrationModeOf(input) !== "up-to-date-base";
+}
+
+/**
+ * Why the default-branch writer guard does not hold, or `null` when it does.
+ *
+ * The guard only passes when the repository restricts updates to the default
+ * branch and the single actor allowed to bypass that restriction is this
+ * repository's approval App. Every other outcome -- unreadable rulesets, no
+ * update restriction at all, an extra human or team, or a different App -- is a
+ * reason to stop, because each of them leaves a writer that could move main
+ * between the snapshot and the merge.
+ *
+ * The bypass set has to be enumerated, not merely empty. GitHub hides
+ * `bypass_actors` from callers without administration access, and an empty
+ * unreadable set would otherwise be indistinguishable from a ruleset that
+ * genuinely grants nobody a bypass.
+ */
+function mainWriterGuardReason(
+  input: Pick<PrReviewGateInput, "runtime">,
+  policy: TrustedPrReviewPolicy,
+): string | null {
+  const guard = input.runtime.mainWriterGuard ?? null;
+  if (guard === null || !guard.readable) return "main_writer_guard_unreadable";
+  if (!guard.restrictsDefaultBranchUpdates) return "main_writer_guard_missing";
+  const approvalAppId = policy.reviewAppId;
+  if (approvalAppId === null) return "main_writer_guard_missing";
+  if (!guard.bypassActorsEnumerated) {
+    return "main_writer_guard_bypass_actors_unreadable";
+  }
+  const bypass = guard.bypassActorIds;
+  if (bypass.length !== 1 || bypass[0] !== approvalAppId) {
+    return "main_writer_guard_bypass_actors";
+  }
+  return null;
 }
 
 export function requirementDigest(
@@ -1204,7 +1436,34 @@ export function evaluatePrReviewGate(
       message: "The PR is Draft, targets a different branch, or comes from another repository.",
     });
   }
-  if (
+  if (headBoundApproval(input)) {
+    // The approval binds to the head SHA and survives main moving, so the
+    // candidate only stops for a confirmed conflict or for a mergeability
+    // GitHub has not reported yet. The exact `clean`/`behind` state is
+    // enforced where the merge actually happens (`mergeActionFor`), because
+    // this check run is itself a required check: it stays `failure` until the
+    // merge candidate is reached, which keeps GitHub reporting `blocked` for
+    // a healthy PR even after the App review lands.
+    if (input.pullRequest.mergeable === false) {
+      return outcome(input, "awaiting_verification", {
+        code: "pull_request_conflict",
+        message: "The PR conflicts with the current main and requires a fix.",
+      });
+    }
+    if (input.pullRequest.mergeable !== true) {
+      return outcome(input, "awaiting_verification", {
+        code: "mergeability_unknown",
+        message:
+          "GitHub has not reported whether the PR can merge into the current main.",
+      });
+    }
+    if (input.pullRequest.mergeSha === null) {
+      return outcome(input, "awaiting_verification", {
+        code: "base_or_merge_ref_changed",
+        message: "The PR merge ref for the current main is not available.",
+      });
+    }
+  } else if (
     input.pullRequest.baseSha !== input.repository.defaultBranchSha ||
     input.pullRequest.mergeSha === null
   ) {
@@ -1322,14 +1581,62 @@ export function evaluatePrReviewGate(
       message: "The current main branch protection could not be read.",
     });
   }
+  // Merge-queue integration replaces the up-to-date-base rule with a queue that
+  // builds and tests the merged result, so the queue itself has to exist. A
+  // deployment that turns the mode on before the repository serves a queue for
+  // main stops here instead of merging against a base nobody validated.
+  if (
+    integrationModeOf(input) === "merge-queue" &&
+    input.runtime.mergeQueueAvailable !== true
+  ) {
+    return outcome(input, "human_decision", {
+      code: "merge_queue_unavailable",
+      message:
+        "Merge-queue integration is configured, but main does not enforce a merge queue.",
+    });
+  }
+  // Serialized-merge lets the controller merge a PR whose head is behind main,
+  // so GitHub must stop requiring an up-to-date branch. Leaving it on would
+  // stall every stale-base merge with no visible reason.
+  if (
+    integrationModeOf(input) === "serialized-merge" &&
+    protection.requiresUpToDate
+  ) {
+    return outcome(input, "human_decision", {
+      code: "requires_up_to_date_still_enabled",
+      message:
+        "Serialized-merge integration is configured, but main still requires branches to be up to date before merging.",
+    });
+  }
+  // Serialized-merge performs the merge itself and only refuses a real
+  // conflict, so main may move between the snapshot and the merge request.
+  // GitHub recomputes the merge against the live main, but it cannot undo
+  // another writer's push, so the repository has to show that main is
+  // updatable only through the approval App. Anything unverifiable stops here.
+  if (integrationModeOf(input) === "serialized-merge") {
+    const guard = mainWriterGuardReason(input, policy);
+    if (guard !== null) {
+      return outcome(input, "human_decision", {
+        code: guard,
+        message:
+          "Serialized-merge integration needs main to be updatable only by the approval App, and that could not be verified.",
+      });
+    }
+  }
   if (
     !protection.protected ||
     protection.branch !== policy.defaultBranch ||
-    !protection.requiresUpToDate ||
+    (integrationModeOf(input) === "up-to-date-base" && !protection.requiresUpToDate) ||
     !protection.dismissesStaleReviews ||
     !protection.enforcesAdmins ||
     protection.requiredApprovingReviews !== 1 ||
-    protection.bypassActorIds.length > 0 ||
+    // The approval App has to be able to merge, so it may legitimately appear as
+    // a ruleset bypass actor. Any *other* bypass actor is a human or a second
+    // App that could move main outside this controller.
+    (integrationModeOf(input) !== "serialized-merge" &&
+      protection.bypassActorIds.some(
+        (actorId) => actorId !== policy.reviewAppId,
+      )) ||
     !hasExactRequiredChecks(
       protection,
       policy.actionsAppId,

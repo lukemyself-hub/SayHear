@@ -16,7 +16,8 @@ const initial: CompletionRecord = {
   identity: { repositoryId: SAYHEAR_REPOSITORY_ID, pullRequestNumber: 339, pullRequestNodeId: "PR_339", headSha: head,
     approvedBaseSha: base, requirementDigest: requirement, baseRepositoryId: SAYHEAR_REPOSITORY_ID, baseRef: "main",
     botActorId: 999, reviewId: 9, appId: 123, policyVersion: PR_REVIEW_GATE_POLICY_VERSION,
-    issueNumbers: [337], humanChannel: "app", humanReviewId: 9, epoch: null },
+    issueNumbers: [337], humanChannel: "app", humanReviewId: 9, epoch: null,
+    integrationMode: "up-to-date-base" },
 };
 class MemoryStore implements CompletionStore {
   value: CompletionRecord = initial;
@@ -217,6 +218,11 @@ describe("durable PR completion", () => {
     await writeFile(resolve(directory, "pr-339.json"), " ".repeat(32_001));
     await expect(store.read(339)).rejects.toThrow("file_untrusted");
     await expect(store.save({ ...initial, phase: "complete" })).rejects.toThrow("schema_invalid");
+  });
+  it("keeps the head-bound integration mode across a signed roundtrip", async () => {
+    const { store } = await signedStore();
+    await store.save({ ...initial, identity: { ...initial.identity, integrationMode: "serialized-merge" } });
+    await expect(store.read(339)).resolves.toMatchObject({ identity: { integrationMode: "serialized-merge" } });
   });
 });
 

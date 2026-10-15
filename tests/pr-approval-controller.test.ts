@@ -5,16 +5,17 @@ import { describe, expect, it } from "vitest";
 import {
   appReviewOutcomeForIdentity,
   collectEvidence,
+  readClosingIssueReferences,
+  requestDeferredMerge,
+  AGENT_IDENTITY,
+  LUKE_IDENTITY,
+  anotherApprovalInFlightFor,
   completeIssueAfterApproval,
   completeLinkedIssuesAfterMerge,
   forEachLinkedIssue,
   handoffStalePullRequestBase,
   reconcileIssueCompletion,
   resolveLinkedIssues,
-  readClosingIssueReferences,
-  requestDeferredMerge,
-  AGENT_IDENTITY,
-  LUKE_IDENTITY,
   createGitHubAppJwt,
   GitHubApiError,
   GitHubRestClient,
@@ -31,7 +32,10 @@ import {
   readBranchProtection,
   readCurrentPullRequestMergeSha,
   readIssueDependencies,
+  readMainWriterGuard,
+  readMergeQueueAvailability,
   readRepositoryMergeSettings,
+  parseIntegrationMode,
   requestProtectedMerge,
   type GitHubApi,
   type GitHubComment,
@@ -165,30 +169,44 @@ describe("migration evidence collection", () => {
     changed_files: 1,
   } satisfies Parameters<typeof collectEvidence>[2];
 
-  function storedZipEntry(name: string, content: Uint8Array): Uint8Array {
-    const nameBytes = Buffer.from(name, "utf8");
-    const local = Buffer.alloc(30 + nameBytes.length);
-    local.writeUInt32LE(0x04034b50, 0);
-    local.writeUInt16LE(20, 4);
-    local.writeUInt32LE(content.byteLength, 18);
-    local.writeUInt32LE(content.byteLength, 22);
-    local.writeUInt16LE(nameBytes.length, 26);
-    nameBytes.copy(local, 30);
-    const central = Buffer.alloc(46 + nameBytes.length);
-    central.writeUInt32LE(0x02014b50, 0);
-    central.writeUInt16LE(20, 4);
-    central.writeUInt16LE(20, 6);
-    central.writeUInt32LE(content.byteLength, 20);
-    central.writeUInt32LE(content.byteLength, 24);
-    central.writeUInt16LE(nameBytes.length, 28);
-    nameBytes.copy(central, 46);
+  function storedZipArchive(
+    entries: readonly Readonly<{ name: string; content: Uint8Array }>[],
+  ): Uint8Array {
+    const localParts: Buffer[] = [];
+    const centralParts: Buffer[] = [];
+    let localOffset = 0;
+    for (const entry of entries) {
+      const nameBytes = Buffer.from(entry.name, "utf8");
+      const size = entry.content.byteLength;
+      const local = Buffer.alloc(30 + nameBytes.length);
+      local.writeUInt32LE(0x04034b50, 0);
+      local.writeUInt16LE(20, 4);
+      local.writeUInt32LE(size, 18);
+      local.writeUInt32LE(size, 22);
+      local.writeUInt16LE(nameBytes.length, 26);
+      nameBytes.copy(local, 30);
+      localParts.push(local, Buffer.from(entry.content));
+
+      const central = Buffer.alloc(46 + nameBytes.length);
+      central.writeUInt32LE(0x02014b50, 0);
+      central.writeUInt16LE(20, 4);
+      central.writeUInt16LE(20, 6);
+      central.writeUInt32LE(size, 20);
+      central.writeUInt32LE(size, 24);
+      central.writeUInt16LE(nameBytes.length, 28);
+      nameBytes.copy(central, 46);
+      central.writeUInt32LE(localOffset, 42);
+      centralParts.push(central);
+      localOffset += local.length + size;
+    }
+    const central = Buffer.concat(centralParts);
     const end = Buffer.alloc(22);
     end.writeUInt32LE(0x06054b50, 0);
-    end.writeUInt16LE(1, 8);
-    end.writeUInt16LE(1, 10);
+    end.writeUInt16LE(entries.length, 8);
+    end.writeUInt16LE(entries.length, 10);
     end.writeUInt32LE(central.length, 12);
-    end.writeUInt32LE(local.length + content.byteLength, 16);
-    return Buffer.concat([local, Buffer.from(content), central, end]);
+    end.writeUInt32LE(localOffset, 16);
+    return new Uint8Array(Buffer.concat([...localParts, central, end]));
   }
 
   function collector(options: {
@@ -226,7 +244,19 @@ describe("migration evidence collection", () => {
         ...(migrationResult ? [migrationResult] : []),
       ],
     }));
-    const archive = storedZipEntry("vitest-report.json", reportBytes);
+    // The collector binds the run to the checkout it actually validated, so
+    // every artifact carries both the report and the validated ref identity.
+    const checkoutBytes = Buffer.from(JSON.stringify({
+      event: "pull_request",
+      pullRequestNumber: 321,
+      headSha: HEAD_SHA,
+      baseSha: BASE_SHA,
+      checkoutSha: MERGE_SHA,
+    }), "utf8");
+    const archive = storedZipArchive([
+      { name: "vitest-report.json", content: new Uint8Array(reportBytes) },
+      { name: "pr-validate-source.json", content: new Uint8Array(checkoutBytes) },
+    ]);
     const validateCheck = {
       id: 9001,
       name: "validate",
@@ -396,6 +426,7 @@ describe("PR approval controller", () => {
     "stale_review",
     "github_context_unavailable",
     "incomplete_diff",
+    "mergeability_unknown",
   ])("keeps the Issue occupied while review context is unavailable: %s", (code) => {
     expect(isReviewStillPending({ workflowStatus: "completed" }, {
       outcome: "awaiting_verification",
@@ -1024,6 +1055,32 @@ describe("PR approval controller", () => {
     );
   });
 
+  it("accepts a PR merge ref built against the latest main while the PR base is stale", async () => {
+    const currentMainSha = "f".repeat(40);
+    const pullRequest = {
+      number: 321,
+      base: { ref: "main", sha: BASE_SHA },
+      head: { sha: HEAD_SHA, repo: { id: SAYHEAR_REPOSITORY_ID } },
+      merge_commit_sha: null,
+    };
+    const api = new StubApi((path) => {
+      if (path.endsWith("/git/ref/pull/321/merge")) {
+        return {
+          ref: "refs/pull/321/merge",
+          object: { type: "commit", sha: MERGE_SHA },
+        };
+      }
+      if (path.endsWith(`/git/commits/${MERGE_SHA}`)) {
+        return { parents: [{ sha: currentMainSha }, { sha: HEAD_SHA }] };
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+
+    await expect(
+      readCurrentPullRequestMergeSha(api, pullRequest, currentMainSha),
+    ).resolves.toBe(MERGE_SHA);
+  });
+
   it("fails closed when the PR merge ref is absent or has stale parents", async () => {
     const pullRequest = {
       number: 321,
@@ -1134,7 +1191,7 @@ describe("PR approval controller", () => {
     await expect(readIssueDependencies(incomplete, 42)).resolves.toBeNull();
   });
 
-  it("reads every required branch rule and fails closed when bypass actors cannot be read", async () => {
+  it("reads every required branch rule and fails closed when the rulesets cannot be read", async () => {
     const protection = {
       required_status_checks: {
         strict: true,
@@ -1151,6 +1208,29 @@ describe("PR approval controller", () => {
     };
     const readable = new StubApi((path) =>
       path.endsWith("/branches/main/protection") ? protection : {},
+    );
+    const appOnlyBypass = new StubApi(
+      (path) =>
+        path.endsWith("/branches/main/protection")
+          ? protection
+          : path.includes("/rulesets/9?")
+            ? {
+                id: 9,
+                bypass_actors: [
+                  { actor_id: 98765, actor_type: "Integration" },
+                ],
+              }
+            : {},
+      (path) => (path.includes("/rulesets") ? [{ id: 9 }] : []),
+    );
+    const hiddenBypass = new StubApi(
+      (path) =>
+        path.endsWith("/branches/main/protection")
+          ? protection
+          : path.includes("/rulesets/9?")
+            ? { id: 9, current_user_can_bypass: "never" }
+            : {},
+      (path) => (path.includes("/rulesets") ? [{ id: 9 }] : []),
     );
     const unreadableRulesets = new StubApi(
       (path) =>
@@ -1173,10 +1253,198 @@ describe("PR approval controller", () => {
       ],
       bypassActorIds: [],
     });
+    // GitHub returns `bypass_actors` only to a caller with administration
+    // access. The rule that matters here is only "a second actor can move
+    // main", so an extra bypass actor is reported and the gate decides.
+    await expect(readBranchProtection(appOnlyBypass)).resolves.toMatchObject({
+      readable: true,
+      bypassActorIds: [98765],
+    });
+    // A hidden bypass set does not disable every approval. Serialized-merge is
+    // where an unenumerable set fails closed, in `readMainWriterGuard`.
+    await expect(readBranchProtection(hiddenBypass)).resolves.toMatchObject({
+      readable: true,
+      bypassActorIds: [],
+    });
     await expect(readBranchProtection(unreadableRulesets)).resolves.toMatchObject({
       readable: false,
       protected: true,
     });
+  });
+
+  it("keeps the strict up-to-date rule unless the config opts into the queue", () => {
+    expect(parseIntegrationMode(undefined)).toBe("up-to-date-base");
+    expect(parseIntegrationMode(null)).toBe("up-to-date-base");
+    expect(parseIntegrationMode("up-to-date-base")).toBe("up-to-date-base");
+    expect(parseIntegrationMode("merge-queue")).toBe("merge-queue");
+    expect(parseIntegrationMode("serialized-merge")).toBe("serialized-merge");
+    expect(() => parseIntegrationMode("fast-lane")).toThrow(/integrationMode/);
+  });
+
+  it("lets parallel approvals overlap only under the merge queue", () => {
+    // The pinned path rebases and merges a single PR at a time, so any other
+    // open PR still blocks it.
+    expect(anotherApprovalInFlightFor("up-to-date-base", 0)).toBe(false);
+    expect(anotherApprovalInFlightFor("up-to-date-base", 1)).toBe(true);
+    expect(anotherApprovalInFlightFor("up-to-date-base", 5)).toBe(true);
+    // The queue serializes the merges themselves, so reviews may overlap and
+    // two PRs on the same older main both stay eligible.
+    expect(anotherApprovalInFlightFor("merge-queue", 0)).toBe(false);
+    expect(anotherApprovalInFlightFor("merge-queue", 1)).toBe(false);
+    expect(anotherApprovalInFlightFor("merge-queue", 5)).toBe(false);
+    // Serialized merge pins one merge at a time against the current main but
+    // never rebases, so reviews overlap here too.
+    expect(anotherApprovalInFlightFor("serialized-merge", 0)).toBe(false);
+    expect(anotherApprovalInFlightFor("serialized-merge", 1)).toBe(false);
+    expect(anotherApprovalInFlightFor("serialized-merge", 5)).toBe(false);
+  });
+
+  it("reads main's merge queue and treats an unreadable result as unknown", async () => {
+    const queued = new StubApi((path) => path === "/graphql"
+      ? { data: { repository: { mergeQueue: { id: "MQ_main" } } } }
+      : {});
+    const plain = new StubApi((path) => path === "/graphql"
+      ? { data: { repository: { mergeQueue: null } } }
+      : {});
+    const incomplete = new StubApi((path) => path === "/graphql"
+      ? { data: { repository: {} } }
+      : {});
+    const denied = new StubApi(
+      (path) => {
+        if (path !== "/graphql") return {};
+        throw new GitHubApiError(403, "POST", "/graphql");
+      },
+    );
+
+    await expect(readMergeQueueAvailability(queued)).resolves.toBe(true);
+    await expect(readMergeQueueAvailability(plain)).resolves.toBe(false);
+    await expect(readMergeQueueAvailability(incomplete)).resolves.toBeNull();
+    await expect(readMergeQueueAvailability(denied)).resolves.toBeNull();
+  });
+
+  it("reads who can update main and fails closed on anything unreadable", async () => {
+    const ruleset = (overrides: Record<string, unknown> = {}) => ({
+      id: 7,
+      target: "branch",
+      enforcement: "active",
+      conditions: { ref_name: { include: ["~DEFAULT_BRANCH"], exclude: [] } },
+      rules: [{ type: "update" }],
+      bypass_actors: [{ actor_id: 98765, actor_type: "Integration" }],
+      current_user_can_bypass: "always",
+      ...overrides,
+    });
+    // GitHub's list endpoint answers with summaries only -- no conditions, no
+    // rules, and no bypass actors -- so the guard has to fetch each detail.
+    // These stubs reproduce that split: the list feeds `rulesets`, the details
+    // map feeds `GET /rulesets/{id}`, and a list-only stub can never pass.
+    const api = (
+      rulesets: readonly unknown[],
+      details: ReadonlyMap<number, unknown> = new Map(),
+    ) =>
+      new StubApi(
+        (path) => {
+          const match = /\/rulesets\/(\d+)\?/.exec(path);
+          return match ? details.get(Number(match[1])) ?? {} : {};
+        },
+        (path) => (path.includes("/rulesets") ? [...rulesets] : []),
+      );
+    const guard = (
+      overrides: Record<string, unknown> = {},
+      summary: Record<string, unknown> = {},
+    ) => api([{ id: 7, ...summary }], new Map([[7, ruleset(overrides)]]));
+    const denied = new StubApi(
+      () => ({}),
+      (path) => {
+        throw new GitHubApiError(403, "GET", path);
+      },
+    );
+
+    // The guard the gate wants: main's updates are restricted to one App.
+    await expect(
+      readMainWriterGuard(guard(), "main"),
+    ).resolves.toEqual({
+      readable: true,
+      restrictsDefaultBranchUpdates: true,
+      bypassActorIds: [98765],
+      bypassActorsEnumerated: true,
+      appBypassMode: "always",
+      rulesetIds: [7],
+    });
+    // Extra bypass actors are reported truthfully; the gate is what refuses them.
+    await expect(
+      readMainWriterGuard(
+        guard({
+          bypass_actors: [
+            { actor_id: 98765, actor_type: "Integration" },
+            { actor_id: 42, actor_type: "User" },
+          ],
+        }),
+        "main",
+      ),
+    ).resolves.toMatchObject({ bypassActorIds: [42, 98765] });
+    // A tag ruleset, another branch, an excluded branch, an inactive ruleset, or
+    // a ruleset without an update rule never restricts updates to main.
+    for (const unrelated of [
+      ruleset({ target: "tag" }),
+      ruleset({ enforcement: "disabled" }),
+      ruleset({ conditions: { ref_name: { include: ["refs/heads/release/*"] } } }),
+      ruleset({ conditions: { ref_name: { include: ["~DEFAULT_BRANCH"], exclude: ["~DEFAULT_BRANCH"] } } }),
+      ruleset({ rules: [{ type: "deletion" }] }),
+    ]) {
+      await expect(
+        readMainWriterGuard(api([{ id: 7 }], new Map([[7, unrelated]])), "main"),
+      ).resolves.toMatchObject({
+        readable: true,
+        restrictsDefaultBranchUpdates: false,
+        bypassActorIds: [],
+      });
+    }
+    // An explicit `refs/heads/main` is the same branch and does count.
+    await expect(
+      readMainWriterGuard(
+        guard({ conditions: { ref_name: { include: ["refs/heads/main"] } } }),
+        "main",
+      ),
+    ).resolves.toMatchObject({
+      restrictsDefaultBranchUpdates: true,
+      bypassActorIds: [98765],
+    });
+    // An unreadable ruleset list is never treated as App-only.
+    await expect(readMainWriterGuard(denied, "main")).resolves.toEqual({
+      readable: false,
+      restrictsDefaultBranchUpdates: false,
+      bypassActorIds: [],
+      bypassActorsEnumerated: false,
+      appBypassMode: null,
+      rulesetIds: [],
+    });
+    // A list-only shape never passes: the summaries carry none of the fields the
+    // guard reads, so every ruleset needs its detail, and a missing or foreign
+    // detail is a read failure rather than a silent skip.
+    await expect(
+      readMainWriterGuard(api([{ id: 7 }]), "main"),
+    ).resolves.toMatchObject({ readable: false });
+    await expect(
+      readMainWriterGuard(api([{ id: 7 }], new Map([[8, ruleset()]])), "main"),
+    ).resolves.toMatchObject({ readable: false });
+    // A hidden bypass set is reported as unproven rather than as unreadable: the
+    // restrictions themselves were read, so the gate can name the missing proof.
+    await expect(
+      readMainWriterGuard(guard({ bypass_actors: undefined }), "main"),
+    ).resolves.toMatchObject({
+      readable: true,
+      restrictsDefaultBranchUpdates: true,
+      bypassActorIds: [],
+      bypassActorsEnumerated: false,
+      appBypassMode: "always",
+      rulesetIds: [7],
+    });
+    await expect(
+      readMainWriterGuard(guard({ rules: undefined }), "main"),
+    ).resolves.toMatchObject({ readable: false });
+    await expect(
+      readMainWriterGuard(guard({ conditions: undefined }), "main"),
+    ).resolves.toMatchObject({ readable: false });
   });
 
   it("honors only the maintainer's latest pause command", () => {
@@ -1282,7 +1550,7 @@ describe("stale main Issue handoff", () => {
     const pull = {
       number: 333, state: "open", draft: false, title: "Deliver #42 #43 #44 #45",
       body: "本 PR 不关闭也不修改 #44。", base: { ref: "main", sha: BASE_SHA },
-      head: { sha: HEAD_SHA, repo: { id: SAYHEAR_REPOSITORY_ID } }, auto_merge: null,
+      head: { sha: HEAD_SHA, repo: { id: SAYHEAR_REPOSITORY_ID } }, auto_merge: null, mergeable: false,
     };
     let main = "f".repeat(40);
     const issues = new Map([42, 43, 44, 45].map((number) => [number, {
@@ -1316,7 +1584,9 @@ describe("stale main Issue handoff", () => {
       }
       if (failLabel === number) throw new Error("label write failed");
       // Labels may change only after the App comment was read back.
-      expect(comments.get(number)!.some((c) => c.user.id === REVIEW_BOT_ACTOR_ID && c.body?.includes("sayhear-pr-base-sync:v1") === true)).toBe(true);
+      expect(comments.get(number)!.some((c) => c.user.id === REVIEW_BOT_ACTOR_ID &&
+        (c.body?.includes("sayhear-pr-base-sync:v1") === true ||
+          c.body?.includes("sayhear-pr-conflict-handoff:v1") === true))).toBe(true);
       const issue = issues.get(number)!;
       if (options.method === "POST") {
         issue.labels.push(...requestBody<{ labels: string[] }>(options).labels.map((name) => ({ name })));
@@ -1329,6 +1599,7 @@ describe("stale main Issue handoff", () => {
       number: pull.number, state: "open", draft: false, title: pull.title, body: pull.body,
       updatedAt: "2026-10-13T00:00:00Z", discussionDigest: "", externalReviewState: "clear",
       headSha: HEAD_SHA, baseSha: BASE_SHA, mergeSha: MERGE_SHA, baseRef: "main",
+      mergeable: false,
       headRepositoryId: SAYHEAR_REPOSITORY_ID, authorId: 101, lastCommitAuthorId: 101,
       linkedIssueNumbers: [42, 43, 44, 45], keepOpenIssueNumbers: [44], issueClosureAmbiguous: false, closingIssueNumbers: [],
       changedFiles: [],
@@ -1357,6 +1628,23 @@ describe("stale main Issue handoff", () => {
       expect(parseRequestChangeHistory(f.comments.get(n)!, 333, REVIEW_BOT_ACTOR_ID).count).toBe(0);
     }
     expect(f.writes.some((w) => /:(44|45):/.test(w))).toBe(false);
+  });
+
+  it("hands a confirmed merge conflict to the original Issue owners without touching exclusions", async () => {
+    const f = fixture();
+    const result = await handoffStalePullRequestBase(f.api, f.expected, actors, {
+      kind: "merge-conflict",
+    });
+
+    expect(result).toMatchObject({ status: "handed_off", issueNumbers: [42, 43] });
+    expect(f.comments.get(42)![0]!.body).toContain("真实合并冲突");
+    expect(f.comments.get(42)![0]!.body).toContain("sayhear-pr-conflict-handoff:v1");
+    expect(f.comments.get(42)![0]!.body).not.toContain("尚未基于当前 main");
+    expect(f.issues.get(42)!.labels.map((label) => label.name).sort()).toEqual([
+      "bug",
+      "ready-for-agent",
+    ]);
+    expect(f.writes.some((write) => /:(44|45):/.test(write))).toBe(false);
   });
 
   it("deduplicates repeated scans, but publishes a new instruction when main advances", async () => {
@@ -1475,34 +1763,44 @@ describe("pre-merge deferral evidence collection", () => {
     externalMvpRelease: false,
   };
 
-  function storedZipEntryWithZeroCrc(name: string, content: Uint8Array): Uint8Array {
-    const nameBytes = Buffer.from(name, "utf8");
-    const size = content.byteLength;
-    const local = Buffer.alloc(30 + nameBytes.length);
-    local.writeUInt32LE(0x04034b50, 0);
-    local.writeUInt16LE(20, 4);
-    local.writeUInt32LE(size, 18);
-    local.writeUInt32LE(size, 22);
-    local.writeUInt16LE(nameBytes.length, 26);
-    nameBytes.copy(local, 30);
-    const central = Buffer.alloc(46 + nameBytes.length);
-    central.writeUInt32LE(0x02014b50, 0);
-    central.writeUInt16LE(20, 4);
-    central.writeUInt16LE(20, 6);
-    central.writeUInt32LE(size, 20);
-    central.writeUInt32LE(size, 24);
-    central.writeUInt16LE(nameBytes.length, 28);
-    nameBytes.copy(central, 46);
-    const centralOffset = local.length + size;
+  function storedZipArchiveWithZeroCrc(
+    entries: readonly Readonly<{ name: string; content: Uint8Array }>[],
+  ): Uint8Array {
+    const localParts: Buffer[] = [];
+    const centralParts: Buffer[] = [];
+    let localOffset = 0;
+    for (const entry of entries) {
+      const nameBytes = Buffer.from(entry.name, "utf8");
+      const size = entry.content.byteLength;
+      const local = Buffer.alloc(30 + nameBytes.length);
+      local.writeUInt32LE(0x04034b50, 0);
+      local.writeUInt16LE(20, 4);
+      local.writeUInt32LE(size, 18);
+      local.writeUInt32LE(size, 22);
+      local.writeUInt16LE(nameBytes.length, 26);
+      nameBytes.copy(local, 30);
+      localParts.push(local, Buffer.from(entry.content));
+
+      const central = Buffer.alloc(46 + nameBytes.length);
+      central.writeUInt32LE(0x02014b50, 0);
+      central.writeUInt16LE(20, 4);
+      central.writeUInt16LE(20, 6);
+      central.writeUInt32LE(size, 20);
+      central.writeUInt32LE(size, 24);
+      central.writeUInt16LE(nameBytes.length, 28);
+      nameBytes.copy(central, 46);
+      central.writeUInt32LE(localOffset, 42);
+      centralParts.push(central);
+      localOffset += local.length + size;
+    }
+    const central = Buffer.concat(centralParts);
     const end = Buffer.alloc(22);
     end.writeUInt32LE(0x06054b50, 0);
-    end.writeUInt16LE(1, 8);
-    end.writeUInt16LE(1, 10);
+    end.writeUInt16LE(entries.length, 8);
+    end.writeUInt16LE(entries.length, 10);
     end.writeUInt32LE(central.length, 12);
-    end.writeUInt32LE(centralOffset, 16);
-    return new Uint8Array(
-      Buffer.concat([local, Buffer.from(content), central, end]),
-    );
+    end.writeUInt32LE(localOffset, 16);
+    return new Uint8Array(Buffer.concat([...localParts, central, end]));
   }
 
   function collector(options: {
@@ -1510,6 +1808,9 @@ describe("pre-merge deferral evidence collection", () => {
     readonly trustedRun?: boolean;
     readonly skippedPath?: string;
     readonly report?: unknown;
+    readonly checkoutSha?: string;
+    readonly integrationMode?: "up-to-date-base" | "merge-queue" | "serialized-merge";
+    readonly checkoutReceipt?: boolean;
   }) {
     const reportBytes = Buffer.from(
       JSON.stringify(
@@ -1524,10 +1825,19 @@ describe("pre-merge deferral evidence collection", () => {
       ),
       "utf8",
     );
-    const archive = storedZipEntryWithZeroCrc(
-      "vitest-report.json",
-      new Uint8Array(reportBytes),
-    );
+    const checkoutBytes = Buffer.from(JSON.stringify({
+      event: "pull_request",
+      pullRequestNumber: 321,
+      headSha: HEAD_SHA,
+      baseSha: BASE_SHA,
+      checkoutSha: options.checkoutSha ?? MERGE_SHA,
+    }), "utf8");
+    const archive = storedZipArchiveWithZeroCrc([
+      { name: "vitest-report.json", content: new Uint8Array(reportBytes) },
+      ...(options.checkoutReceipt === false
+        ? []
+        : [{ name: "pr-validate-source.json", content: new Uint8Array(checkoutBytes) }]),
+    ]);
     const validateCheck = {
       id: 9001,
       name: "validate",
@@ -1584,6 +1894,9 @@ describe("pre-merge deferral evidence collection", () => {
           slug: "sayhear-pr-review-gate",
           productionMergeAuthorized: false,
           ordinaryMergeTriggersProduction: false,
+          ...(options.integrationMode === undefined
+            ? {}
+            : { integrationMode: options.integrationMode }),
         },
         policy: {
           repositoryId: SAYHEAR_REPOSITORY_ID,
@@ -1653,6 +1966,83 @@ describe("pre-merge deferral evidence collection", () => {
     expect(byId.get("provider:privacy-checks")).toMatchObject({
       result: "passed",
     });
+  });
+
+  it("rejects otherwise green CI when a head-bound merge tested an older integration commit", async () => {
+    const { config } = collector({
+      reportPaths: ["tests/runtime-config.test.ts"],
+      checkoutSha: "f".repeat(40),
+      integrationMode: "serialized-merge",
+    });
+    const collected = await collectEvidence(
+      config,
+      321,
+      pullRequest,
+      [{ path: "packages/web/src/page.tsx", status: "modified" }],
+      [],
+      capability,
+      MERGE_SHA,
+      BASE_SHA,
+    );
+
+    expect(
+      collected.evidence.find((entry) => entry.checkId === "baseline:test"),
+    ).toMatchObject({ result: "failed" });
+    expect(
+      collected.evidence.find((entry) => entry.checkId === "baseline:typecheck"),
+    ).toMatchObject({ result: "failed" });
+  });
+
+  it("keeps the pre-existing tolerance while base must still equal main", async () => {
+    // A deployment that never opted into a head-bound mode must not start
+    // demanding the merge-ref receipt: the accepted run metadata already pins
+    // head and base, and the gate refuses a PR whose base is not main.
+    const { config } = collector({
+      reportPaths: ["tests/runtime-config.test.ts"],
+      checkoutReceipt: false,
+    });
+    const collected = await collectEvidence(
+      config,
+      321,
+      pullRequest,
+      [{ path: "packages/web/src/page.tsx", status: "modified" }],
+      [],
+      capability,
+      MERGE_SHA,
+      BASE_SHA,
+    );
+
+    expect(
+      collected.evidence.find((entry) => entry.checkId === "baseline:test"),
+    ).toMatchObject({ result: "passed" });
+    expect(
+      collected.evidence.find((entry) => entry.checkId === "baseline:typecheck"),
+    ).toMatchObject({ result: "passed" });
+  });
+
+  it("rejects green CI that carries no merge-ref receipt in a head-bound mode", async () => {
+    const { config } = collector({
+      reportPaths: ["tests/runtime-config.test.ts"],
+      checkoutReceipt: false,
+      integrationMode: "serialized-merge",
+    });
+    const collected = await collectEvidence(
+      config,
+      321,
+      pullRequest,
+      [{ path: "packages/web/src/page.tsx", status: "modified" }],
+      [],
+      capability,
+      MERGE_SHA,
+      BASE_SHA,
+    );
+
+    expect(
+      collected.evidence.find((entry) => entry.checkId === "baseline:test"),
+    ).toMatchObject({ result: "failed" });
+    expect(
+      collected.evidence.find((entry) => entry.checkId === "baseline:typecheck"),
+    ).toMatchObject({ result: "failed" });
   });
 
   it("records the migration upgrade drill as digest-bound targeted evidence when the report covers its path", async () => {

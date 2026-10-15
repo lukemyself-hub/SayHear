@@ -1,4 +1,6 @@
 import { SignedJsonStore } from "./signed-store.ts";
+import type { IntegrationMode } from "../pr-review-gate.ts";
+import { parseIntegrationMode } from "../pr-review-gate.ts";
 export type CompletionIdentity = Readonly<{
   repositoryId: number;
   pullRequestNumber: number;
@@ -17,6 +19,9 @@ export type CompletionIdentity = Readonly<{
   humanChannel?: "app" | "browser";
   humanReviewId?: number;
   epoch?: string | null;
+  // Absent on every receipt written before merge-queue integration existed,
+  // which all used the pinned-merge path.
+  integrationMode?: IntegrationMode;
 }>;
 export type CompletionPhase = "merge_unconfirmed" | "issues_pending" | "complete" | "needs_attention";
 export type CompletionRecord = Readonly<{
@@ -82,12 +87,23 @@ export function parseCompletionRecord(value: unknown): CompletionRecord {
       humanChannel: identity.humanChannel === "browser" ? "browser" : "app",
       humanReviewId: identity.humanReviewId === undefined ? positive(identity.reviewId) : positive(identity.humanReviewId),
       epoch: identity.epoch === undefined || identity.epoch === null ? null : string(identity.epoch),
+      // One parser decides what an integration mode is. A receipt that stores
+      // anything else is corrupt, not silently "up-to-date-base".
+      integrationMode: completionIntegrationMode(identity.integrationMode),
     },
     phase, attempts: integer(value.attempts), nextRetryAt: integer(value.nextRetryAt),
     reason: value.reason === null ? null : string(value.reason), mergeSha: value.mergeSha === null ? null : digest(value.mergeSha, 40),
   };
   if ((phase === "issues_pending" || phase === "complete") && result.mergeSha === null) throw new Error("completion_schema_invalid");
   return result;
+}
+
+function completionIntegrationMode(value: unknown): IntegrationMode {
+  try {
+    return parseIntegrationMode(value);
+  } catch {
+    throw new Error("completion_schema_invalid");
+  }
 }
 
 export interface CompletionStore {
