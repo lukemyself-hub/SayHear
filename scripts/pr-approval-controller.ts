@@ -379,6 +379,12 @@ type ControllerConfig = Readonly<{
   integrationRefreshStore?: IntegrationRefreshStore;
   browserApprovalStore?: BrowserApprovalStore;
   app: GitHubAppConfig;
+  /**
+   * Operator attestation loaded once at startup next to the App config, so
+   * snapshot and status paths never touch the protected filesystem mid-flow.
+   * Absent means no attestation was presented; unit-test configs omit it.
+   */
+  mainWriterAttestation?: MainWriterAttestation | null;
   policy: TrustedPrReviewPolicy;
   botActorId: number;
   ownerActorId: number;
@@ -1675,6 +1681,7 @@ async function createControllerConfig(
   return {
     api,
     app: config,
+    mainWriterAttestation: await readMainWriterAttestation(),
     policy: {
       repositoryId: SAYHEAR_REPOSITORY_ID,
       repositoryName: SAYHEAR_REPOSITORY_NAME,
@@ -2489,7 +2496,6 @@ export async function readSnapshot(
     openPullRequests,
     mergeQueueAvailable,
     mainWriterGuard,
-    mainWriterAttestation,
   ] = await Promise.all([
       readRepositoryMergeSettings(config.api),
       config.api.request<GitHubPullRequest>(
@@ -2508,10 +2514,8 @@ export async function readSnapshot(
       integrationMode === "serialized-merge"
         ? readMainWriterGuard(config.api, "main")
         : Promise.resolve(null),
-      integrationMode === "serialized-merge"
-        ? readMainWriterAttestation()
-        : Promise.resolve(null),
     ]);
+  const mainWriterAttestation = config.mainWriterAttestation ?? null;
   if (recordNumber(repository, "id") !== SAYHEAR_REPOSITORY_ID) {
     throw new Error("The GitHub App returned a different repository.");
   }
@@ -5283,7 +5287,7 @@ async function statusReport(
   config: ControllerConfig,
 ): Promise<Readonly<Record<string, unknown>>> {
   const integrationMode = parseIntegrationMode(config.app.integrationMode);
-  const [repository, branchProtection, mergeQueueAvailable, mainWriterGuard, mainWriterAttestation] =
+  const [repository, branchProtection, mergeQueueAvailable, mainWriterGuard] =
     await Promise.all([
       readRepositoryMergeSettings(config.api),
       readBranchProtection(config.api),
@@ -5294,8 +5298,8 @@ async function statusReport(
       // guard is reported whatever the mode is: Luke can see exactly what the
       // controller would enforce before he switches `serialized-merge` on.
       readMainWriterGuard(config.api, "main"),
-      readMainWriterAttestation(),
     ]);
+  const mainWriterAttestation = config.mainWriterAttestation ?? null;
   return {
     repository: SAYHEAR_REPOSITORY_NAME,
     integrationMode,

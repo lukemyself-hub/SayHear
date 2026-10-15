@@ -2690,6 +2690,26 @@ describe("guarded serialized controller completion", () => {
     expect(f.writes.some((write) => write.includes("/pulls/321/merge") || write.includes("/labels"))).toBe(false);
   });
 
+  it("carries a startup-loaded attestation into the snapshot without touching the disk", async () => {
+    // The attestation lives in config (loaded once in the privileged launcher
+    // context). Snapshot and status paths must never hit the protected
+    // filesystem mid-flow, or unit runs outside macOS break: realpath
+    // '/Library' does not exist on Linux CI.
+    const attestation = {
+      version: 1 as const,
+      rulesetId: 9,
+      rulesetFingerprint: "a".repeat(64),
+      assertedBypassAppIds: [98765],
+      attestedAt: "2026-10-15T00:00:00.000Z",
+      attestedBy: "test",
+    };
+    const f = await serializedControllerFixture("browser");
+    const snapshot = await readSnapshot({ ...f.config, mainWriterAttestation: attestation }, 321);
+    expect(snapshot.gateInput.runtime.mainWriterAttestation).toEqual(attestation);
+    const unattested = await readSnapshot(f.config, 321);
+    expect(unattested.gateInput.runtime.mainWriterAttestation).toBeUndefined();
+  });
+
   it("never falls back to an older green Validate while a newer trusted run is queued", async () => {
     const f = await serializedControllerFixture("browser");
     f.queueNewerValidation();
