@@ -1,27 +1,57 @@
 {
-  "recordedAt": "2026-10-15T19:32:04.482Z",
+  "recordedAt": "2026-10-15T19:44:00.000Z",
   "baseCommit": "b7fac60d3111726616c571840f33126d9a4b6e41",
-  "evidenceCommit": "084b6c7d4690e2b423c828344cb421333133d488",
-  "workingTree": "The cross-date journey ran on clean commit 084b6c7; only the untracked handoff/log/config files remained. The first launch attempt used the missing default Playwright executable and was cleaned; the successful rerun used the already cached Chrome for Testing. The linked artifact directory includes full browser, database and cleanup evidence.",
+  "evidenceCommit": "00092a3ba1135a7f80ebcdb21770252067d3c84a",
+  "workingTree": "The history and cross-date journeys ran on clean commit 00092a3; only the untracked handoff/log/config files remained. The history retry on c93823f first selected an anchor outside the bounded page and failed; the selector was corrected before the passing run. The linked artifact directories retain browser, database and cleanup evidence.",
   "latestCrossDateRun": {
-    "run": "issue-345-cross-date-6",
+    "run": "issue-345-cross-date-7",
     "profile": "timeline",
-    "commit": "084b6c7d4690e2b423c828344cb421333133d488",
+    "commit": "00092a3ba1135a7f80ebcdb21770252067d3c84a",
     "passed": true,
-    "evidence": "../../../../artifacts/verify/issue-345-cross-date-6",
+    "evidence": "../../../../artifacts/verify/issue-345-cross-date-7",
     "journey": "cross-date",
     "logicalDates": ["2026-07-27", "2026-07-28"],
     "journals": "Both dates have one statement and a current published Journal; each published after two scans, with zero failed scans.",
-    "browserChecks": ["date entry", "date URL", "copy", "export", "view that day's conversation"],
+    "browserChecks": ["date entry", "date URL", "copy exactly matches that date's Journal", "export exactly matches that date's prose and excludes the other date", "view that day's conversation"],
     "proseLengths": {"2026-07-27": 119, "2026-07-28": 120},
     "substitutions": ["test-only file clock re-read per request", "60 second inactivity window", "driver-invoked scans", "local Workflow runtime"],
     "scratchRemoved": true,
-    "cleanupReceipt": "../../../../artifacts/verify/issue-345-cross-date-6/cleanup.json"
+    "cleanupReceipt": "../../../../artifacts/verify/issue-345-cross-date-7/cleanup.json"
+  },
+  "reviewFollowups": {
+    "history": {
+      "run": "issue-345-history-5",
+      "profile": "local",
+      "commit": "00092a3ba1135a7f80ebcdb21770252067d3c84a",
+      "passed": true,
+      "evidence": "../../../../artifacts/verify/issue-345-history-5",
+      "exchangeCount": 30,
+      "storedEvents": 60,
+      "continuedFollowAfterRepin": true,
+      "olderPageAnchorShiftPx": 0.84375,
+      "scratchRemoved": true,
+      "cleanupReceipt": "../../../../artifacts/verify/issue-345-history-5/cleanup.json"
+    },
+    "crossDateCopyExport": {
+      "run": "issue-345-cross-date-7",
+      "profile": "timeline",
+      "passed": true,
+      "copyExact": true,
+      "exportExactAndExcludesOtherDate": true
+    },
+    "failedHistoryAttempt": {
+      "run": "issue-345-history-3",
+      "commit": "c93823f7adbcf95968521578e37973d9e59a5b7a",
+      "passed": false,
+      "reason": "After adding the post-repin exchange, the pagination anchor was still history-05, which fell outside the now-extended first page. The driver timed out looking up the anchor. The next run moved the anchor to visible history-06 and passed.",
+      "scratchRemoved": true,
+      "cleanupReceipt": "../../../../artifacts/verify/issue-345-history-3/cleanup.json"
+    }
   },
   "driverSha256": {
     "scripts/verify-control.mjs": "7f29fbb0b077fe957ba531198a97bb2271ec8f4d70f557aa7e6c0a8de76e0b9a",
     "scripts/verify-fixture.mjs": "fa4d9f22a7afc36c5c56d24e7d296d4f983036b0076ac39131eeae255a134dd6",
-    "scripts/verify-browser.mjs": "9fd2ad298019b831f606bd3d9c19f1b184a76463ca158f611755c67c65a120e6"
+    "scripts/verify-browser.mjs": "4b5ab72614064c209b2498fb9f2b7331778ce0c9b43ade39ce6dc2450ee6bd86"
   },
   "mergedMain": {
     "mergeCommit": "527afb99a9f2e0f2c086e47d3eeb71484a97cc3d",
@@ -30,6 +60,74 @@
   },
   "host": "macOS, Node 24.18.0, PostgreSQL 17.10, playwright-core 1.61.1 with cached Chrome for Testing build 1200, no locale in the environment",
   "runs": {
+    "history-review-followup": {
+      "run": "issue-345-history-5",
+      "profile": "local",
+      "commit": "00092a3ba1135a7f80ebcdb21770252067d3c84a",
+      "doctor": {
+        "deployment": "test",
+        "clock": "fixed",
+        "provider": "deterministic",
+        "oauth": "inert",
+        "session": "fixture",
+        "owner": "synthetic",
+        "anonymousStatus": 401,
+        "ownerFixture": true,
+        "authenticatedStatus": 200,
+        "composerPresent": true,
+        "businessMigrations": 84,
+        "markerMigrations": 2
+      },
+      "journeys": [
+        {
+          "feature": "history",
+          "profile": "local",
+          "passed": true,
+          "entries": ["/internal composer × 28", "scroll follow, 回到最新, and continued follow after another exchange", "/internal?date=2026-07-27 with 加载更早消息"],
+          "anchorShiftPx": 0.84375,
+          "window": { "recent": 50, "storedEvents": 60, "exchanges": 30 },
+          "stored": "history-stored.json: 30 user and 30 assistant messages rendered exactly once; responseRequests 30; the reply after 回到最新 stayed at the bottom; 加载更早消息 preserved the anchor within 0.84375px",
+          "unverified": ["interrupted items inside a long history", "tampered pagination cursors"]
+        }
+      ],
+      "scratchRemoved": true,
+      "cleanupReceipt": "../../../../artifacts/verify/issue-345-history-5/cleanup.json"
+    },
+    "cross-date-strict-copy-export": {
+      "run": "issue-345-cross-date-7",
+      "profile": "timeline",
+      "commit": "00092a3ba1135a7f80ebcdb21770252067d3c84a",
+      "doctor": {
+        "deployment": "test",
+        "clock": "controllable",
+        "provider": "deterministic",
+        "providerFault": null,
+        "oauth": "inert",
+        "session": "fixture",
+        "owner": "synthetic",
+        "anonymousStatus": 401,
+        "ownerFixture": true,
+        "authenticatedStatus": 200,
+        "composerPresent": true,
+        "businessMigrations": 84,
+        "markerMigrations": 2
+      },
+      "journeys": [
+        {
+          "feature": "cross-date",
+          "profile": "timeline",
+          "passed": true,
+          "entries": ["/internal composer on 2026-07-27", "inactivity + scan on 2026-07-27", "/internal composer on 2026-07-28", "inactivity + scan on 2026-07-28", "date entries, URLs, exact date-specific copy/export and that day's conversation for both dates"],
+          "failedScans": 0,
+          "scansUntilPublished": { "2026-07-27": 2, "2026-07-28": 2 },
+          "proseLengths": { "2026-07-27": 119, "2026-07-28": 120 },
+          "substitutions": ["60 second inactivity window", "driver-invoked scans", "controlled test clock", "local Workflow runtime"],
+          "unverified": ["hosted Workflow delivery", "a real calendar crossing of midnight"]
+        }
+      ],
+      "scratchRemoved": true,
+      "cleanupReceipt": "../../../../artifacts/verify/issue-345-cross-date-7/cleanup.json"
+    },
     "local-regression": {
       "run": "dev-345-local-3",
       "doctor": {
