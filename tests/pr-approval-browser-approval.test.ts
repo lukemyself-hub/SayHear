@@ -553,7 +553,8 @@ describe("channel routing in the controller", () => {
     expect(requirementProjectionFor("sayhear-pr-review-gate:v4")).toBe("review-inclusive-v4");
     // v7 was reviewed on main but never installed, so it never wrote a receipt.
     expect(() => requirementProjectionFor("sayhear-pr-review-gate:v7")).toThrow();
-    expect(() => requirementProjectionFor("sayhear-pr-review-gate:v11")).toThrow();
+    expect(requirementProjectionFor("sayhear-pr-review-gate:v11")).toBe("review-exclusive-v5");
+    expect(() => requirementProjectionFor("sayhear-pr-review-gate:v12")).toThrow();
   });
 
   it("exempts a protected path once the approval names it", () => {
@@ -702,9 +703,9 @@ describe("channel routing in the controller", () => {
     expect(calls.every((call) => call.path === "/graphql")).toBe(true);
   });
 
-  it("exposes the v10 policy and unchanged browser capability in the build identity", () => {
+  it("exposes the v11 policy and unchanged browser capability in the build identity", () => {
     const identity = controllerBuildIdentity();
-    expect(identity.policyVersion).toBe("sayhear-pr-review-gate:v10");
+    expect(identity.policyVersion).toBe("sayhear-pr-review-gate:v11");
     expect(PR_REVIEW_REPORT_VERSION).toBe("sayhear-pr-review-report:v4");
     expect(identity.browserApprovalVersion).toBe("sayhear-pr-browser-approval:v1");
   });

@@ -7,6 +7,7 @@ import {
   type ReleaseImpactKind,
 } from "../scripts/daily-release-validation.ts";
 import {
+  MAIN_WRITER_ATTESTATION_VERSION,
   PR_REVIEW_GATE_POLICY_VERSION,
   PR_REVIEW_REPORT_VERSION,
   PR_VALIDATE_WORKFLOW_PATH,
@@ -19,6 +20,7 @@ import {
   parseIssueClosureExclusions,
   closingKeywordIssueNumbers,
   type PreMergeDeferralRecord,
+  type MainWriterAttestation,
   type PrReviewGateInput,
   type TrustedPrReviewPolicy,
   type WorkflowEvidenceRecord,
@@ -847,6 +849,231 @@ describe("PR review gate", () => {
     }
   });
 
+  it("approves serialized-merge on an attested guard when the live fingerprint matches", () => {
+    const report = evaluatePrReviewGate(
+      input({
+        repository: { defaultBranchSha: "f".repeat(40) },
+        pullRequest: { mergeable: true, mergeableState: "behind" },
+        branchProtection: { requiresUpToDate: false },
+        runtime: {
+          integrationMode: "serialized-merge",
+          mainWriterGuard: {
+            readable: true,
+            restrictsDefaultBranchUpdates: true,
+            bypassActorIds: [],
+            bypassActorsEnumerated: false,
+            appBypassMode: "always",
+            rulesetIds: [7],
+            rulesetFingerprints: [{ id: 7, fingerprint: "a".repeat(64) }],
+          },
+          mainWriterAttestation: {
+            version: MAIN_WRITER_ATTESTATION_VERSION,
+            rulesetId: 7,
+            rulesetFingerprint: "a".repeat(64),
+            assertedBypassAppIds: [REVIEW_APP_ID],
+            attestedAt: "2026-10-15T00:00:00.000Z",
+            attestedBy: "lukemyself-hub",
+          },
+        },
+      }),
+      policy,
+    );
+
+    expect(report.outcome).toBe("merge_candidate");
+  });
+
+  it("fails closed when the attested ruleset changed after attestation", () => {
+    const cases: readonly [string, object][] = [
+      // A bypass list edit bumps updated_at, so the fingerprint stops matching.
+      [
+        "main_writer_attestation_fingerprint_mismatch",
+        { rulesetFingerprints: [{ id: 7, fingerprint: "b".repeat(64) }] },
+      ],
+      // A second covering ruleset is a second potential writer.
+      [
+        "main_writer_attestation_ruleset_changed",
+        {
+          rulesetIds: [7, 9],
+          rulesetFingerprints: [
+            { id: 7, fingerprint: "a".repeat(64) },
+            { id: 9, fingerprint: "a".repeat(64) },
+          ],
+        },
+      ],
+      // The attested ruleset no longer covers main.
+      [
+        "main_writer_attestation_ruleset_changed",
+        { rulesetIds: [9], rulesetFingerprints: [{ id: 9, fingerprint: "a".repeat(64) }] },
+      ],
+      // Live fingerprints missing means nothing to compare against.
+      ["main_writer_attestation_ruleset_changed", { rulesetFingerprints: [] }],
+    ];
+
+    for (const [code, guardOverride] of cases) {
+      const report = evaluatePrReviewGate(
+        input({
+          pullRequest: { mergeable: true, mergeableState: "behind" },
+          branchProtection: { requiresUpToDate: false },
+          runtime: {
+            integrationMode: "serialized-merge",
+            mainWriterGuard: {
+              readable: true,
+              restrictsDefaultBranchUpdates: true,
+              bypassActorIds: [],
+              bypassActorsEnumerated: false,
+              appBypassMode: "always",
+              rulesetIds: [7],
+              ...guardOverride,
+            },
+            mainWriterAttestation: {
+              version: MAIN_WRITER_ATTESTATION_VERSION,
+              rulesetId: 7,
+              rulesetFingerprint: "a".repeat(64),
+              assertedBypassAppIds: [REVIEW_APP_ID],
+              attestedAt: "2026-10-15T00:00:00.000Z",
+              attestedBy: "lukemyself-hub",
+            },
+          },
+        }),
+        policy,
+      );
+
+      expect(report.outcome).toBe("human_decision");
+      expect(report.reasons[0]?.code).toBe(code);
+    }
+  });
+
+  it("rejects an attestation that asserts anyone but the approval App", () => {
+    const report = evaluatePrReviewGate(
+      input({
+        pullRequest: { mergeable: true, mergeableState: "behind" },
+        branchProtection: { requiresUpToDate: false },
+        runtime: {
+          integrationMode: "serialized-merge",
+          mainWriterGuard: {
+            readable: true,
+            restrictsDefaultBranchUpdates: true,
+            bypassActorIds: [],
+            bypassActorsEnumerated: false,
+            appBypassMode: "always",
+            rulesetIds: [7],
+            rulesetFingerprints: [{ id: 7, fingerprint: "a".repeat(64) }],
+          },
+          mainWriterAttestation: {
+            version: MAIN_WRITER_ATTESTATION_VERSION,
+            rulesetId: 7,
+            rulesetFingerprint: "a".repeat(64),
+            assertedBypassAppIds: [REVIEW_APP_ID, 42],
+            attestedAt: "2026-10-15T00:00:00.000Z",
+            attestedBy: "lukemyself-hub",
+          },
+        },
+      }),
+      policy,
+    );
+
+    expect(report.outcome).toBe("human_decision");
+    expect(report.reasons[0]?.code).toBe("main_writer_attestation_assertion_mismatch");
+  });
+
+  it("lets a readable live bypass set overrule a stale attestation", () => {
+    // Attestation never overrides live enumeration: when GitHub does report
+    // the set, the live list alone decides.
+    const stale = {
+      version: MAIN_WRITER_ATTESTATION_VERSION,
+      rulesetId: 7,
+      rulesetFingerprint: "a".repeat(64),
+      assertedBypassAppIds: [REVIEW_APP_ID],
+      attestedAt: "2026-10-15T00:00:00.000Z",
+      attestedBy: "lukemyself-hub",
+    } as const;
+    const blocking = evaluatePrReviewGate(
+      input({
+        pullRequest: { mergeable: true, mergeableState: "behind" },
+        branchProtection: { requiresUpToDate: false },
+        runtime: {
+          integrationMode: "serialized-merge",
+          mainWriterGuard: {
+            ...APP_ONLY_MAIN_WRITER_GUARD,
+            bypassActorIds: [],
+            rulesetFingerprints: [{ id: 7, fingerprint: "a".repeat(64) }],
+          },
+          mainWriterAttestation: stale,
+        },
+      }),
+      policy,
+    );
+
+    expect(blocking.outcome).toBe("human_decision");
+    expect(blocking.reasons[0]?.code).toBe("main_writer_guard_bypass_actors");
+  });
+
+  it("still approves on a live bypass set when the attestation went stale", () => {
+    const passing = evaluatePrReviewGate(
+      input({
+        repository: { defaultBranchSha: "f".repeat(40) },
+        pullRequest: { mergeable: true, mergeableState: "behind" },
+        branchProtection: { requiresUpToDate: false },
+        runtime: {
+          integrationMode: "serialized-merge",
+          mainWriterGuard: {
+            ...APP_ONLY_MAIN_WRITER_GUARD,
+            rulesetFingerprints: [{ id: 7, fingerprint: "b".repeat(64) }],
+          },
+          mainWriterAttestation: {
+            version: MAIN_WRITER_ATTESTATION_VERSION,
+            rulesetId: 7,
+            rulesetFingerprint: "a".repeat(64),
+            assertedBypassAppIds: [REVIEW_APP_ID],
+            attestedAt: "2026-10-15T00:00:00.000Z",
+            attestedBy: "lukemyself-hub",
+          },
+        },
+      }),
+      policy,
+    );
+
+    expect(passing.outcome).toBe("merge_candidate");
+  });
+
+  it("holds every mode to the App-only main restriction once a ruleset exists", () => {
+    const restricting = {
+      readable: true,
+      restrictsDefaultBranchUpdates: true,
+      bypassActorIds: [],
+      bypassActorsEnumerated: false,
+      appBypassMode: "always",
+      rulesetIds: [7],
+      rulesetFingerprints: [{ id: 7, fingerprint: "a".repeat(64) }],
+    };
+    const attested: MainWriterAttestation = {
+      version: MAIN_WRITER_ATTESTATION_VERSION,
+      rulesetId: 7,
+      rulesetFingerprint: "a".repeat(64),
+      assertedBypassAppIds: [REVIEW_APP_ID],
+      attestedAt: "2026-10-15T00:00:00.000Z",
+      attestedBy: "lukemyself-hub",
+    };
+    // Strict mode with a hidden, unattested bypass set stops too: protection
+    // readability only means the rules parsed, not that the bypass list is
+    // App-only.
+    const blocked = evaluatePrReviewGate(
+      input({ runtime: { mainWriterGuard: restricting } }),
+      policy,
+    );
+    expect(blocked.outcome).toBe("human_decision");
+    expect(blocked.reasons[0]?.code).toBe("main_writer_guard_bypass_actors_unreadable");
+    // The same strict candidate passes once the attestation covers the live
+    // fingerprint.
+    const passing = evaluatePrReviewGate(
+      input({
+        runtime: { mainWriterGuard: restricting, mainWriterAttestation: attested },
+      }),
+      policy,
+    );
+    expect(passing.outcome).toBe("merge_candidate");
+  });
+
   it("refuses serialized-merge until main is updatable only by the approval App", () => {
     const cases: readonly [
       Exclude<PrReviewGateInput["runtime"]["mainWriterGuard"], undefined>,
@@ -1454,12 +1681,12 @@ describe("PR review gate", () => {
     expect(report.acceptedEvidenceIds).toEqual([]);
   });
 
-  it.each(["v4", "v5", "v6", "v7", "v8", "v9"])("invalidates %s policy reviews while keeping the report schema unchanged", (version) => {
+  it.each(["v4", "v5", "v6", "v7", "v8", "v9", "v10"])("invalidates %s policy reviews while keeping the report schema unchanged", (version) => {
     const report = evaluatePrReviewGate(input({
       review: { policyVersion: `sayhear-pr-review-gate:${version}` },
     }), policy);
 
-    expect(PR_REVIEW_GATE_POLICY_VERSION).toBe("sayhear-pr-review-gate:v10");
+    expect(PR_REVIEW_GATE_POLICY_VERSION).toBe("sayhear-pr-review-gate:v11");
     expect(PR_REVIEW_REPORT_VERSION).toBe("sayhear-pr-review-report:v4");
     expect(report.reasons[0]?.code).toBe("policy_version_mismatch");
   });
@@ -1749,6 +1976,8 @@ describe("PR review gate", () => {
     ["sayhear-pr-review-report:v4", "sayhear-pr-review-gate:v7"],
     ["sayhear-pr-review-report:v3", "sayhear-pr-review-gate:v8"],
     ["sayhear-pr-review-report:v4", "sayhear-pr-review-gate:v8"],
+    ["sayhear-pr-review-report:v3", "sayhear-pr-review-gate:v10"],
+    ["sayhear-pr-review-report:v4", "sayhear-pr-review-gate:v10"],
   ])("rejects a new report with incompatible identity %s / %s", (version, policyVersion) => {
     const report = evaluatePrReviewGate(
       input({
@@ -1757,7 +1986,7 @@ describe("PR review gate", () => {
       policy,
     );
 
-    expect(PR_REVIEW_GATE_POLICY_VERSION).toBe("sayhear-pr-review-gate:v10");
+    expect(PR_REVIEW_GATE_POLICY_VERSION).toBe("sayhear-pr-review-gate:v11");
     expect(PR_REVIEW_REPORT_VERSION).toBe("sayhear-pr-review-report:v4");
     expect(report.outcome).toBe("awaiting_verification");
     expect(report.reasons[0]?.code).toBe("policy_version_mismatch");

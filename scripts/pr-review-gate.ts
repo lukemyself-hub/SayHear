@@ -14,7 +14,8 @@ import {
 
 // Historical installed policies remain readable for signed completion receipts.
 // They do not acquire the head-bound review semantics introduced by v10.
-export const PR_REVIEW_GATE_POLICY_VERSION = "sayhear-pr-review-gate:v10";
+export const PR_REVIEW_GATE_POLICY_VERSION = "sayhear-pr-review-gate:v11";
+export const PR_REVIEW_GATE_V10_POLICY_VERSION = "sayhear-pr-review-gate:v10";
 export const PR_REVIEW_GATE_V9_POLICY_VERSION = "sayhear-pr-review-gate:v9";
 export const PR_REVIEW_GATE_LEGACY_POLICY_VERSION = "sayhear-pr-review-gate:v4";
 export const PR_REVIEW_GATE_PREVIOUS_POLICY_VERSION = "sayhear-pr-review-gate:v5";
@@ -80,6 +81,56 @@ export type MainWriterGuard = Readonly<{
   appBypassMode: string | null;
   /** Ids of the rulesets that contributed, for the audit trail. */
   rulesetIds: readonly number[];
+  /**
+   * Content fingerprints of the covering update rulesets, one per ruleset.
+   *
+   * Optional so snapshots built before fingerprints existed still parse. The
+   * attested path below requires it: without a live fingerprint there is
+   * nothing to compare the attestation against.
+   */
+  rulesetFingerprints?: readonly RulesetFingerprint[];
+}>;
+
+export type RulesetFingerprint = Readonly<{
+  /** The GitHub ruleset id this fingerprint was taken from. */
+  id: number;
+  /** Lowercase hex SHA-256 over the canonical ruleset detail. */
+  fingerprint: string;
+}>;
+
+/** Schema version of the root-owned main writer attestation record. */
+export const MAIN_WRITER_ATTESTATION_VERSION = 1;
+
+/**
+ * A root-owned operator attestation that a ruleset nobody can enumerate
+ * still restricts the default branch to the approval App alone.
+ *
+ * GitHub withholds `bypass_actors` from the approval App token, so live
+ * enumeration can stay impossible forever with the settings exactly right.
+ * The attestation records what the operator saw in the repository settings UI
+ * at a moment when the ruleset fingerprint below was current. Later runs
+ * re-read the live fingerprint: equality means nobody touched the ruleset
+ * since, so the asserted bypass list still holds. Any touch fails closed.
+ *
+ * There is deliberately no expiry field. Re-attestation is driven by change,
+ * not by time: editing the ruleset is rare and intentional, and the live
+ * fingerprint catches it on the next run. A calendar deadline would only buy
+ * recurring maintenance while adding no detection the fingerprint does not
+ * already provide.
+ */
+export type MainWriterAttestation = Readonly<{
+  /** Schema version of this attestation record. */
+  version: typeof MAIN_WRITER_ATTESTATION_VERSION;
+  /** The GitHub ruleset id the operator attested. */
+  rulesetId: number;
+  /** The live ruleset fingerprint at attestation time. */
+  rulesetFingerprint: string;
+  /** The bypass actor ids the operator saw in the settings UI. */
+  assertedBypassAppIds: readonly number[];
+  /** ISO-8601 timestamp of the attestation ceremony. */
+  attestedAt: string;
+  /** Who performed the attestation. Free text for the audit trail. */
+  attestedBy: string;
 }>;
 
 const FIXED_BASELINE_IDS = new Set<string>(FIXED_PR_CI_BASELINE);
@@ -328,6 +379,12 @@ export type PrReviewGateInput = Readonly<{
      * closed rather than assuming the default branch is App-only.
      */
     mainWriterGuard?: MainWriterGuard | null;
+    /**
+     * Root-owned operator attestation backing the guard when GitHub hides
+     * the bypass set. Absent or `null` means no attestation was presented;
+     * `serialized-merge` then needs live enumeration to pass.
+     */
+    mainWriterAttestation?: MainWriterAttestation | null;
   }>;
 }>;
 
@@ -803,6 +860,9 @@ export function parsePrReviewGateInput(value: unknown): PrReviewGateInput {
       ? undefined
       : requiredBoolean(runtime.mergeQueueAvailable, "runtime.mergeQueueAvailable");
   const mainWriterGuard = optionalMainWriterGuard(runtime.mainWriterGuard);
+  const mainWriterAttestation = optionalMainWriterAttestation(
+    runtime.mainWriterAttestation,
+  );
 
   const installed = runtime.reviewAppInstalledForRepository;
   if (installed !== null && typeof installed !== "boolean") {
@@ -951,6 +1011,7 @@ export function parsePrReviewGateInput(value: unknown): PrReviewGateInput {
       ...(integrationMode === undefined ? {} : { integrationMode }),
       ...(mergeQueueAvailable === undefined ? {} : { mergeQueueAvailable }),
       ...(mainWriterGuard === undefined ? {} : { mainWriterGuard }),
+      ...(mainWriterAttestation === undefined ? {} : { mainWriterAttestation }),
     },
   };
 }
@@ -986,6 +1047,70 @@ function optionalMainWriterGuard(
       "runtime.mainWriterGuard.appBypassMode",
     ),
     rulesetIds,
+    ...(value.rulesetFingerprints === undefined
+      ? {}
+      : { rulesetFingerprints: parseRulesetFingerprints(value.rulesetFingerprints) }),
+  };
+}
+
+function parseRulesetFingerprints(value: unknown): readonly RulesetFingerprint[] {
+  if (!Array.isArray(value)) {
+    throw new Error("runtime.mainWriterGuard.rulesetFingerprints must be an array.");
+  }
+  return value.map((entry, index) => {
+    const label = `runtime.mainWriterGuard.rulesetFingerprints[${index}]`;
+    if (!isRecord(entry)) throw new Error(`${label} must be an object.`);
+    const fingerprint = entry.fingerprint;
+    if (typeof fingerprint !== "string" || !/^[0-9a-f]{64}$/.test(fingerprint)) {
+      throw new Error(`${label}.fingerprint must be lowercase hex SHA-256.`);
+    }
+    return {
+      id: requiredPositiveInteger(entry.id, `${label}.id`),
+      fingerprint,
+    };
+  });
+}
+
+function optionalMainWriterAttestation(
+  value: unknown,
+): MainWriterAttestation | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (!isRecord(value)) {
+    throw new Error("runtime.mainWriterAttestation must be an object.");
+  }
+  if (value.version !== MAIN_WRITER_ATTESTATION_VERSION) {
+    throw new Error(
+      `runtime.mainWriterAttestation.version must be ${MAIN_WRITER_ATTESTATION_VERSION}.`,
+    );
+  }
+  const asserted = value.assertedBypassAppIds;
+  if (
+    !Array.isArray(asserted) ||
+    asserted.length === 0 ||
+    asserted.some(
+      (actorId) =>
+        typeof actorId !== "number" ||
+        !Number.isSafeInteger(actorId) ||
+        actorId <= 0,
+    )
+  ) {
+    throw new Error(
+      "runtime.mainWriterAttestation.assertedBypassAppIds must be a non-empty array of positive integers.",
+    );
+  }
+  const fingerprint = value.rulesetFingerprint;
+  if (typeof fingerprint !== "string" || !/^[0-9a-f]{64}$/.test(fingerprint)) {
+    throw new Error(
+      "runtime.mainWriterAttestation.rulesetFingerprint must be lowercase hex SHA-256.",
+    );
+  }
+  return {
+    version: MAIN_WRITER_ATTESTATION_VERSION,
+    rulesetId: requiredPositiveInteger(value.rulesetId, "runtime.mainWriterAttestation.rulesetId"),
+    rulesetFingerprint: fingerprint,
+    assertedBypassAppIds: [...asserted as readonly number[]].sort((left, right) => left - right),
+    attestedAt: requiredString(value.attestedAt, "runtime.mainWriterAttestation.attestedAt"),
+    attestedBy: requiredString(value.attestedBy, "runtime.mainWriterAttestation.attestedBy"),
   };
 }
 
@@ -1047,6 +1172,16 @@ function headBoundApproval(input: Pick<PrReviewGateInput, "runtime">): boolean {
  * `bypass_actors` from callers without administration access, and an empty
  * unreadable set would otherwise be indistinguishable from a ruleset that
  * genuinely grants nobody a bypass.
+ *
+ * GitHub also withholds `bypass_actors` from the approval App token itself,
+ * so live enumeration can stay impossible with the settings exactly right.
+ * For that case the guard accepts a root-owned operator attestation instead:
+ * the operator records the bypass list seen in the repository settings UI
+ * together with the live ruleset fingerprint, and later runs re-read the
+ * live fingerprint. Equality means nobody touched the ruleset since, so the
+ * asserted list still holds; any touch fails closed. Attestation never
+ * overrides a readable live set: when GitHub does enumerate, the live list
+ * alone decides.
  */
 function mainWriterGuardReason(
   input: Pick<PrReviewGateInput, "runtime">,
@@ -1057,12 +1192,54 @@ function mainWriterGuardReason(
   if (!guard.restrictsDefaultBranchUpdates) return "main_writer_guard_missing";
   const approvalAppId = policy.reviewAppId;
   if (approvalAppId === null) return "main_writer_guard_missing";
-  if (!guard.bypassActorsEnumerated) {
+  if (guard.bypassActorsEnumerated) {
+    const bypass = guard.bypassActorIds;
+    if (bypass.length !== 1 || bypass[0] !== approvalAppId) {
+      return "main_writer_guard_bypass_actors";
+    }
+    return null;
+  }
+  return attestedGuardReason(input, approvalAppId);
+}
+
+/**
+ * Why an attested guard does not hold, or `null` when it does.
+ *
+ * The live restriction, target, and update rule are re-verified above, so
+ * only the hidden bypass membership rides on the attestation. Three checks
+ * bind it: the attestation must name exactly the live covering set, every
+ * live fingerprint must equal the attested one, and the asserted bypass must
+ * be exactly the approval App. A ruleset touch of any kind, including a
+ * bypass list edit, changes the live fingerprint and fails closed here.
+ * Attestation covers exactly one ruleset by schema design; a second covering
+ * ruleset fails closed until the operator merges the overlap away.
+ */
+function attestedGuardReason(
+  input: Pick<PrReviewGateInput, "runtime">,
+  approvalAppId: number,
+): string | null {
+  const guard = input.runtime.mainWriterGuard;
+  const attestation = input.runtime.mainWriterAttestation ?? null;
+  if (attestation === null || attestation === undefined) {
     return "main_writer_guard_bypass_actors_unreadable";
   }
-  const bypass = guard.bypassActorIds;
-  if (bypass.length !== 1 || bypass[0] !== approvalAppId) {
-    return "main_writer_guard_bypass_actors";
+  const live = new Map(
+    (guard?.rulesetFingerprints ?? []).map((entry) => [entry.id, entry.fingerprint]),
+  );
+  if (
+    guard === null ||
+    guard === undefined ||
+    live.size !== 1 ||
+    !live.has(attestation.rulesetId)
+  ) {
+    return "main_writer_attestation_ruleset_changed";
+  }
+  if (live.get(attestation.rulesetId) !== attestation.rulesetFingerprint) {
+    return "main_writer_attestation_fingerprint_mismatch";
+  }
+  const asserted = attestation.assertedBypassAppIds;
+  if (asserted.length !== 1 || asserted[0] !== approvalAppId) {
+    return "main_writer_attestation_assertion_mismatch";
   }
   return null;
 }
@@ -1612,13 +1789,24 @@ export function evaluatePrReviewGate(
         "Serialized-merge integration is configured, but main still requires branches to be up to date before merging.",
     });
   }
-  if (integrationModeOf(input) === "serialized-merge") {
+  // Whenever a ruleset restricts who can update main, the guard must prove
+  // the restriction is App-only, in every integration mode. Protection
+  // readability only means the rules parsed; a hidden bypass actor could
+  // otherwise advance main outside this controller while every rule below
+  // still looks green. Serialized-merge always needs the proof because it
+  // merges behind-main heads against a moving target; other modes need it
+  // only once such a ruleset exists. Repositories without one keep the exact
+  // historical behavior.
+  if (
+    integrationModeOf(input) === "serialized-merge" ||
+    input.runtime.mainWriterGuard?.restrictsDefaultBranchUpdates === true
+  ) {
     const guard = mainWriterGuardReason(input, policy);
     if (guard !== null) {
       return outcome(input, "human_decision", {
         code: guard,
         message:
-          "Serialized-merge integration needs main to be updatable only by the approval App, and that could not be verified.",
+          "Main can only be updated through a restriction that is not exclusively held by the approval App, or that could not be verified.",
       });
     }
   }

@@ -30,6 +30,7 @@ import {
   createGitHubAppJwt,
   GitHubApiError,
   GitHubRestClient,
+  fingerprintRuleset,
   nextRequestChangeRound,
   parseHumanReviewAuthorizations,
   matchHumanReviewAuthorization,
@@ -53,11 +54,13 @@ import {
   type ModelReviewReport,
 } from "../scripts/pr-approval-controller.ts";
 import {
+  MAIN_WRITER_ATTESTATION_VERSION,
   PR_VALIDATE_WORKFLOW_PATH,
   PR_REVIEW_GATE_POLICY_VERSION,
   PR_REVIEW_REPORT_VERSION,
   SAYHEAR_REPOSITORY_ID,
   requirementDigest,
+  type MainWriterAttestation,
   type PrReviewGateInput,
 } from "../scripts/pr-review-gate.ts";
 import type { IntegrationRefreshRecord } from "../scripts/pr-approval/integration-refresh.ts";
@@ -1317,8 +1320,10 @@ describe("PR approval controller", () => {
       readable: true,
       bypassActorIds: [98765],
     });
+    // A hidden bypass set no longer poisons readability: the rules themselves
+    // parsed, and bypass membership is the main writer guard's question now.
     await expect(readBranchProtection(hiddenBypass)).resolves.toMatchObject({
-      readable: false,
+      readable: true,
       bypassActorIds: [],
     });
     await expect(readBranchProtection(unreadableRulesets)).resolves.toMatchObject({
@@ -1384,6 +1389,7 @@ describe("PR approval controller", () => {
       enforcement: "active",
       conditions: { ref_name: { include: ["~DEFAULT_BRANCH"], exclude: [] } },
       rules: [{ type: "update" }],
+      updated_at: "2026-10-14T21:00:00.000Z",
       bypass_actors: [{ actor_id: 98765, actor_type: "Integration" }],
       current_user_can_bypass: "always",
       ...overrides,
@@ -1424,6 +1430,7 @@ describe("PR approval controller", () => {
       bypassActorsEnumerated: true,
       appBypassMode: "always",
       rulesetIds: [7],
+      rulesetFingerprints: [{ id: 7, fingerprint: fingerprintRuleset(ruleset()) }],
     });
     // Extra bypass actors are reported truthfully; the gate is what refuses them.
     await expect(
@@ -1500,6 +1507,54 @@ describe("PR approval controller", () => {
     await expect(
       readMainWriterGuard(guard({ conditions: undefined }), "main"),
     ).resolves.toMatchObject({ readable: false });
+  });
+
+  it("fingerprints rulesets so any touch is visible without reading bypass actors", () => {
+    const detail = {
+      id: 25136844,
+      target: "branch",
+      enforcement: "active",
+      conditions: { ref_name: { include: ["~DEFAULT_BRANCH"], exclude: [] } },
+      rules: [{ type: "update" }, { type: "non_fast_forward" }],
+      updated_at: "2026-10-14T21:00:00.000Z",
+    };
+    const same = fingerprintRuleset(detail);
+    // Deterministic and key-order insensitive.
+    expect(fingerprintRuleset({ ...detail })).toBe(same);
+    expect(
+      fingerprintRuleset({
+        updated_at: detail.updated_at,
+        rules: detail.rules,
+        conditions: detail.conditions,
+        target: detail.target,
+        enforcement: detail.enforcement,
+        id: detail.id,
+      }),
+    ).toBe(same);
+    // Any touch changes the fingerprint: bypass edits, rule edits,
+    // enforcement flips, retargeting, and clock bumps alike.
+    for (const touched of [
+      { ...detail, updated_at: "2026-10-14T21:00:01.000Z" },
+      { ...detail, enforcement: "disabled" },
+      { ...detail, target: "tag" },
+      { ...detail, rules: [{ type: "update" }] },
+      {
+        ...detail,
+        conditions: { ref_name: { include: ["refs/heads/main"], exclude: [] } },
+      },
+    ]) {
+      expect(fingerprintRuleset(touched)).not.toBe(same);
+    }
+    // Bypass actors never enter the fingerprint: the field GitHub hides
+    // cannot be part of the comparison either way.
+    expect(
+      fingerprintRuleset({
+        ...detail,
+        bypass_actors: [{ actor_id: 5270295, actor_type: "Integration" }],
+      }),
+    ).toBe(same);
+    // Without updated_at there is no touch detection, so it fails closed.
+    expect(() => fingerprintRuleset({ ...detail, updated_at: undefined })).toThrow();
   });
 
   it("honors only the maintainer's latest pause command", () => {
@@ -2422,7 +2477,8 @@ async function serializedControllerFixture(channel: "browser" | "legacy-root") {
       { context: "validate", app_id: ACTIONS_APP_ID }, { context: "pr-review-gate", app_id: 98765 },
     ] }, required_pull_request_reviews: { dismiss_stale_reviews: true, required_approving_review_count: 1 }, enforce_admins: { enabled: true } };
     if (url.includes("/rulesets/9?")) return { id: 9, target: "branch", enforcement: "active", conditions: { ref_name: { include: ["~DEFAULT_BRANCH"], exclude: [] } },
-      rules: [{ type: "update" }], bypass_actors: [{ actor_id: 98765, actor_type: "Integration", bypass_mode: "always" }], current_user_can_bypass: "always" };
+      rules: [{ type: "update" }], updated_at: "2026-10-14T21:00:00.000Z",
+      bypass_actors: [{ actor_id: 98765, actor_type: "Integration", bypass_mode: "always" }], current_user_can_bypass: "always" };
     if (url.endsWith("/git/ref/heads/main")) {
       mainReads++;
       return { object: { sha: finalMainDrift && mainReads > 2 ? "8".repeat(40) : main } };
@@ -2636,6 +2692,26 @@ describe("guarded serialized controller completion", () => {
     f.failValidation();
     await expect(guardImmediateMerge(f.config, f.receipt.identity)).rejects.toThrow("fresh_merge_gate_blocked");
     expect(f.writes.some((write) => write.includes("/pulls/321/merge") || write.includes("/labels"))).toBe(false);
+  });
+
+  it("carries a startup-loaded attestation into the snapshot via config", async () => {
+    // The attestation lives in config (loaded once in the privileged launcher
+    // context). Snapshot and status paths must never hit the protected
+    // filesystem mid-flow, or unit runs outside macOS break: realpath
+    // '/Library' does not exist on Linux CI.
+    const attestation: MainWriterAttestation = {
+      version: MAIN_WRITER_ATTESTATION_VERSION,
+      rulesetId: 9,
+      rulesetFingerprint: "a".repeat(64),
+      assertedBypassAppIds: [98765],
+      attestedAt: "2026-10-15T00:00:00.000Z",
+      attestedBy: "test",
+    };
+    const f = await serializedControllerFixture("browser");
+    const snapshot = await readSnapshot({ ...f.config, mainWriterAttestation: attestation }, 321);
+    expect(snapshot.gateInput.runtime.mainWriterAttestation).toEqual(attestation);
+    const unattested = await readSnapshot(f.config, 321);
+    expect(unattested.gateInput.runtime.mainWriterAttestation).toBeUndefined();
   });
 
   it("never falls back to an older green Validate while a newer trusted run is queued", async () => {

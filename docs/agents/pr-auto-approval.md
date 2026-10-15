@@ -86,8 +86,13 @@ Luke 于 2026-10-12 确认：PR 可以引用多个 Issue；合入后自动关闭
   也不能改标成当前版本号。
 - 串行合并修复把审批策略提高到 `sayhear-pr-review-gate:v10`，报告结构仍是
   `sayhear-pr-review-report:v4`，并加入 main 写入守卫。已签发收据的恢复允许列表为
-  v4、v5、v6、v8、v9、v10。v7 只存在于源码与审核记录中，从未安装，因此从未写过收据；
+  v4、v5、v6、v8、v9、v10、v11。v7 只存在于源码与审核记录中，从未安装，因此从未写过收据；
   不猜它的需求投影，位置不对的版本一律拒绝，而不是按最近的版本套用。
+- v11 给 main 写入守卫加上 root-owned 见证（attestation）：GitHub 不把 bypass 名单
+  返回给审批 App token，v10 要求的实时枚举在这类仓库里永远不成立。见证记录 Luke
+  在设置页亲眼看到的 bypass 名单和当时 ruleset 指纹；之后每次运行重读实时指纹，
+  相等才放行，不等（任何改动，包括改 bypass 名单）直接转人工。见证没有过期时间：
+  重新见证只发生在 ruleset 真被改过之后，改 ruleset 本来就是少见且故意的动作。
 - `prepare` 返回 `issue_completion_pending` 时，使用固定 `scan --pr 数字` 恢复合入后
   收尾。只开启 auto-merge 时继续等待并保留执行占用；必须回读 `merged=true` 和匹配
   的真实 App approval，才逐个关闭交付 Issue、清理标签并回读。失败不跳过其余 Issue，
@@ -137,9 +142,10 @@ Luke 于 2026-10-14 选择轻量串行集成模式：独立 PR 并行开发和�
   `behind`，不使用延后 auto-merge。
 - `serialized-merge` 必须关闭 `requiresUpToDate`，并以 active Branch ruleset 的
   `update` 规则限制 main 写入，唯一 bypass 是审批 App `5270295`。controller 从
-  `/rulesets?includes_parents=true` 枚举编号，再读每条详情。规则、目标条件或 bypass
-  列表读不全都阻断，不能把不可见列表当成空列表。默认严格模式也拒绝不可读或
-  格式错误的 bypass 列表。
+  `/rulesets?includes_parents=true` 枚举编号，再读每条详情。规则、目标条件读不全
+  就阻断。bypass 名单能实时读到就按实时名单判（必须恰好等于 `[reviewAppId]`）；
+  读不到时看 root-owned 见证：实时指纹与见证指纹相等才放行，不等就转人工。
+  不能把不可见列表当成空列表。默认严格模式也拒绝不可读或格式错误的 bypass 列表。
 - controller 的仓库锁保护最终写入；main 写入守卫阻止外部写入者在验证后推进 main。
   GitHub merge API 没有 expected-base 参数，所以两者缺一不可。所有使用同一 App
   的 main 写入程序也必须遵守同一把锁。
@@ -156,9 +162,10 @@ Luke 于 2026-10-14 选择轻量串行集成模式：独立 PR 并行开发和�
 
 #### 启用 serialized-merge 的操作顺序（Luke 的仓库设置）
 
-先发布本 PR，再安装通过审核的 v10 bundle，最后改仓库设置并启用新模式。
-已安装的 v9 保持默认严格模式；不能用旧 v9 助手启用轻量模式。所有版本都需要
-能够读取规则集详情与完整 bypass 列表，读不到时保留阻断。
+先发布本 PR，再安装通过审核的 v11 bundle，最后做仓库设置、见证并启用新模式。
+已安装的 v10 保持默认严格模式；不能用旧助手启用轻量模式。规则集详情（规则、
+目标、指纹）必须可读；bypass 名单实时可读就走实时判定，读不到就走见证判定，
+两者都立不起来时保留阻断。
 
 另有两个前提。其一，`.github/workflows/pr-validate.yml` 的收据改动必须先在 main 上
 生效，否则 head-bound 模式要求 `pr-validate-source.json`，而这个 workflow 还不产出它，
@@ -186,20 +193,28 @@ main 单独前进由 controller 按可信终态旧 run 自动请求刷新。保�
    多一个 bypass actor 就是多一个能在审批与合入之间推进 main 的写入者，gate 会
    判为 `main_writer_guard_bypass_actors`。
 4. 运行固定 `pr-approval-status`，必须同时看到 `mainWriterGuard.readable === true`、
-   `restrictsDefaultBranchUpdates === true`、`bypassActorsEnumerated === true`、
-   `bypassActorIds === [5270295]`，并且 `branchProtection.requiresUpToDate === false`。
-   `bypassActorsEnumerated` 取决于 GitHub 是否把 `bypass_actors` 返回给这个 App
-   （只对持有 administration 权限的调用者返回）。不返回时本步会看到
-   `bypassActorsEnumerated === false`，此时**不要**进入第 5 步：gate 会把
-   `serialized-merge` 判为 `main_writer_guard_bypass_actors_unreadable` 转人工，
-   不会把“读不到”当成“没有别的写入者”。第 2 步关掉 `requiresUpToDate` 之后、
-   第 5 步写入新 `integrationMode` 之前，gate 在 `up-to-date-base` 下会因
+   `restrictsDefaultBranchUpdates === true`，并且 `branchProtection.requiresUpToDate
+   === false`。bypass 名单分两种情况：`bypassActorsEnumerated === true` 且
+   `bypassActorIds === [5270295]`，直接进第 5 步；`bypassActorsEnumerated === false`
+  （GitHub 不把名单返回给 App token，设置正确也会这样），走第 4b 步见证，
+   不要跳过见证直接进第 5 步：没有见证时 gate 会把 `serialized-merge` 判为
+   `main_writer_guard_bypass_actors_unreadable` 转人工。第 2 步关掉 `requiresUpToDate`
+   之后、第 5 步写入新 `integrationMode` 之前，gate 在 `up-to-date-base` 下会因
    `branch_protection_incomplete` 转人工，这段时间审批不会通过（fail-closed，
    不会合入任何东西）。所以第 2 到第 5 步要一次做完，中间不要停：只改一半仓库
    设置只会让所有审批停在转人工，不会提前放行。
+4b. 运行安装助手的见证模式（随安装包交付，见交付记录），把当前 ruleset 指纹和
+   设置页看到的 bypass 名单写进 root-owned 见证文件。助手会打印实时指纹、规则与
+   目标，请对照设置页确认 bypass 名单恰好只有审批 App 再确认写入。指纹里不含 bypass
+   名单本身，靠 GitHub 每次改动 ruleset 都刷新 updated_at 来感知改动（本仓库已实测：
+   ruleset 建后一次保存就推高了 updated_at）。见证没有过期时间；之后改过 ruleset
+   （加规则、改目标、改 bypass 名单都会变指纹），下次运行会转人工并提示重新见证。
+   见证模式只支持恰好一条覆盖 main 的 update ruleset，多了就转人工，先合并不必要的
+   ruleset 再见证。
 5. 再次运行同一个安装助手并带启用参数，把 `config.json` 的 `integrationMode`
    写成 `serialized-merge`，再用固定 `pr-approval-status` 回读 `policyVersion`、
-   `controllerSha256` 与 `integrationMode`。`scripts/pr-review-gate.ts`、
+   `controllerSha256` 与 `integrationMode`。启用前助手先做写入前硬门禁：实时枚举
+   通过或见证指纹相符才写，否则直接退出。`scripts/pr-review-gate.ts`、
    `scripts/pr-approval-controller.ts` 属受保护路径，走当时的审批通道。
 6. 回退：先把 `config.json` 的 `integrationMode` 改回 `up-to-date-base`，再删除
    第 3 步的 ruleset 并重新打开 `requiresUpToDate`；只做一半同样会停在转人工。
@@ -454,7 +469,7 @@ pnpm pr:review-gate:dry-run -- --input <snapshot.json>
 - 每项必要证据都必须显式为 `passed`。`skipped`、`cancelled`、`neutral`、`planned` 和 `out-of-scope` 均阻断。
 - `scripts/daily-release-validation.ts` 决定行为专项；gate 不使用它的退出码代替验收结果。
 - 涉及审批规则、CI、产品定义、删除测试、完整能力验收或生产新能力启用时转人工。UI 变化按 Luke 确认的标准，追加 `ui:portal-smoke`（`tests/portal-integration.test.ts` 与 `tests/portal-conversation-status.test.ts` 两个模块级行为测试），不再要求设计稿所述的桌面与移动端交互证据；仓库当前没有接入 PR CI 的浏览器 E2E runner。该降级是产品决定，不是测试通过，等真实浏览器 E2E 落地后可恢复。数据库迁移要求可信、无 skip 的升级兼容专项证据。
-- 只有可读的 main 保护规则、base 满足当前集成模式（`up-to-date-base` 要求等于最新 main；`merge-queue` 暂不可激活；`serialized-merge` 要求无冲突、main 已关闭 `requiresUpToDate`，且 main 的写入守卫正好只给审批 App 一个 bypass）、过期 review 失效、管理员强制执行、恰好一个审批名额、绕过 actor 符合当前模式（`up-to-date-base`/`merge-queue` 除审批 App 外不得有别的 bypass actor；`serialized-merge` 要求 bypass 恰好等于 `[reviewAppId]`），以及精确匹配来源的 `validate` 和 `pr-review-gate` 两项 required checks 同时成立时，才会生成 `merge_candidate`。
+- 只有可读的 main 保护规则、base 满足当前集成模式（`up-to-date-base` 要求等于最新 main；`merge-queue` 暂不可激活；`serialized-merge` 要求无冲突、main 已关闭 `requiresUpToDate`，且 main 的写入守卫正好只给审批 App 一个 bypass）、过期 review 失效、管理员强制执行、恰好一个审批名额、绕过 actor 符合当前模式（`up-to-date-base`/`merge-queue` 除审批 App 外不得有别的 bypass actor；`serialized-merge` 要求实时 bypass 名单恰好等于 `[reviewAppId]`，名单不可读时要求见证指纹相符且见证断言恰好等于 `[reviewAppId]`；一旦存在限制 main 写入的 ruleset，这条 App-only 证明在所有模式下都要过，不只轻量模式），以及精确匹配来源的 `validate` 和 `pr-review-gate` 两项 required checks 同时成立时，才会生成 `merge_candidate`。
 - 所有必要证据必须来自同一个 PR Validate workflow run 和 attempt。快照采集器仍须证明它们是当前最新 run；gate 本身不连接 GitHub，也不提供全仓合入锁。
 
 ## Issue 标签交接
