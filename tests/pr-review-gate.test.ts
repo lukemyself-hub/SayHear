@@ -1006,6 +1006,34 @@ describe("PR review gate", () => {
     expect(blocking.reasons[0]?.code).toBe("main_writer_guard_bypass_actors");
   });
 
+  it("still approves on a live bypass set when the attestation went stale", () => {
+    const passing = evaluatePrReviewGate(
+      input({
+        repository: { defaultBranchSha: "f".repeat(40) },
+        pullRequest: { mergeable: true, mergeableState: "behind" },
+        branchProtection: { requiresUpToDate: false },
+        runtime: {
+          integrationMode: "serialized-merge",
+          mainWriterGuard: {
+            ...APP_ONLY_MAIN_WRITER_GUARD,
+            rulesetFingerprints: [{ id: 7, fingerprint: "b".repeat(64) }],
+          },
+          mainWriterAttestation: {
+            version: 1,
+            rulesetId: 7,
+            rulesetFingerprint: "a".repeat(64),
+            assertedBypassAppIds: [REVIEW_APP_ID],
+            attestedAt: "2026-10-15T00:00:00.000Z",
+            attestedBy: "lukemyself-hub",
+          },
+        },
+      }),
+      policy,
+    );
+
+    expect(passing.outcome).toBe("merge_candidate");
+  });
+
   it("refuses serialized-merge until main is updatable only by the approval App", () => {
     const cases: readonly [
       Exclude<PrReviewGateInput["runtime"]["mainWriterGuard"], undefined>,

@@ -57,6 +57,7 @@ import {
   SAYHEAR_REPOSITORY_ID,
   SAYHEAR_REPOSITORY_NAME,
   type IntegrationMode,
+  MAIN_WRITER_ATTESTATION_VERSION,
   type MainWriterAttestation,
   type PrReviewGateInput,
   type PrReviewGateReport,
@@ -108,7 +109,6 @@ const CONFIG_DIRECTORY =
 const CONFIG_PATH = `${CONFIG_DIRECTORY}/config.json`;
 const CONTROLLER_PATH = `${CONFIG_DIRECTORY}/controller.mjs`;
 const ATTESTATION_PATH = `${CONFIG_DIRECTORY}/main-writer-attestation.json`;
-const ATTESTATION_VERSION = 1;
 const LAUNCHER_PATHS = [
   `${CONFIG_DIRECTORY}/pr-approval-status`,
   `${CONFIG_DIRECTORY}/pr-approval-prepare`,
@@ -1432,8 +1432,10 @@ export function fingerprintRuleset(detail: JsonRecord): string {
 
 function parseMainWriterAttestation(value: unknown): MainWriterAttestation {
   if (!isRecord(value)) throw new Error("Main writer attestation must be an object.");
-  if (value.version !== ATTESTATION_VERSION) {
-    throw new Error(`Main writer attestation version must be ${ATTESTATION_VERSION}.`);
+  if (value.version !== MAIN_WRITER_ATTESTATION_VERSION) {
+    throw new Error(
+      `Main writer attestation version must be ${MAIN_WRITER_ATTESTATION_VERSION}.`,
+    );
   }
   const fingerprint = value.rulesetFingerprint;
   if (typeof fingerprint !== "string" || !/^[0-9a-f]{64}$/.test(fingerprint)) {
@@ -1451,7 +1453,7 @@ function parseMainWriterAttestation(value: unknown): MainWriterAttestation {
     throw new Error("Main writer attestation has no usable asserted bypass list.");
   }
   return {
-    version: ATTESTATION_VERSION,
+    version: MAIN_WRITER_ATTESTATION_VERSION,
     rulesetId: requiredPositiveInteger(value.rulesetId, "rulesetId"),
     rulesetFingerprint: fingerprint,
     assertedBypassAppIds: [...asserted as readonly number[]].sort((left, right) => left - right),

@@ -98,6 +98,9 @@ export type RulesetFingerprint = Readonly<{
   fingerprint: string;
 }>;
 
+/** Schema version of the root-owned main writer attestation record. */
+export const MAIN_WRITER_ATTESTATION_VERSION = 1;
+
 /**
  * A root-owned operator attestation that a ruleset nobody can enumerate
  * still restricts the default branch to the approval App alone.
@@ -117,7 +120,7 @@ export type RulesetFingerprint = Readonly<{
  */
 export type MainWriterAttestation = Readonly<{
   /** Schema version of this attestation record. */
-  version: 1;
+  version: typeof MAIN_WRITER_ATTESTATION_VERSION;
   /** The GitHub ruleset id the operator attested. */
   rulesetId: number;
   /** The live ruleset fingerprint at attestation time. */
@@ -1206,6 +1209,8 @@ function mainWriterGuardReason(
  * live fingerprint must equal the attested one, and the asserted bypass must
  * be exactly the approval App. A ruleset touch of any kind, including a
  * bypass list edit, changes the live fingerprint and fails closed here.
+ * Attestation covers exactly one ruleset by schema design; a second covering
+ * ruleset fails closed until the operator merges the overlap away.
  */
 function attestedGuardReason(
   input: Pick<PrReviewGateInput, "runtime">,

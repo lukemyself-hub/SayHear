@@ -203,10 +203,14 @@ main 单独前进由 controller 按可信终态旧 run 自动请求刷新。保�
    `branch_protection_incomplete` 转人工，这段时间审批不会通过（fail-closed，
    不会合入任何东西）。所以第 2 到第 5 步要一次做完，中间不要停：只改一半仓库
    设置只会让所有审批停在转人工，不会提前放行。
-4b. 运行安装助手的见证模式，把当前 ruleset 指纹和设置页看到的 bypass 名单写进
-   root-owned 见证文件。助手会打印实时指纹、规则与目标，请对照设置页确认 bypass
-   名单恰好只有审批 App 再确认写入。见证没有过期时间；之后改过 ruleset（加规则、
-   改目标、改 bypass 名单都会变指纹），下次运行会转人工并提示重新见证。
+4b. 运行安装助手的见证模式（随安装包交付，见交付记录），把当前 ruleset 指纹和
+   设置页看到的 bypass 名单写进 root-owned 见证文件。助手会打印实时指纹、规则与
+   目标，请对照设置页确认 bypass 名单恰好只有审批 App 再确认写入。指纹里不含 bypass
+   名单本身，靠 GitHub 每次改动 ruleset 都刷新 updated_at 来感知改动（本仓库已实测：
+   ruleset 建后一次保存就推高了 updated_at）。见证没有过期时间；之后改过 ruleset
+   （加规则、改目标、改 bypass 名单都会变指纹），下次运行会转人工并提示重新见证。
+   见证模式只支持恰好一条覆盖 main 的 update ruleset，多了就转人工，先合并不必要的
+   ruleset 再见证。
 5. 再次运行同一个安装助手并带启用参数，把 `config.json` 的 `integrationMode`
    写成 `serialized-merge`，再用固定 `pr-approval-status` 回读 `policyVersion`、
    `controllerSha256` 与 `integrationMode`。启用前助手先做写入前硬门禁：实时枚举
