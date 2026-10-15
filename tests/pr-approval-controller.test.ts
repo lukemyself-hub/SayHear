@@ -60,6 +60,7 @@ import {
   PR_REVIEW_REPORT_VERSION,
   SAYHEAR_REPOSITORY_ID,
   requirementDigest,
+  type MainWriterAttestation,
   type PrReviewGateInput,
 } from "../scripts/pr-review-gate.ts";
 import type { IntegrationRefreshRecord } from "../scripts/pr-approval/integration-refresh.ts";
@@ -2696,7 +2697,7 @@ describe("guarded serialized controller completion", () => {
     // context). Snapshot and status paths must never hit the protected
     // filesystem mid-flow, or unit runs outside macOS break: realpath
     // '/Library' does not exist on Linux CI.
-    const attestation = {
+    const attestation: MainWriterAttestation = {
       version: MAIN_WRITER_ATTESTATION_VERSION,
       rulesetId: 9,
       rulesetFingerprint: "a".repeat(64),
