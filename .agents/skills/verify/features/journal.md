@@ -65,7 +65,8 @@ launches `timeline` or `fault`: both carry the test-only file clock, and
   the scheduled scan until the first Journal publishes, advances the clock 24
   hours, sends a day-2 exchange, and publishes the second Journal. It then reads
   each date through its module date entry and its URL, compares the rendered
-  prose with that date's stored statements, copies, exports and follows
+  prose with that date's stored statements, requires copied text and exported
+  prose to match that date exactly without the other date's Journal, and follows
   查看当天聊天, requiring each date's own expression and not the other's. The
   clock file is re-read per request; no session row or generation result is
   edited. Three 2026-10-13 attempts lost a Journal workflow to the #340 deadlock

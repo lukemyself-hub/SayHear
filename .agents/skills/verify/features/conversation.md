@@ -53,12 +53,12 @@ session rows. Past-date navigation needs a completed prior-day exchange.
   human-pending.
 - Long-history journey: run `... history` on `local`, `live`, `timeline` or
   `fault` with a fresh instance. It sends 28 exchanges through the composer
-  (56 events, past
-  the 50-message window), reloads to require the bounded 25-exchange window,
-  scrolls to the top, sends one more exchange and requires the viewport not to
-  move and `回到最新` to appear and re-pin; then opens
+  (56 events, past the 50-message window), reloads to require the bounded
+  25-exchange window, scrolls to the top, sends one exchange and requires the
+  viewport not to move and `回到最新` to appear. After re-pinning, it sends
+  another exchange and requires the viewport to keep following. It then opens
   `/internal?date=YYYY-MM-DD`, requires `加载更早消息`, loads the rest, and
-  requires all 29 exchanges exactly once with the anchor's viewport offset
+  requires all 30 exchanges exactly once with the anchor's viewport offset
   preserved.
 - Fault journey: run `... interruption` on `fault`. It writes a one-chunk
   ceiling to the test-only fault file, sends a real reply that interrupts after

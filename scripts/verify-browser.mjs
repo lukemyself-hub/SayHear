@@ -535,7 +535,7 @@ async function historyJourney() {
   const responsesPath = "/api/internal/conversation/responses";
   const messageText = (index) => `Synthetic verification ${state.runId}: history-${String(index).padStart(2, "0")} through the composer.`;
   const composerExchanges = 28;
-  const totalExchanges = composerExchanges + 1;
+  const totalExchanges = composerExchanges + 2;
   action(`Send ${composerExchanges} exchanges through the real composer to exceed the 50-message recent window.`);
   for (let index = 1; index <= composerExchanges; index += 1) {
     await sendThroughComposer(messageText(index), { snapshotDraft: false });
@@ -571,6 +571,12 @@ async function historyJourney() {
   assert(distance <= 48, `回到最新 left the viewport ${distance}px above the bottom.`);
   assert.equal(await jump.count(), 0, "回到最新 is still shown after re-pinning.");
 
+  action("Send another exchange after re-pinning; its reply must keep the viewport at the bottom without showing 回到最新.");
+  await sendThroughComposer(messageText(composerExchanges + 2), { snapshotDraft: false });
+  const afterFollowupDistance = await currentList.evaluate((node) => node.scrollHeight - node.scrollTop - node.clientHeight);
+  assert(afterFollowupDistance <= 48, `A reply after re-pinning left the viewport ${afterFollowupDistance}px above the bottom.`);
+  assert.equal(await jump.count(), 0, "回到最新 reappeared after a reply while following.");
+
   const logicalDate = sql("SELECT logical_date::text FROM daily_sessions");
   action(`Open the read-only date URL /internal?date=${logicalDate} and page the older messages.`);
   await page.goto(`${state.origin}/internal?date=${logicalDate}`, { waitUntil: "networkidle" });
@@ -583,7 +589,7 @@ async function historyJourney() {
   await loadOlder.waitFor();
   await list.evaluate((node) => { node.scrollTop = 0; });
   await page.waitForTimeout(300);
-  const anchor = list.locator(".userMessage", { hasText: "history-05" });
+  const anchor = list.locator(".userMessage", { hasText: "history-06" });
   const container = await list.elementHandle();
   const offsetOf = (element) => element.evaluate((node, parent) => node.getBoundingClientRect().top - parent.getBoundingClientRect().top, container);
   const anchorBefore = await offsetOf(anchor);
@@ -605,7 +611,8 @@ async function historyJourney() {
   const rendered = (await list.locator(".userMessage .messageBody p").allInnerTexts()).map(squash).sort();
   const expected = Array.from({ length: totalExchanges }, (_, index) => squash(messageText(index + 1))).sort();
   assert.deepEqual(rendered, expected, "Older messages are missing or duplicated.");
-  assert.equal(await list.locator(".assistantMessage").count(), totalExchanges);
+  assert.equal(await list.locator(".userMessage").count(), totalExchanges, "The read-only history omitted user messages.");
+  assert.equal(await list.locator(".assistantMessage").count(), totalExchanges, "The read-only history omitted assistant replies.");
   assert.equal(storedMessages().length, 2 * totalExchanges);
   await snapshot("all-messages");
   save("stored", { anchorAfter, anchorBefore, exchangeCount: totalExchanges, olderMessageRequests: requestsTo("/api/internal/conversation/messages").length, responseRequests: requestsTo(responsesPath).length, storedEvents: storedMessages().length });
@@ -719,6 +726,7 @@ async function crossDateJourney() {
   for (const day of [dayOne, dayTwo]) {
     const expected = day === dayOne ? firstJournal : secondJournal;
     const ownToken = day === dayOne ? "herons" : "lighthouse";
+    const otherJournal = day === dayOne ? secondJournal : firstJournal;
     const otherToken = day === dayOne ? "lighthouse" : "herons";
     action(`Read ${day} through its date entry in the Journal module.`);
     await page.goto(state.origin + "/internal/journals", { waitUntil: "networkidle" });
@@ -741,7 +749,8 @@ async function crossDateJourney() {
     await journal.getByRole("button", { name: "复制", exact: true }).click();
     await journal.getByRole("button", { name: "已复制", exact: true }).waitFor();
     const copied = await page.evaluate(() => navigator.clipboard.readText());
-    assert(squash(copied).includes(squash(expected.prose)), `The ${day} clipboard does not hold the visible Journal.`);
+    assert.equal(squash(copied), squash(expected.prose), `The ${day} clipboard differs from the visible Journal.`);
+    assert(!squash(copied).includes(squash(otherJournal.prose)), `The ${day} clipboard includes the other date's Journal.`);
 
     action(`Choose 导出 for ${day} and read the downloaded file.`);
     const pending = page.waitForEvent("download");
@@ -752,7 +761,8 @@ async function crossDateJourney() {
     assert.equal(download.suggestedFilename(), `sayhear-journal-${day}.txt`, "The export does not carry the selected date.");
     const exportedText = readFileSync(exported, "utf8");
     assert(exportedText.startsWith(`${day}\n\n`), "The export does not open with the Journal's date.");
-    assert(squash(exportedText).includes(squash(expected.prose)), "The export does not hold the visible Journal prose.");
+    assert.equal(squash(exportedText.slice(`${day}\n\n`.length)), squash(expected.prose), "The export differs from the visible Journal prose.");
+    assert(!squash(exportedText).includes(squash(otherJournal.prose)), `The ${day} export includes the other date's Journal.`);
 
     action(`Choose 查看当天聊天 for ${day}; only that day's read-only Conversation may open.`);
     await journal.getByRole("link", { name: "查看当天聊天", exact: true }).click();

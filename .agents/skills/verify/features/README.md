@@ -13,9 +13,9 @@ not the root README's historical Foundation-only feature description.
 - The empty seed includes auth and backup policy, but no product content. Episode
   and Reflection writes remain off. This is not a hosted acceptance environment.
 - Use a fresh run for `text`, `keyboard`, `history`, `delivery`, `interruption`,
-  `cross-date` and `oauth`. Keyboard/IME, fault injection, long history and a
-  second Journal date now have their own journeys; generated Reflections still
-  need one.
+  `cross-date` and `oauth`. Keyboard/IME, fault injection, long history with
+  continued follow after re-pinning, and a second Journal date now have their own
+  journeys; generated Reflections still need one.
 
 ## Driving conventions
 
