@@ -241,6 +241,19 @@ describe("runtime safety configuration", () => {
     ).toBe("test");
   });
 
+  it("rejects blank test clock and provider fault file paths", () => {
+    const environment = testRuntimeEnvironment();
+    expect(() =>
+      loadRuntimeConfiguration({ ...environment, SAYHEAR_TEST_NOW_FILE: " " }),
+    ).toThrow("SAYHEAR_TEST_NOW_FILE must name a file");
+    expect(() =>
+      loadRuntimeConfiguration({
+        ...environment,
+        SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS_FILE: " ",
+      }),
+    ).toThrow("SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS_FILE must name a file");
+  });
+
   it("keeps file-backed provider faults test-only", () => {
     expect(() =>
       assertSafeRuntimeConfiguration({
