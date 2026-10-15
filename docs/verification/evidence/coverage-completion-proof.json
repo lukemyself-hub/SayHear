@@ -1,11 +1,26 @@
 {
-  "recordedAt": "2026-10-14T01:54:03.000Z",
+  "recordedAt": "2026-10-15T19:20:00.000Z",
   "baseCommit": "b7fac60d3111726616c571840f33126d9a4b6e41",
-  "evidenceCommit": "6a0528ec9dc84f1a1e717a2312c6a2482e32a5f8",
-  "workingTree": "All runs launched at evidenceCommit with the review-fix edits still uncommitted, except dev-345-cross-date-4 which ran on the clean ca5a09d commit; each run's doctor.json records the exact sourceStatus. driverSha256 pins the driver revision the evidence came from.",
+  "evidenceCommit": "fb0fa356c23e5ee0c42544f300b9a5b8a20f1a5c",
+  "workingTree": "Historical runs below retain their original identities. The 2026-10-15 cross-date rerun launched on clean commit fb0fa35; only the untracked handoff/log/config files remained. The linked artifact directory includes full browser, database and cleanup evidence.",
+  "latestCrossDateRun": {
+    "run": "issue-345-cross-date-4",
+    "profile": "timeline",
+    "commit": "fb0fa356c23e5ee0c42544f300b9a5b8a20f1a5c",
+    "passed": true,
+    "evidence": "../../../../artifacts/verify/issue-345-cross-date-4",
+    "journey": "cross-date",
+    "logicalDates": ["2026-07-27", "2026-07-28"],
+    "journals": "Both dates have one statement and a current published Journal; each published after two scans, with zero failed scans.",
+    "browserChecks": ["date entry", "date URL", "copy", "export", "view that day's conversation"],
+    "proseLengths": {"2026-07-27": 119, "2026-07-28": 120},
+    "substitutions": ["test-only file clock re-read per request", "60 second inactivity window", "driver-invoked scans", "local Workflow runtime"],
+    "scratchRemoved": true,
+    "cleanupReceipt": "../../../../artifacts/verify/issue-345-cross-date-4/cleanup.json"
+  },
   "driverSha256": {
-    "scripts/verify-control.mjs": "535b4e57022a93f8687f3b294039a09dd9cff401b73242669a70fa259515c7c7",
-    "scripts/verify-fixture.mjs": "5edd2e7bc719d506aa46c300fde3d82131d0400a5dbb3cc623a498b4f6087807",
+    "scripts/verify-control.mjs": "7f29fbb0b077fe957ba531198a97bb2271ec8f4d70f557aa7e6c0a8de76e0b9a",
+    "scripts/verify-fixture.mjs": "fa4d9f22a7afc36c5c56d24e7d296d4f983036b0076ac39131eeae255a134dd6",
     "scripts/verify-browser.mjs": "9fd2ad298019b831f606bd3d9c19f1b184a76463ca158f611755c67c65a120e6"
   },
   "mergedMain": {
@@ -198,7 +213,7 @@
     ],
     "cleanup": "no production changes and no public bypass links; the rotated station CRON_SECRET stays in a 0600 local file; the synthetic fixture remains in the disposable station database; screenshots and logs stay in the git-ignored artifacts/verify/hosted-345-1/"
   },
-  "blockedRuns": {
+  "historicalBlockedRuns": {
     "cross-date": {
       "attempts": [
         {
@@ -223,7 +238,7 @@
           "observation": "The retry agent re-ran the journey on the clean committed review-fix revision (ca5a09d) in the foreground. The day-1 session quiesced by inactivity_timeout, eligibility created one command, the first scan dispatched three outbox items, and the Journal generation ended as retryable_failed / journal_generation_failed; postgres.log holds 'deadlock detected' at 2026-10-13 19:16:51.254 PDT (the daily_sessions FOR UPDATE waits on an evidence_source_snapshots insert). The failed instance was cleaned with scratchRemoved true."
         }
       ],
-      "outcome": "All three attempts that reached the journey lost the Journal path to the known issue #340 deadlock, not a driver fault. (One further environment retry, dev-345-cross-date-3, never launched a browser: playwright-core expected its own cached Chrome build; dev-345-cross-date-4 launched with SAYHEAR_CHROME pointing at the installed Chrome for Testing.) Real-run evidence for cross-date waits for issue #340 to merge, as triaged for issue #345; the journey stays in the driver and feature map.",
+      "outcome": "Historical attempts before #340 was fixed lost Journal generation to the deadlock. The rerun after #340 merged is recorded as latestCrossDateRun above and passed on 2026-10-15.",
       "issue": "https://github.com/lukemyself-hub/SayHear/issues/340",
       "scratchRemoved": true
     }
@@ -233,10 +248,7 @@
       "journey": "a real operating-system IME for the keyboard journey",
       "reason": "only a human can operate a real IME; the driver uses browser-level CDP Input.imeSetComposition and records that substitution"
     },
-    {
-      "journey": "cross-date acceptance evidence",
-      "reason": "three attempts were blocked by the issue #340 deadlock (see blockedRuns); per issue #345 triage it is rerun after that fix"
-    },
+
     {
       "journey": "hosted Episode and Daily/Weekly Reflection generation",
       "reason": "executed on 2026-10-14 except for the G1-gated generation: the station keeps switch.episode_build_enabled and switch.reflection_enabled false and holds no active G1 manifest, so the scans created no episode or reflection commands; recorded as a configuration gap in hosted-execution-proof.json instead of enabling G1"

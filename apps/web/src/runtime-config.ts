@@ -256,7 +256,11 @@ export function loadRuntimeConfiguration(environment: Environment) {
   // test composition (never a client parameter) and is re-read on every clock
   // call. The same test-only deployment guard as SAYHEAR_TEST_NOW applies, and
   // an unreadable instant throws instead of falling back to the wall clock.
-  const testNowFile = environment.SAYHEAR_TEST_NOW_FILE?.trim() || null;
+  const rawTestNowFile = environment.SAYHEAR_TEST_NOW_FILE;
+  if (rawTestNowFile !== undefined && rawTestNowFile.trim().length === 0) {
+    throw new Error("SAYHEAR_TEST_NOW_FILE must name a file.");
+  }
+  const testNowFile = rawTestNowFile?.trim() ?? null;
   if (testNowFile && testNow) {
     throw new Error(
       "SAYHEAR_TEST_NOW_FILE and SAYHEAR_TEST_NOW cannot both be set.",
@@ -288,14 +292,19 @@ export function loadRuntimeConfiguration(environment: Environment) {
           required(environment, "SAYHEAR_TEST_PROVIDER_CHUNKS"),
         )
       : [];
+  const rawProviderFaultFile =
+    environment.SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS_FILE;
+  if (rawProviderFaultFile !== undefined && rawProviderFaultFile.trim().length === 0) {
+    throw new Error(
+      "SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS_FILE must name a file.",
+    );
+  }
   const failAfterChunks =
-    environment.SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS_FILE === undefined
+    rawProviderFaultFile === undefined
       ? environment.SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS
         ? Number(environment.SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS)
         : undefined
-      : readProviderFaultChunksFile(
-          environment.SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS_FILE,
-        );
+      : readProviderFaultChunksFile(rawProviderFaultFile);
   const failAfterCompletionValue =
     environment.SAYHEAR_TEST_PROVIDER_FAIL_AFTER_COMPLETION;
   if (
