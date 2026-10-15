@@ -1,14 +1,14 @@
 {
-  "recordedAt": "2026-10-15T19:20:00.000Z",
+  "recordedAt": "2026-10-15T19:32:04.482Z",
   "baseCommit": "b7fac60d3111726616c571840f33126d9a4b6e41",
-  "evidenceCommit": "fb0fa356c23e5ee0c42544f300b9a5b8a20f1a5c",
-  "workingTree": "Historical runs below retain their original identities. The 2026-10-15 cross-date rerun launched on clean commit fb0fa35; only the untracked handoff/log/config files remained. The linked artifact directory includes full browser, database and cleanup evidence.",
+  "evidenceCommit": "084b6c7d4690e2b423c828344cb421333133d488",
+  "workingTree": "The cross-date journey ran on clean commit 084b6c7; only the untracked handoff/log/config files remained. The first launch attempt used the missing default Playwright executable and was cleaned; the successful rerun used the already cached Chrome for Testing. The linked artifact directory includes full browser, database and cleanup evidence.",
   "latestCrossDateRun": {
-    "run": "issue-345-cross-date-4",
+    "run": "issue-345-cross-date-6",
     "profile": "timeline",
-    "commit": "fb0fa356c23e5ee0c42544f300b9a5b8a20f1a5c",
+    "commit": "084b6c7d4690e2b423c828344cb421333133d488",
     "passed": true,
-    "evidence": "../../../../artifacts/verify/issue-345-cross-date-4",
+    "evidence": "../../../../artifacts/verify/issue-345-cross-date-6",
     "journey": "cross-date",
     "logicalDates": ["2026-07-27", "2026-07-28"],
     "journals": "Both dates have one statement and a current published Journal; each published after two scans, with zero failed scans.",
@@ -16,7 +16,7 @@
     "proseLengths": {"2026-07-27": 119, "2026-07-28": 120},
     "substitutions": ["test-only file clock re-read per request", "60 second inactivity window", "driver-invoked scans", "local Workflow runtime"],
     "scratchRemoved": true,
-    "cleanupReceipt": "../../../../artifacts/verify/issue-345-cross-date-4/cleanup.json"
+    "cleanupReceipt": "../../../../artifacts/verify/issue-345-cross-date-6/cleanup.json"
   },
   "driverSha256": {
     "scripts/verify-control.mjs": "7f29fbb0b077fe957ba531198a97bb2271ec8f4d70f557aa7e6c0a8de76e0b9a",

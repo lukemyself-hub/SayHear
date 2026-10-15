@@ -70,8 +70,9 @@ launches `timeline` or `fault`: both carry the test-only file clock, and
   clock file is re-read per request; no session row or generation result is
   edited. Three 2026-10-13 attempts lost a Journal workflow to the #340 deadlock
   (`dev-345-cross-date-1` and `dev-345-cross-date-4` at day-1, `dev-345-cross-date-2`
-  at day-2 after day-1 published); real-run evidence for this journey waits for
-  that fix.
+  at day-2 after day-1 published). After the fix, `issue-345-cross-date-6` passed
+  on 2026-10-15; its run-specific evidence is in
+  `docs/verification/evidence/coverage-completion-proof.json`.
 
 ## Gotchas
 
