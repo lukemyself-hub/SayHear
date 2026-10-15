@@ -44,6 +44,7 @@ import {
   PR_REVIEW_GATE_INSTALLED_POLICY_VERSION as V8_POLICY_VERSION,
   PR_REVIEW_GATE_OLDER_INSTALLED_POLICY_VERSION as V6_POLICY_VERSION,
   PR_REVIEW_GATE_V9_POLICY_VERSION,
+  PR_REVIEW_GATE_V10_POLICY_VERSION,
   PR_REVIEW_GATE_POLICY_VERSION,
   PR_REVIEW_REPORT_VERSION,
   PR_VALIDATE_WORKFLOW_PATH,
@@ -56,8 +57,10 @@ import {
   SAYHEAR_REPOSITORY_ID,
   SAYHEAR_REPOSITORY_NAME,
   type IntegrationMode,
+  type MainWriterAttestation,
   type PrReviewGateInput,
   type PrReviewGateReport,
+  type RulesetFingerprint,
   type TrustedPrReviewPolicy,
 } from "./pr-review-gate.ts";
 import { SignedIntegrationRefreshStore, requestIntegrationRefresh, type IntegrationRefreshStore } from "./pr-approval/integration-refresh.ts";
@@ -104,6 +107,8 @@ const CONFIG_DIRECTORY =
   "/Library/Application Support/SayHear/PRApproval";
 const CONFIG_PATH = `${CONFIG_DIRECTORY}/config.json`;
 const CONTROLLER_PATH = `${CONFIG_DIRECTORY}/controller.mjs`;
+const ATTESTATION_PATH = `${CONFIG_DIRECTORY}/main-writer-attestation.json`;
+const ATTESTATION_VERSION = 1;
 const LAUNCHER_PATHS = [
   `${CONFIG_DIRECTORY}/pr-approval-status`,
   `${CONFIG_DIRECTORY}/pr-approval-prepare`,
@@ -354,6 +359,7 @@ const NO_HUMAN_BINDING: HumanReviewBinding = Object.freeze({
 export type RequirementProjection = "review-inclusive-v4" | "review-exclusive-v5";
 export const RECEIPT_POLICY_VERSIONS: readonly string[] = [
   PR_REVIEW_GATE_POLICY_VERSION,
+  PR_REVIEW_GATE_V10_POLICY_VERSION,
   PR_REVIEW_GATE_V9_POLICY_VERSION,
   V8_POLICY_VERSION,
   V6_POLICY_VERSION,
@@ -1373,6 +1379,132 @@ async function readRulesetDetails(
   return details;
 }
 
+function stableStringify(value: unknown): string {
+  if (value === null) return "null";
+  if (Array.isArray(value)) {
+    return `[${value.map((entry) => stableStringify(entry)).join(",")}]`;
+  }
+  if (isRecord(value)) {
+    const keys = Object.keys(value).sort();
+    return `{${keys.map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(",")}}`;
+  }
+  const text = JSON.stringify(value);
+  if (typeof text !== "string") throw new Error("Ruleset detail is not JSON-serializable.");
+  return text;
+}
+
+/**
+ * Content fingerprint of one ruleset detail record.
+ *
+ * Only fields the App token can actually read enter the fingerprint: id,
+ * enforcement, target, conditions, rules, and `updated_at`. GitHub bumps
+ * `updated_at` on any ruleset mutation, including bypass list edits, so a
+ * fingerprint taken at attestation time stops matching after any touch.
+ * Array order is significant on purpose: a reordering the API actually
+ * reports is treated as a change and fails closed.
+ */
+export function fingerprintRuleset(detail: JsonRecord): string {
+  const id = detail.id;
+  if (typeof id !== "number" || !Number.isSafeInteger(id) || id <= 0) {
+    throw new Error("Ruleset detail has no usable id.");
+  }
+  for (const key of ["enforcement", "target", "updated_at"] as const) {
+    if (typeof detail[key] !== "string") {
+      throw new Error(`Ruleset detail has no usable ${key}.`);
+    }
+  }
+  if (!isRecord(detail.conditions) || !Array.isArray(detail.rules)) {
+    throw new Error("Ruleset detail has no usable conditions or rules.");
+  }
+  return createHash("sha256")
+    .update(
+      stableStringify({
+        id: detail.id,
+        enforcement: detail.enforcement,
+        target: detail.target,
+        conditions: detail.conditions,
+        rules: detail.rules,
+        updatedAt: detail.updated_at,
+      }),
+    )
+    .digest("hex");
+}
+
+function parseMainWriterAttestation(value: unknown): MainWriterAttestation {
+  if (!isRecord(value)) throw new Error("Main writer attestation must be an object.");
+  if (value.version !== ATTESTATION_VERSION) {
+    throw new Error(`Main writer attestation version must be ${ATTESTATION_VERSION}.`);
+  }
+  const fingerprint = value.rulesetFingerprint;
+  if (typeof fingerprint !== "string" || !/^[0-9a-f]{64}$/.test(fingerprint)) {
+    throw new Error("Main writer attestation has no usable ruleset fingerprint.");
+  }
+  const asserted = value.assertedBypassAppIds;
+  if (
+    !Array.isArray(asserted) ||
+    asserted.length === 0 ||
+    asserted.some(
+      (actorId) =>
+        typeof actorId !== "number" || !Number.isSafeInteger(actorId) || actorId <= 0,
+    )
+  ) {
+    throw new Error("Main writer attestation has no usable asserted bypass list.");
+  }
+  return {
+    version: ATTESTATION_VERSION,
+    rulesetId: requiredPositiveInteger(value.rulesetId, "rulesetId"),
+    rulesetFingerprint: fingerprint,
+    assertedBypassAppIds: [...asserted as readonly number[]].sort((left, right) => left - right),
+    attestedAt: requiredString(value.attestedAt, "attestedAt"),
+    attestedBy: requiredString(value.attestedBy, "attestedBy"),
+  };
+}
+
+/**
+ * The operator attestation backing the main writer guard, or null when the
+ * operator never attested. A missing file is ordinary: without it the guard
+ * simply needs live bypass enumeration to pass. A present but unreadable or
+ * malformed file throws, the same fail-closed posture as the App config.
+ */
+async function readMainWriterAttestation(): Promise<MainWriterAttestation | null> {
+  await assertTrustedDirectories();
+  let raw: string;
+  try {
+    const [resolvedPath, fileInfo] = await Promise.all([
+      realpath(ATTESTATION_PATH),
+      stat(ATTESTATION_PATH),
+    ]);
+    if (
+      resolvedPath !== ATTESTATION_PATH ||
+      !fileInfo.isFile() ||
+      fileInfo.uid !== 0 ||
+      (fileInfo.mode & 0o022) !== 0
+    ) {
+      throw new Error(
+        "Main writer attestation must be a root-owned, non-writable regular file.",
+      );
+    }
+    raw = await readFile(ATTESTATION_PATH, "utf8");
+  } catch (error: unknown) {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      (error as { code?: unknown }).code === "ENOENT"
+    ) {
+      return null;
+    }
+    throw error;
+  }
+  let value: unknown;
+  try {
+    value = JSON.parse(raw) as unknown;
+  } catch {
+    throw new Error(`Main writer attestation is not valid JSON at ${ATTESTATION_PATH}.`);
+  }
+  return parseMainWriterAttestation(value);
+}
+
 /**
  * Who is allowed to update the default branch.
  *
@@ -1409,6 +1541,7 @@ export async function readMainWriterGuard(
   const bypassActorIds = new Set<number>();
   const bypassModes = new Set<string>();
   const rulesetIds: number[] = [];
+  const rulesetFingerprints: RulesetFingerprint[] = [];
   let restrictsDefaultBranchUpdates = false;
   let bypassActorsEnumerated = true;
   for (const ruleset of rulesets) {
@@ -1433,6 +1566,11 @@ export async function readMainWriterGuard(
     }
     rulesetIds.push(id);
     restrictsDefaultBranchUpdates = true;
+    try {
+      rulesetFingerprints.push({ id, fingerprint: fingerprintRuleset(ruleset) });
+    } catch {
+      return unreadable;
+    }
     // GitHub reports this even when it hides `bypass_actors`, so the guard can
     // still show whether the App itself is allowed through the restriction.
     if (typeof ruleset.current_user_can_bypass === "string") {
@@ -1457,6 +1595,7 @@ export async function readMainWriterGuard(
     bypassActorsEnumerated,
     appBypassMode: bypassModes.size === 1 ? [...bypassModes][0]! : null,
     rulesetIds,
+    rulesetFingerprints,
   };
 }
 
@@ -2348,6 +2487,7 @@ export async function readSnapshot(
     openPullRequests,
     mergeQueueAvailable,
     mainWriterGuard,
+    mainWriterAttestation,
   ] = await Promise.all([
       readRepositoryMergeSettings(config.api),
       config.api.request<GitHubPullRequest>(
@@ -2365,6 +2505,9 @@ export async function readSnapshot(
         : Promise.resolve(null),
       integrationMode === "serialized-merge"
         ? readMainWriterGuard(config.api, "main")
+        : Promise.resolve(null),
+      integrationMode === "serialized-merge"
+        ? readMainWriterAttestation()
         : Promise.resolve(null),
     ]);
   if (recordNumber(repository, "id") !== SAYHEAR_REPOSITORY_ID) {
@@ -2601,6 +2744,7 @@ export async function readSnapshot(
         integrationMode,
         mergeQueueAvailable,
         mainWriterGuard,
+        ...(mainWriterAttestation === null ? {} : { mainWriterAttestation }),
       },
     },
     evidence: collected.evidence,
@@ -5137,7 +5281,7 @@ async function statusReport(
   config: ControllerConfig,
 ): Promise<Readonly<Record<string, unknown>>> {
   const integrationMode = parseIntegrationMode(config.app.integrationMode);
-  const [repository, branchProtection, mergeQueueAvailable, mainWriterGuard] =
+  const [repository, branchProtection, mergeQueueAvailable, mainWriterGuard, mainWriterAttestation] =
     await Promise.all([
       readRepositoryMergeSettings(config.api),
       readBranchProtection(config.api),
@@ -5148,12 +5292,14 @@ async function statusReport(
       // guard is reported whatever the mode is: Luke can see exactly what the
       // controller would enforce before he switches `serialized-merge` on.
       readMainWriterGuard(config.api, "main"),
+      readMainWriterAttestation(),
     ]);
   return {
     repository: SAYHEAR_REPOSITORY_NAME,
     integrationMode,
     mergeQueueAvailable,
     mainWriterGuard,
+    mainWriterAttestation,
     build: controllerBuildIdentity(),
     controllerSha256: createHash("sha256").update(await readFile(CONTROLLER_PATH)).digest("hex"),
     completionStates: config.completionStore ? (await config.completionStore.list()).map((record) => ({ pullRequest: record.identity.pullRequestNumber, phase: record.phase, attempts: record.attempts, nextRetryAt: record.nextRetryAt, reason: record.reason, mergeSha: record.mergeSha })) : [],
