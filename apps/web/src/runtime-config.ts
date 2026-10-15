@@ -646,6 +646,9 @@ function boundedMilliseconds(
  * only, enforced by assertSafeRuntimeConfiguration.
  */
 function readTestNowFile(path: string): Date {
+  if (path.trim().length === 0) {
+    throw new Error("SAYHEAR_TEST_NOW_FILE must name a file.");
+  }
   let instant: Date;
   try {
     // Use the runtime builtin lazily because this module is also imported by
@@ -668,6 +671,9 @@ function readTestNowFile(path: string): Date {
  * run. Test deployment only, enforced by assertSafeRuntimeConfiguration.
  */
 function readProviderFaultChunksFile(path: string): number | undefined {
+  if (path.trim().length === 0) {
+    throw new Error("SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS_FILE must name a file.");
+  }
   let content: string;
   try {
     const { readFileSync } = process.getBuiltinModule("node:fs");

@@ -197,12 +197,12 @@ async function launch() {
   const state = { runId, root, scratch, ...prepared, profile, standIns, sessionToken: randomBytes(32).toString("hex"), scannerSecret: randomBytes(32).toString("hex"), ownerId: "01984477-31e1-7595-92c6-06889cb0fdde", cleaned: false };
   // `fixed` freezes the clock, `real` lets exchanges end by wall time, and
   // `controllable` does both: the driver freezes it and advances it by hand.
-  const freezesClock = standIns.clock !== "real";
+  const freezesClock = standIns.clock === "fixed";
   const endsExchangesByTime = standIns.clock !== "fixed";
   if (endsExchangesByTime) state.inactivityTimeoutMs = SHORT_INACTIVITY_MS;
   if (standIns.clock === "controllable") {
     // The driver rewrites this file between requests; the runtime re-reads it
-    // per configuration load. `SAYHEAR_TEST_NOW` stays the launch fallback.
+    // on every clock call. Do not also set the static SAYHEAR_TEST_NOW value.
     state.testNowInitial = FIXED_NOW;
     state.testNowFile = join(evidence, "test-clock.txt");
     writeFileSync(state.testNowFile, `${FIXED_NOW}\n`);
