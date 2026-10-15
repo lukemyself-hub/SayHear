@@ -4,6 +4,16 @@ import { describe, expect, it } from "vitest";
 
 import {
   appReviewOutcomeForIdentity,
+  baseReviewRiskSafe,
+  completionBlockingScope,
+  definitiveMergeRejection,
+  guardImmediateMerge,
+  readHumanBinding,
+  readSavedReviewReport,
+  refreshStaleIntegration,
+  readSnapshot,
+  recoverControllerCompletion,
+  applyMergeAction,
   collectEvidence,
   readClosingIssueReferences,
   requestDeferredMerge,
@@ -49,6 +59,9 @@ import {
   requirementDigest,
   type PrReviewGateInput,
 } from "../scripts/pr-review-gate.ts";
+import type { IntegrationRefreshRecord } from "../scripts/pr-approval/integration-refresh.ts";
+import type { CompletionRecord } from "../scripts/pr-approval/completion.ts";
+import type { BrowserApprovalStore, BrowserState } from "../scripts/pr-approval/browser-approval.ts";
 import { preMergeDeferralFor } from "../scripts/daily-release-validation.ts";
 
 const ACTIONS_APP_ID = 15368;
@@ -136,10 +149,51 @@ class StubApi implements GitHubApi {
     return this.pageValues(path) as T[];
   }
 
-  async bytes(): Promise<Uint8Array> {
+  async bytes(_path: string): Promise<Uint8Array> {
     return this.archiveBytes();
   }
 }
+
+function storedZipArchive(
+  entries: readonly Readonly<{ name: string; content: Uint8Array }>[],
+): Uint8Array {
+  const localParts: Buffer[] = [];
+  const centralParts: Buffer[] = [];
+  let localOffset = 0;
+  for (const entry of entries) {
+    const nameBytes = Buffer.from(entry.name, "utf8");
+    const size = entry.content.byteLength;
+    const local = Buffer.alloc(30 + nameBytes.length);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(20, 4);
+    local.writeUInt32LE(size, 18);
+    local.writeUInt32LE(size, 22);
+    local.writeUInt16LE(nameBytes.length, 26);
+    nameBytes.copy(local, 30);
+    localParts.push(local, Buffer.from(entry.content));
+
+    const central = Buffer.alloc(46 + nameBytes.length);
+    central.writeUInt32LE(0x02014b50, 0);
+    central.writeUInt16LE(20, 4);
+    central.writeUInt16LE(20, 6);
+    central.writeUInt32LE(size, 20);
+    central.writeUInt32LE(size, 24);
+    central.writeUInt16LE(nameBytes.length, 28);
+    nameBytes.copy(central, 46);
+    central.writeUInt32LE(localOffset, 42);
+    centralParts.push(central);
+    localOffset += local.length + size;
+  }
+  const central = Buffer.concat(centralParts);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(entries.length, 8);
+  end.writeUInt16LE(entries.length, 10);
+  end.writeUInt32LE(central.length, 12);
+  end.writeUInt32LE(localOffset, 16);
+  return new Uint8Array(Buffer.concat([...localParts, central, end]));
+}
+
 
 describe("migration evidence collection", () => {
   const migrationCheckId = "migration:upgrade-compatibility";
@@ -169,45 +223,6 @@ describe("migration evidence collection", () => {
     changed_files: 1,
   } satisfies Parameters<typeof collectEvidence>[2];
 
-  function storedZipArchive(
-    entries: readonly Readonly<{ name: string; content: Uint8Array }>[],
-  ): Uint8Array {
-    const localParts: Buffer[] = [];
-    const centralParts: Buffer[] = [];
-    let localOffset = 0;
-    for (const entry of entries) {
-      const nameBytes = Buffer.from(entry.name, "utf8");
-      const size = entry.content.byteLength;
-      const local = Buffer.alloc(30 + nameBytes.length);
-      local.writeUInt32LE(0x04034b50, 0);
-      local.writeUInt16LE(20, 4);
-      local.writeUInt32LE(size, 18);
-      local.writeUInt32LE(size, 22);
-      local.writeUInt16LE(nameBytes.length, 26);
-      nameBytes.copy(local, 30);
-      localParts.push(local, Buffer.from(entry.content));
-
-      const central = Buffer.alloc(46 + nameBytes.length);
-      central.writeUInt32LE(0x02014b50, 0);
-      central.writeUInt16LE(20, 4);
-      central.writeUInt16LE(20, 6);
-      central.writeUInt32LE(size, 20);
-      central.writeUInt32LE(size, 24);
-      central.writeUInt16LE(nameBytes.length, 28);
-      nameBytes.copy(central, 46);
-      central.writeUInt32LE(localOffset, 42);
-      centralParts.push(central);
-      localOffset += local.length + size;
-    }
-    const central = Buffer.concat(centralParts);
-    const end = Buffer.alloc(22);
-    end.writeUInt32LE(0x06054b50, 0);
-    end.writeUInt16LE(entries.length, 8);
-    end.writeUInt16LE(entries.length, 10);
-    end.writeUInt32LE(central.length, 12);
-    end.writeUInt32LE(localOffset, 16);
-    return new Uint8Array(Buffer.concat([...localParts, central, end]));
-  }
 
   function collector(options: {
     migrationResult?: Readonly<{
@@ -222,6 +237,10 @@ describe("migration evidence collection", () => {
     badDigest?: boolean;
     runBaseSha?: string;
     mergeWorkflowBlobSha?: string;
+    integrationMode?: "serialized-merge";
+    checkout?: Readonly<Record<string, unknown>>;
+    workflowStatus?: string;
+    checkStatus?: string;
   } = {}) {
     const migrationResult = options.migrationResult === undefined
       ? {
@@ -252,6 +271,8 @@ describe("migration evidence collection", () => {
       headSha: HEAD_SHA,
       baseSha: BASE_SHA,
       checkoutSha: MERGE_SHA,
+      parentShas: [BASE_SHA, HEAD_SHA], runId, runAttempt: 1,
+      ...options.checkout,
     }), "utf8");
     const archive = storedZipArchive([
       { name: "vitest-report.json", content: new Uint8Array(reportBytes) },
@@ -263,7 +284,7 @@ describe("migration evidence collection", () => {
       app: { id: ACTIONS_APP_ID },
       head_sha: HEAD_SHA,
       details_url: `https://github.com/lukemyself-hub/SayHear/actions/runs/${runId}`,
-      status: "completed",
+      status: options.checkStatus ?? "completed",
       conclusion: "success",
     };
     const api = new StubApi((path) => {
@@ -281,10 +302,14 @@ describe("migration evidence collection", () => {
             head: { sha: HEAD_SHA },
             base: { sha: options.runBaseSha ?? BASE_SHA },
           }],
-          status: "completed",
+          status: options.workflowStatus ?? "completed",
           conclusion: "success",
           run_attempt: 1,
         };
+      }
+      if (path.includes("/git/commits/")) {
+        return { sha: options.checkout?.checkoutSha ?? MERGE_SHA,
+          parents: [{ sha: BASE_SHA }, { sha: HEAD_SHA }] };
       }
       if (path.includes("/contents/")) {
         return {
@@ -315,6 +340,7 @@ describe("migration evidence collection", () => {
         slug: "sayhear-pr-review-gate",
         productionMergeAuthorized: false,
         ordinaryMergeTriggersProduction: false,
+        integrationMode: options.integrationMode,
       },
       policy: {
         repositoryId: SAYHEAR_REPOSITORY_ID,
@@ -331,10 +357,40 @@ describe("migration evidence collection", () => {
     return {
       reportDigest: createHash("sha256").update(reportBytes).digest("hex"),
       collect: () => collectEvidence(
-        config, 321, pullRequest, changedFiles, [], capability, MERGE_SHA, BASE_SHA,
+        config, 321, pullRequest, changedFiles, [], capability, MERGE_SHA, options.integrationMode ? "9".repeat(40) : BASE_SHA,
       ),
     };
   }
+
+  it("uses authenticated current-main parents rather than stale event base metadata in serialized mode", async () => {
+    const currentMain = "9".repeat(40);
+    const result = await collector({ integrationMode: "serialized-merge", runBaseSha: BASE_SHA,
+      checkout: { parentShas: [currentMain, HEAD_SHA] } }).collect();
+    expect(result.staleIntegrationRunId).toBeNull();
+    expect(result.evidence.find((entry) => entry.checkId === "baseline:test")).toMatchObject({ result: "passed", source: { baseSha: currentMain, mergeSha: MERGE_SHA } });
+  });
+
+  it.each([
+    { runId: 999 }, { runAttempt: 2 }, { parentShas: [BASE_SHA, "8".repeat(40)] }, { parentShas: null },
+  ])("rejects mismatched integration checkout provenance %#", async (checkout) => {
+    const result = await collector({ integrationMode: "serialized-merge", checkout }).collect();
+    expect(result.staleIntegrationRunId).toBeNull();
+    expect(result.evidence.find((entry) => entry.checkId === "baseline:test")).toMatchObject({ result: "failed" });
+  });
+
+  it("identifies only a terminal stale run whose checkout commit and workflow can be verified", async () => {
+    const result = await collector({ integrationMode: "serialized-merge", checkout: { checkoutSha: "7".repeat(40) } }).collect();
+    expect(result.staleIntegrationRunId).toBe(runId);
+    expect(result.evidence.find((entry) => entry.checkId === "baseline:test")).toMatchObject({ result: "failed" });
+  });
+
+  it.each([
+    { workflowStatus: "queued" }, { workflowStatus: "in_progress" }, { workflowStatus: "unknown" },
+    { missingArtifact: true }, { badDigest: true }, { missingRun: true },
+  ])("never requests refresh from transient or incomplete evidence %#", async (options) => {
+    const result = await collector({ integrationMode: "serialized-merge", checkout: { checkoutSha: "7".repeat(40) }, ...options }).collect();
+    expect(result.staleIntegrationRunId).toBeNull();
+  });
 
   it("collects digest-bound migration evidence from passed assertions in a trusted report", async () => {
     const fixture = collector();
@@ -1217,7 +1273,7 @@ describe("PR approval controller", () => {
             ? {
                 id: 9,
                 bypass_actors: [
-                  { actor_id: 98765, actor_type: "Integration" },
+                  { actor_id: 98765, actor_type: "Integration", bypass_mode: "always" },
                 ],
               }
             : {},
@@ -1260,10 +1316,8 @@ describe("PR approval controller", () => {
       readable: true,
       bypassActorIds: [98765],
     });
-    // A hidden bypass set does not disable every approval. Serialized-merge is
-    // where an unenumerable set fails closed, in `readMainWriterGuard`.
     await expect(readBranchProtection(hiddenBypass)).resolves.toMatchObject({
-      readable: true,
+      readable: false,
       bypassActorIds: [],
     });
     await expect(readBranchProtection(unreadableRulesets)).resolves.toMatchObject({
@@ -1295,8 +1349,8 @@ describe("PR approval controller", () => {
     // Serialized merge pins one merge at a time against the current main but
     // never rebases, so reviews overlap here too.
     expect(anotherApprovalInFlightFor("serialized-merge", 0)).toBe(false);
-    expect(anotherApprovalInFlightFor("serialized-merge", 1)).toBe(false);
-    expect(anotherApprovalInFlightFor("serialized-merge", 5)).toBe(false);
+    expect(anotherApprovalInFlightFor("serialized-merge", 1)).toBe(true);
+    expect(anotherApprovalInFlightFor("serialized-merge", 5)).toBe(true);
   });
 
   it("reads main's merge queue and treats an unreadable result as unknown", async () => {
@@ -1375,7 +1429,7 @@ describe("PR approval controller", () => {
       readMainWriterGuard(
         guard({
           bypass_actors: [
-            { actor_id: 98765, actor_type: "Integration" },
+            { actor_id: 98765, actor_type: "Integration", bypass_mode: "always" },
             { actor_id: 42, actor_type: "User" },
           ],
         }),
@@ -2273,4 +2327,352 @@ describe("pre-merge deferral evidence collection", () => {
       expect(mutations).toEqual([mergeable ? "/repos/lukemyself-hub/SayHear/pulls/321/merge" : "/graphql"]);
     },
   );
+});
+
+describe("serialized review base risk", () => {
+  const main = "9".repeat(40);
+  const comparison = (files: unknown[]) => ({ base_commit: { sha: BASE_SHA }, merge_base_commit: { sha: BASE_SHA },
+    status: "ahead", total_commits: 1, commits: [{ sha: main }], files });
+  it("accepts unchanged main without a network assumption", async () => {
+    await expect(baseReviewRiskSafe(new StubApi(() => { throw new Error("must not read"); }), BASE_SHA, BASE_SHA, ["src/a.ts"])).resolves.toBe(true);
+  });
+  it("accepts a complete forward comparison of independent ordinary files", async () => {
+    await expect(baseReviewRiskSafe(new StubApi(() => comparison([{ filename: "src/b.ts", status: "modified" }])), BASE_SHA, main, ["src/a.ts"])).resolves.toBe(true);
+  });
+  it.each([
+    "src/a.ts", "src/contracts/types.ts", "packages/shared/src/record.ts", "packages/ai/src/provider.ts",
+    "packages/core/src/auth/access.ts", "src/security.ts", "package.json", "pnpm-lock.yaml",
+    ".github/workflows/pr-validate.yml", "packages/data/migrations/0042.sql", "scripts/pr-review-gate.ts",
+  ])("rejects overlapping or shared policy/dependency risk in %s", async (path) => {
+    await expect(baseReviewRiskSafe(new StubApi(() => comparison([{ filename: path, status: "modified" }])), BASE_SHA, main, ["src/a.ts"])).resolves.toBe(false);
+  });
+  it("includes rename sources in overlap checks", async () => {
+    await expect(baseReviewRiskSafe(new StubApi(() => comparison([{ filename: "src/b.ts", previous_filename: "src/a.ts", status: "renamed" }])), BASE_SHA, main, ["src/a.ts"])).resolves.toBe(false);
+  });
+  it.each([
+    { status: "diverged" }, { base_commit: { sha: HEAD_SHA } }, { merge_base_commit: { sha: HEAD_SHA } },
+    { total_commits: 2 }, { commits: [{ sha: HEAD_SHA }] }, { files: Array.from({ length: 300 }, () => ({ filename: "src/b.ts", status: "modified" })) },
+    { files: [{ filename: "src/b.ts", status: "renamed" }] },
+  ])("rejects unverified or potentially truncated comparisons %#", async (override) => {
+    await expect(baseReviewRiskSafe(new StubApi(() => ({ ...comparison([{ filename: "src/b.ts", status: "modified" }]), ...override })), BASE_SHA, main, ["src/a.ts"])).resolves.toBe(false);
+  });
+});
+
+class ControllerBrowserStore implements BrowserApprovalStore {
+  value: BrowserState | null = null;
+  async read() { return this.value; }
+  async save(value: BrowserState) { this.value = structuredClone(value); }
+}
+
+async function serializedControllerFixture(channel: "browser" | "legacy-root") {
+  const workflow = "f".repeat(40);
+  const path = "scripts/pr-approval-controller.ts";
+  const diff = `diff --git a/${path} b/${path}\nindex 1111111..2222222 100644\n--- a/${path}\n+++ b/${path}\n@@ -1 +1 @@\n-old\n+new\n`;
+  const changedFile = { filename: path, sha: "2".repeat(40), status: "modified", additions: 1, deletions: 1 };
+  const pull = {
+    number: 321, node_id: "PR_321", state: "open" as "open" | "closed", merged: false, draft: false,
+    title: "Controller safety repair", body: "Fixes #42", updated_at: "2026-10-14T00:00:00Z",
+    head: { sha: HEAD_SHA, repo: { id: SAYHEAR_REPOSITORY_ID } },
+    base: { sha: BASE_SHA, ref: "main", repo: { id: SAYHEAR_REPOSITORY_ID } },
+    user: channel === "browser" ? AGENT_IDENTITY : LUKE_IDENTITY,
+    merge_commit_sha: MERGE_SHA, changed_files: 1, mergeable: true, mergeable_state: "clean", auto_merge: null,
+  };
+  const issue = { number: 42, state: "open", title: "Controller safety repair", body: "Deliver safe serialized integration and durable recovery.",
+    updated_at: "2026-10-14T00:00:00Z", labels: ["ongoing"] };
+  const browserApprovalStore = new ControllerBrowserStore();
+  const reviews: Array<Record<string, unknown>> = [];
+  const reviewChecks: Array<Record<string, unknown>> = [];
+  const writes: string[] = [];
+  const prLabels: string[] = [];
+  const repositoryLabels = new Set<string>();
+  let refreshRecord: IntegrationRefreshRecord | null = null;
+  let newerQueued = false;
+  let main = BASE_SHA;
+  let validatedMain = BASE_SHA;
+  let validatedMerge = MERGE_SHA;
+  let validationConclusion = "success";
+  let material = false;
+  let mergeError: unknown;
+  let finalMainDrift = false;
+  let mainReads = 0;
+  const validationArchive = () => storedZipArchive([
+    { name: "vitest-report.json", content: Buffer.from(JSON.stringify({ success: true, testResults: [
+      { name: "/workspace/tests/pr-approval-controller.test.ts", status: "passed", assertionResults: [{ status: "passed" }] },
+    ] })) },
+    { name: "pr-validate-source.json", content: Buffer.from(JSON.stringify({ event: "pull_request", pullRequestNumber: 321,
+      headSha: HEAD_SHA, baseSha: BASE_SHA, checkoutSha: validatedMerge, parentShas: [validatedMain, HEAD_SHA], runId: 555, runAttempt: 1 })) },
+  ]);
+  const repository = { id: SAYHEAR_REPOSITORY_ID, node_id: "R_SayHear", full_name: "lukemyself-hub/SayHear", default_branch: "main" };
+  const api = new StubApi((url, options) => {
+    if (options?.method && options.method !== "GET") writes.push(`${options.method} ${url}`);
+    if (url === "/graphql") return { data: { repository: {
+      autoMergeAllowed: true, mergeCommitAllowed: true, squashMergeAllowed: false, rebaseMergeAllowed: false,
+      pullRequest: { reviewThreads: { nodes: [], pageInfo: { hasNextPage: false } }, closingIssuesReferences: { nodes: [{ number: 42 }], pageInfo: { hasNextPage: false } } },
+      issue: { blockedBy: { nodes: [], pageInfo: { hasNextPage: false } } },
+    } } };
+    if (url === "/repos/lukemyself-hub/SayHear") return structuredClone(repository);
+    if (url.endsWith("/branches/main/protection")) return { required_status_checks: { strict: false, checks: [
+      { context: "validate", app_id: ACTIONS_APP_ID }, { context: "pr-review-gate", app_id: 98765 },
+    ] }, required_pull_request_reviews: { dismiss_stale_reviews: true, required_approving_review_count: 1 }, enforce_admins: { enabled: true } };
+    if (url.includes("/rulesets/9?")) return { id: 9, target: "branch", enforcement: "active", conditions: { ref_name: { include: ["~DEFAULT_BRANCH"], exclude: [] } },
+      rules: [{ type: "update" }], bypass_actors: [{ actor_id: 98765, actor_type: "Integration", bypass_mode: "always" }], current_user_can_bypass: "always" };
+    if (url.endsWith("/git/ref/heads/main")) {
+      mainReads++;
+      return { object: { sha: finalMainDrift && mainReads > 2 ? "8".repeat(40) : main } };
+    }
+    if (url.endsWith("/git/ref/pull/321/merge")) return { ref: "refs/pull/321/merge", object: { type: "commit", sha: pull.merge_commit_sha } };
+    if (url.includes("/git/commits/")) return { sha: url.split("/").at(-1), parents: [{ sha: url.endsWith(validatedMerge) ? validatedMain : main }, { sha: HEAD_SHA }] };
+    if (url.includes("/contents/")) return { sha: workflow };
+    if (url.includes("/check-runs?")) return { check_runs: [
+      { id: 9001, name: "validate", app: { id: ACTIONS_APP_ID }, head_sha: HEAD_SHA,
+        details_url: "https://github.com/lukemyself-hub/SayHear/actions/runs/555", status: "completed", conclusion: validationConclusion }, ...reviewChecks,
+    ] };
+    if (url.endsWith("/actions/runs/556") && newerQueued) return { id: 556, run_attempt: 1, event: "pull_request", status: "queued", conclusion: null,
+      head_sha: HEAD_SHA, path: PR_VALIDATE_WORKFLOW_PATH, pull_requests: [{ number: 321, head: { sha: HEAD_SHA }, base: { sha: BASE_SHA } }] };
+    if (url.endsWith("/actions/runs/555")) return { id: 555, run_attempt: 1, event: "pull_request", status: "completed", conclusion: validationConclusion,
+      head_sha: HEAD_SHA, path: PR_VALIDATE_WORKFLOW_PATH, pull_requests: [{ number: 321, head: { sha: HEAD_SHA }, base: { sha: BASE_SHA } }] };
+    if (url.includes("/artifacts?")) return { artifacts: [{ id: 77, name: "vitest-report-321", expired: false,
+      digest: `sha256:${createHash("sha256").update(validationArchive()).digest("hex")}` }] };
+    if (url.includes("/labels/ci-int%3A")) {
+      const label = decodeURIComponent(url.split("/").at(-1) ?? "");
+      if (!repositoryLabels.has(label)) throw new GitHubApiError(404, "GET", url);
+      return { name: label };
+    }
+    if (url.endsWith("/SayHear/labels") && options?.method === "POST") {
+      const body = requestBody<{ name: string }>(options); repositoryLabels.add(body.name); return { name: body.name };
+    }
+    if (url.endsWith("/issues/321/labels") && options?.method === "POST") {
+      prLabels.push(...requestBody<{ labels: string[] }>(options).labels); return prLabels.map((name) => ({ name }));
+    }
+    if (url.endsWith("/pulls/321/merge")) {
+      if (mergeError) throw mergeError;
+      expect(options?.body).toEqual({ sha: HEAD_SHA, merge_method: "merge" });
+      pull.state = "closed"; pull.merged = true;
+      return { merged: true };
+    }
+    if (url.endsWith("/pulls/321")) return structuredClone(pull);
+    if (url.endsWith("/issues/42/labels/ongoing") && options?.method === "DELETE") { issue.labels = []; return []; }
+    if (url.endsWith("/issues/42")) {
+      if (options?.method === "PATCH") issue.state = "closed";
+      return structuredClone(issue);
+    }
+    if (url.includes("/compare/")) return { base_commit: { sha: BASE_SHA }, merge_base_commit: { sha: BASE_SHA }, status: "ahead",
+      total_commits: 1, commits: [{ sha: main }], files: [{ filename: material ? "packages/shared/src/types.ts" : "src/unrelated.ts", status: "modified" }] };
+    throw new Error(`Unexpected controller request ${url}`);
+  }, (url) => {
+    if (url.includes("/rulesets?")) return [{ id: 9 }];
+    if (url.endsWith("/pulls?state=open")) return [structuredClone(pull)];
+    if (url.endsWith("/pulls/321/files")) return [changedFile];
+    if (url.endsWith("/pulls/321/commits")) return [{ author: { id: 101 }, committer: { id: 101 }, commit: { message: "Implement safety" } }];
+    if (url.endsWith("/issues/321/labels")) return prLabels.map((name) => ({ name }));
+    if (url.endsWith("/pulls/321/reviews")) return reviews;
+    if (url.endsWith("/comments")) return [];
+    throw new Error(`Unexpected controller page ${url}`);
+  });
+  api.bytes = async (url) => url.includes("/compare/") ? Buffer.from(diff) : validationArchive();
+  const app: Parameters<typeof readHumanBinding>[0]["app"] = {
+    appId: 98765, installationId: 1, slug: "sayhear-pr-review-gate", productionMergeAuthorized: true,
+    ordinaryMergeTriggersProduction: true, integrationMode: "serialized-merge", humanReviewAuthorizations: [],
+  };
+  let stored: CompletionRecord | null = null;
+  const config: Parameters<typeof readSnapshot>[0] = { api, app, browserApprovalStore,
+    integrationRefreshStore: { read: async () => refreshRecord, save: async (value) => { refreshRecord = value; } },
+    completionStore: { read: async () => stored, list: async () => stored ? [stored] : [], save: async (value) => { stored = structuredClone(value); } },
+    policy: { repositoryId: SAYHEAR_REPOSITORY_ID, repositoryName: "lukemyself-hub/SayHear", defaultBranch: "main",
+      policyVersion: PR_REVIEW_GATE_POLICY_VERSION, reviewAppId: 98765, actionsAppId: ACTIONS_APP_ID, validateWorkflowBlobSha: null },
+    botActorId: REVIEW_BOT_ACTOR_ID, ownerActorId: LUKE_IDENTITY.id,
+  };
+  const frozen = await readSnapshot(config, 321, [], undefined, { freezeBrowserChallenge: true });
+  const digest = requirementDigest(frozen.gateInput.issues, frozen.gateInput.pullRequest);
+  if (channel === "browser") {
+    const challenge = browserApprovalStore.value?.challenge;
+    if (!challenge) throw new Error("Expected frozen browser challenge");
+    reviews.push({ id: 10, state: "APPROVED", body: "Approved", commit_id: HEAD_SHA, user: LUKE_IDENTITY,
+      submitted_at: new Date(challenge.frozenAt + 1_000).toISOString() });
+  }
+  const rootAuthorization = { pullRequestNumber: 321, approvedHeadSha: HEAD_SHA, approvedBaseSha: BASE_SHA,
+    diffDigest: frozen.diff.digest, requirementDigest: digest, paths: [path], noRuntimeImpact: true,
+    validateWorkflowBlobSha: workflow, approvedAt: "2026-10-14T00:00:00Z" };
+  const activeConfig = channel === "legacy-root" ? { ...config, app: { ...app, humanReviewAuthorizations: [rootAuthorization] } } : config;
+  const report: ModelReviewReport = { ...modelReport, baseSha: BASE_SHA, requirementDigest: digest, declaredImpacts: [] };
+  const externalId = `sayhear-pr-review:321:${HEAD_SHA}:${BASE_SHA}:${digest}`;
+  reviewChecks.push({ id: 9002, name: "pr-review-gate", app: { id: 98765 }, status: "completed", external_id: externalId,
+    output: { summary: `<!-- sayhear-pr-auto-approval-state:v1 pr=321 head=${HEAD_SHA} base=${BASE_SHA} requirement=${digest} diff=${frozen.diff.digest} change=${frozen.diff.changeDigest} evidence=${"0".repeat(64)} outcome=merge_candidate report=${Buffer.from(JSON.stringify(report)).toString("base64url")} -->` } });
+  reviews.push({ id: 20, state: "APPROVED", commit_id: HEAD_SHA, user: { id: REVIEW_BOT_ACTOR_ID, login: "sayhear-pr-review-gate[bot]" },
+    body: `<!-- sayhear-pr-auto-approval-review:v2 pr=321 head=${HEAD_SHA} base=${BASE_SHA} requirement=${digest} outcome=approve -->` });
+  // Materializing the receipt uses the same live browser binding as submission.
+  const bound = await readSnapshot(activeConfig, 321);
+  const receipt: CompletionRecord = { version: 1, phase: "merge_unconfirmed", attempts: 0, nextRetryAt: 0, reason: null, mergeSha: null, mergeWriteState: "not-sent",
+    identity: { repositoryId: SAYHEAR_REPOSITORY_ID, pullRequestNumber: 321, pullRequestNodeId: "PR_321", headSha: HEAD_SHA,
+      approvedBaseSha: BASE_SHA, requirementDigest: digest, baseRepositoryId: SAYHEAR_REPOSITORY_ID, baseRef: "main", botActorId: REVIEW_BOT_ACTOR_ID,
+      reviewId: 20, appId: 98765, policyVersion: PR_REVIEW_GATE_POLICY_VERSION, issueNumbers: [42], integrationMode: "serialized-merge",
+      humanChannel: channel === "browser" ? "browser" : "app", humanReviewId: channel === "browser" ? 10 : 20,
+      epoch: bound.humanBinding.receipt?.challenge.epoch ?? null, mergeAction: "merge-now",
+      reviewIdentity: { diffDigest: frozen.diff.digest, changeDigest: frozen.diff.changeDigest, workflowBlobSha: workflow } } };
+  const clock = { now: () => 1_000_000, sleep: async () => {}, random: () => 0 };
+  return { config: activeConfig, receipt, api, pull, issue, reviews, reviewChecks, browserApprovalStore, rootAuthorization, clock, writes,
+    stored: () => stored,
+    advanceMain: (freshCi = true, risky = false, nextMain = "9".repeat(40)) => { main = nextMain; pull.merge_commit_sha = "7".repeat(40); material = risky;
+      if (freshCi) { validatedMain = main; validatedMerge = pull.merge_commit_sha; } },
+    failValidation: () => { validationConclusion = "failure"; },
+    queueNewerValidation: () => { newerQueued = true; reviewChecks.push({ id: 9003, name: "validate", app: { id: ACTIONS_APP_ID }, head_sha: HEAD_SHA,
+      details_url: "https://github.com/lukemyself-hub/SayHear/actions/runs/556", status: "queued", conclusion: null }); },
+    driftFinalMain: () => { mainReads = 0; finalMainDrift = true; },
+    failMerge: (error: unknown) => { mergeError = error; },
+  };
+}
+
+describe("guarded serialized controller completion", () => {
+  it.each(["browser", "legacy-root"] as const)("merges and completes Issues through the full current guard for %s", async (channel) => {
+    const f = await serializedControllerFixture(channel);
+    const completed = await recoverControllerCompletion(f.config, f.receipt, f.clock);
+    expect(completed).toMatchObject({ phase: "complete", mergeSha: MERGE_SHA, mergeWriteState: "accepted" });
+    expect(f.pull.merged).toBe(true);
+    expect(f.issue).toMatchObject({ state: "closed", labels: [] });
+    expect(f.writes.filter((write) => write.includes("/pulls/321/merge"))).toHaveLength(1);
+    expect(f.stored()).toMatchObject({ phase: "complete", mergeWriteState: "accepted" });
+    const restarted = await recoverControllerCompletion(f.config, completed, f.clock);
+    expect(restarted).toEqual(completed);
+    expect(f.writes.filter((write) => write.includes("/pulls/321/merge"))).toHaveLength(1);
+  });
+
+  it.each(["browser", "legacy-root"] as const)("reuses the immutable report across independent main movement for %s", async (channel) => {
+    const f = await serializedControllerFixture(channel);
+    f.advanceMain();
+    const guarded = await guardImmediateMerge(f.config, f.receipt.identity);
+    expect(guarded.report.baseSha).toBe(BASE_SHA);
+    expect(guarded.pullRequest.base.sha).toBe(BASE_SHA);
+    expect(guarded.pullRequest.merge_commit_sha).toBe("7".repeat(40));
+    const completed = await recoverControllerCompletion(f.config, f.receipt, f.clock);
+    expect(completed.phase).toBe("complete");
+    expect(f.writes.filter((write) => write.includes("/pulls/321/merge"))).toHaveLength(1);
+  });
+
+  it("integrates two PRs from the same original base in sequence while preserving their reviewed bases", async () => {
+    const first = await serializedControllerFixture("browser");
+    const firstResult = await recoverControllerCompletion(first.config, first.receipt, first.clock);
+    expect(firstResult.mergeSha).toBe(MERGE_SHA);
+    const second = await serializedControllerFixture("legacy-root");
+    second.advanceMain(true, false, MERGE_SHA);
+    const guarded = await guardImmediateMerge(second.config, second.receipt.identity);
+    expect(guarded.report.baseSha).toBe(BASE_SHA);
+    const secondResult = await recoverControllerCompletion(second.config, second.receipt, second.clock);
+    expect(secondResult).toMatchObject({ phase: "complete", mergeSha: "7".repeat(40) });
+    expect(second.receipt.identity.approvedBaseSha).toBe(BASE_SHA);
+  });
+
+  it("does not merge when main advanced without a matching integration proof", async () => {
+    const f = await serializedControllerFixture("browser");
+    f.advanceMain(false);
+    await expect(guardImmediateMerge(f.config, f.receipt.identity)).rejects.toThrow("waiting_for_integration_validation");
+    await expect(guardImmediateMerge(f.config, f.receipt.identity)).rejects.toThrow("waiting_for_integration_validation");
+    expect(f.writes.filter((write) => write.endsWith("/issues/321/labels"))).toHaveLength(1);
+    expect(f.issue.labels).toEqual(["ongoing"]);
+    expect(f.writes.some((write) => write.includes("/pulls/321/merge"))).toBe(false);
+  });
+
+  it.each(["browser", "legacy-root"] as const)("requires a new review and human binding after material main movement for %s", async (channel) => {
+    const f = await serializedControllerFixture(channel);
+    f.advanceMain(true, true);
+    const snapshot = await readSnapshot(f.config, 321);
+    await expect(readSavedReviewReport(f.config, snapshot)).resolves.toBeNull();
+    expect(snapshot.humanBinding.paths).toEqual([]);
+    if (channel === "browser") expect(f.browserApprovalStore.value?.challenge).toBeNull();
+    await expect(guardImmediateMerge(f.config, f.receipt.identity)).rejects.toThrow("saved_review_identity_mismatch");
+    expect(f.writes.some((write) => write.includes("/pulls/321/merge"))).toBe(false);
+  });
+
+  it("rejects final main drift after successful CI and snapshot validation", async () => {
+    const f = await serializedControllerFixture("browser");
+    f.driftFinalMain();
+    await expect(guardImmediateMerge(f.config, f.receipt.identity)).rejects.toThrow("integration_changed_before_merge");
+    expect(f.writes.some((write) => write.includes("/pulls/321/merge"))).toBe(false);
+  });
+
+  it("rejects current-target failed CI without dispatching or merging", async () => {
+    const f = await serializedControllerFixture("browser");
+    f.failValidation();
+    await expect(guardImmediateMerge(f.config, f.receipt.identity)).rejects.toThrow("fresh_merge_gate_blocked");
+    expect(f.writes.some((write) => write.includes("/pulls/321/merge") || write.includes("/labels"))).toBe(false);
+  });
+
+  it("never falls back to an older green Validate while a newer trusted run is queued", async () => {
+    const f = await serializedControllerFixture("browser");
+    f.queueNewerValidation();
+    const snapshot = await readSnapshot(f.config, 321);
+    expect(snapshot.workflowStatus).toBe("queued");
+    expect(snapshot.staleIntegrationRunId).toBeNull();
+    expect(snapshot.evidence.find((entry) => entry.checkId === "baseline:test")).toMatchObject({ result: "planned", source: { runId: 556 } });
+    await expect(guardImmediateMerge(f.config, f.receipt.identity)).rejects.toThrow("fresh_merge_gate_blocked");
+    expect(f.writes.some((write) => write.includes("/pulls/321/merge") || write.includes("/labels"))).toBe(false);
+  });
+
+  it("rejects a dismissed human review during guarded recovery", async () => {
+    const f = await serializedControllerFixture("browser");
+    const human = f.reviews.find((review) => review.id === 10);
+    if (!human) throw new Error("human review missing");
+    human.state = "DISMISSED";
+    await expect(guardImmediateMerge(f.config, f.receipt.identity)).rejects.toThrow("fresh_merge_gate_blocked");
+    expect(f.writes.some((write) => write.includes("/pulls/321/merge"))).toBe(false);
+  });
+
+  it("records definitive rejection and permits unrelated PRs after confirmed unmerged readback", async () => {
+    const f = await serializedControllerFixture("legacy-root");
+    f.failMerge(new GitHubApiError(409, "PUT", "/pulls/321/merge"));
+    const failed = await recoverControllerCompletion(f.config, f.receipt, f.clock);
+    expect(failed.mergeWriteState).toBe("rejected");
+    await expect(completionBlockingScope(f.api, failed)).resolves.toBe("this-pr");
+    expect(f.pull.merged).toBe(false);
+    expect(f.issue.state).toBe("open");
+  });
+
+  it("keeps a lost merge response globally blocking and does not blindly send again", async () => {
+    const f = await serializedControllerFixture("browser");
+    f.failMerge(new Error("socket lost"));
+    const pending = await recoverControllerCompletion(f.config, f.receipt, f.clock);
+    expect(pending.mergeWriteState).toBe("uncertain");
+    await expect(completionBlockingScope(f.api, pending)).resolves.toBe("repository");
+    expect(f.writes.filter((write) => write.includes("/pulls/321/merge"))).toHaveLength(1);
+  });
+
+  it("lets unrelated work proceed after a confirmed merge with incomplete Issue cleanup", async () => {
+    const f = await serializedControllerFixture("browser");
+    await expect(completionBlockingScope(f.api, { ...f.receipt, phase: "issues_pending", mergeSha: MERGE_SHA })).resolves.toBe("this-pr");
+    await expect(completionBlockingScope(f.api, { ...f.receipt, phase: "complete", mergeSha: MERGE_SHA })).resolves.toBe("none");
+  });
+
+  it("never promotes old open completion receipts into head-bound authority", async () => {
+    const f = await serializedControllerFixture("legacy-root");
+    await expect(guardImmediateMerge(f.config, { ...f.receipt.identity, policyVersion: "sayhear-pr-review-gate:v9", reviewIdentity: undefined })).rejects.toThrow("fresh_merge_authorization_required");
+    expect(f.writes.some((write) => write.includes("/pulls/321/merge"))).toBe(false);
+  });
+
+  it("requires legacy-root authorizations to bind both head and reviewed base before serialized use", async () => {
+    const f = await serializedControllerFixture("legacy-root");
+    const request: Parameters<typeof readHumanBinding>[1] = { pullRequest: f.pull, number: 321, repositoryNodeId: "R_SayHear", reviews: [],
+      diffDigest: f.rootAuthorization.diffDigest, diffComplete: true, changedFiles: [{ path: "scripts/pr-approval-controller.ts", status: "modified" }],
+      requirement: f.rootAuthorization.requirementDigest, headSha: HEAD_SHA, currentMainSha: BASE_SHA, freeze: false };
+    for (const authorization of [ { ...f.rootAuthorization, approvedBaseSha: undefined }, { ...f.rootAuthorization, approvedHeadSha: "8".repeat(40) } ]) {
+      const binding = await readHumanBinding({ ...f.config, app: { ...f.config.app, humanReviewAuthorizations: [authorization] } }, request);
+      expect(binding.paths).toEqual([]);
+    }
+    const defaultBinding = await readHumanBinding({ ...f.config, app: { ...f.config.app, integrationMode: "up-to-date-base", humanReviewAuthorizations: [{ ...f.rootAuthorization, approvedBaseSha: undefined }] } }, request);
+    expect(defaultBinding.paths).toEqual(["scripts/pr-approval-controller.ts"]);
+  });
+
+  it("rejects both serialized deferred entry points without auto-merge writes", async () => {
+    const f = await serializedControllerFixture("legacy-root");
+    f.writes.length = 0;
+    const outcome = await requestDeferredMerge(f.config, modelReport, { outcome: "merge_candidate_with_deferrals", deferredEvidence: [] }, {}, f.pull);
+    expect(outcome.outcome).toBe("human_decision");
+    await expect(applyMergeAction(f.config, modelReport, {}, f.pull, "arm-auto-merge")).rejects.toThrow("serialized_merge_requires_immediate_merge");
+    expect(f.writes.some((write) => write.includes("/pulls/321/merge"))).toBe(false);
+    expect(f.writes.filter((write) => write === "POST /graphql")).toHaveLength(0);
+  });
+
+  it("classifies only explicit merge rejection responses as safely unmerged", () => {
+    expect(definitiveMergeRejection(new GitHubApiError(409, "PUT", "/merge"))).toBe(true);
+    expect(definitiveMergeRejection(new GitHubApiError(500, "PUT", "/merge"))).toBe(false);
+    expect(definitiveMergeRejection(new Error("network timeout"))).toBe(false);
+  });
 });

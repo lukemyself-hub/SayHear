@@ -673,6 +673,7 @@ const NON_RUNTIME_TOOL_PATHS: ReadonlySet<string> = new Set([
   "scripts/pr-approval/browser-approval.ts",
   "scripts/pr-approval/completion.ts",
   "scripts/pr-approval/diff.ts",
+  "scripts/pr-approval/integration-refresh.ts",
   "scripts/pr-approval/signed-store.ts",
   "scripts/pr-review-gate.ts",
   "scripts/verify-pr-approval-bundle.mjs",
@@ -693,6 +694,7 @@ const NON_RUNTIME_TOOL_PATHS: ReadonlySet<string> = new Set([
   "tests/pr-approval-completion.test.ts",
   "tests/pr-approval-controller.test.ts",
   "tests/pr-approval-diff.test.ts",
+  "tests/pr-approval-integration-refresh.test.ts",
   "tests/pr-review-gate.test.ts",
 ]);
 

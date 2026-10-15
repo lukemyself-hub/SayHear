@@ -21,7 +21,7 @@ import {
   type BrowserState,
 } from "../scripts/pr-approval/browser-approval.ts";
 import { applyMergeAction, browserAuthorizationRequired, confirmCompletionMerge, controllerBuildIdentity, digestDiscussion,
-  isBrowserApprovalWait, mergeActionFor, readHumanBinding, requirementProjectionFor, reissuePinnedBrowserMerge,
+  isBrowserApprovalWait, mergeActionFor, readHumanBinding, requirementProjectionFor,
   PR_REVIEW_GATE_INSTALLED_POLICY_VERSION,
   verifyCompletionRequirements,
   type GitHubApi, type GitHubComment, type HumanReviewBinding } from "../scripts/pr-approval-controller.ts";
@@ -159,6 +159,51 @@ describe("browser approval channel", () => {
     await readBrowserAuthorization(store, 400, context(), [], true, at);
     const next = await readBrowserAuthorization(store, 400, context({ headSha: NEXT_HEAD }), [lukeReview({ id: 11, commit_id: NEXT_HEAD })], false, at);
     expect(next.receipt).toBeNull();
+  });
+
+  it("preserves a head-v2 approval across cleared base advancement", async () => {
+    const store = new MemoryBrowserStore();
+    const original = context({ reviewBinding: "head-v2" });
+    const next = context({ reviewBinding: "head-v2", baseSha: "2".repeat(40) });
+    const at = Date.parse("2026-10-14T00:00:05Z");
+    await readBrowserAuthorization(store, 400, original, [], true, at);
+    const bound = await readBrowserAuthorization(store, 400, original, [lukeReview()]);
+    const advanced = await readBrowserAuthorization(store, 400, next, [lukeReview()]);
+    expect(bound.receipt?.reviewId).toBe(10);
+    expect(advanced.receipt).toEqual(bound.receipt);
+    expect(browserContextDigest(original)).toBe(browserContextDigest(next));
+    expect(advanced.receipt?.challenge.context.baseSha).toBe(BASE);
+  });
+
+  it("does not promote an exact-base approval into head-v2 authority", async () => {
+    const store = new MemoryBrowserStore();
+    const at = Date.parse("2026-10-14T00:00:05Z");
+    await readBrowserAuthorization(store, 400, context(), [], true, at);
+    expect((await readBrowserAuthorization(store, 400, context(), [lukeReview()])).receipt).not.toBeNull();
+    const next = await readBrowserAuthorization(store, 400, context({ reviewBinding: "head-v2" }), [lukeReview()]);
+    expect(next.receipt).toBeNull();
+    expect(next.challenge).toBeNull();
+  });
+
+  it("invalidates head-v2 after material risk, changed workflow, requirements or head", async () => {
+    for (const next of [
+      null,
+      context({ reviewBinding: "head-v2", headSha: NEXT_HEAD }),
+      context({ reviewBinding: "head-v2", requirementDigest: NEXT_REQUIREMENT }),
+      context({ reviewBinding: "head-v2", diffDigest: "2".repeat(64) }),
+      context({ reviewBinding: "head-v2", validateWorkflowBlobSha: "3".repeat(40) }),
+      context({ reviewBinding: "head-v2", protectedPaths: ["scripts/another.ts"] }),
+    ]) {
+      const store = new MemoryBrowserStore();
+      const original = context({ reviewBinding: "head-v2" });
+      await readBrowserAuthorization(store, 400, original, [], true, Date.parse("2026-10-14T00:00:05Z"));
+      expect((await readBrowserAuthorization(store, 400, original, [lukeReview()])).receipt).not.toBeNull();
+      const invalid = await readBrowserAuthorization(store, 400, next, [lukeReview()]);
+      expect(invalid.receipt).toBeNull();
+      expect(invalid.challenge).toBeNull();
+      expect((await readBrowserAuthorization(store, 400, original, [lukeReview()])).receipt).toBeNull();
+    }
+    expect(() => parseBrowserContext({ ...context(), reviewBinding: "head-v3" })).toThrow("browser_binding_invalid");
   });
 
   it("revokes the receipt when the latest Luke review is not an approval", async () => {
@@ -655,44 +700,9 @@ describe("channel routing in the controller", () => {
     expect(calls.every((call) => call.path === "/graphql")).toBe(true);
   });
 
-  it("re-issues the pinned browser merge on recovery but never merges a revoked approval", async () => {
-    const identity: CompletionIdentity = {
-      repositoryId: 1312399710, pullRequestNumber: 400, pullRequestNodeId: "PR_node", headSha: HEAD, approvedBaseSha: BASE,
-      requirementDigest: REQUIREMENT, baseRepositoryId: 1312399710, baseRef: "main", botActorId: 999, reviewId: 9, appId: 123,
-      policyVersion: PR_REVIEW_GATE_POLICY_VERSION, issueNumbers: [1], humanChannel: "browser", humanReviewId: 10, epoch: "epoch-1",
-    };
-    const requests: string[] = [];
-    const pagesReads: string[] = [];
-    function stubApi(reviews: readonly unknown[]): GitHubApi {
-      return {
-        request: async <T>(path: string, options?: { method?: string }) => {
-          requests.push(`${options?.method ?? "GET"} ${path}`);
-          if (path === "/graphql") {
-            return { data: { repository: { autoMergeAllowed: true, mergeCommitAllowed: true, squashMergeAllowed: true, rebaseMergeAllowed: true } } } as T;
-          }
-          return { merged: true } as T;
-        },
-        pages: async <T>(path: string) => { pagesReads.push(path); return structuredClone(reviews) as unknown as T[]; },
-        bytes: async () => new Uint8Array(),
-      };
-    }
-    // Recovery re-reads the live approval and re-issues the pinned merge itself:
-    // no deferred intent is left behind for a later, unreviewed head to consume.
-    await reissuePinnedBrowserMerge(stubApi([lukeReview()]), identity);
-    expect(pagesReads).toEqual(["/repos/lukemyself-hub/SayHear/pulls/400/reviews"]);
-    expect(requests).toContain(`PUT /repos/lukemyself-hub/SayHear/pulls/400/merge`);
-    requests.length = 0;
-    pagesReads.length = 0;
-    // A dismissal after the receipt was written must stop the merge outright.
-    await expect(reissuePinnedBrowserMerge(
-      stubApi([lukeReview({ id: 11, state: "DISMISSED", submitted_at: "2026-10-14T00:00:20Z" })]), identity,
-    )).rejects.toThrow(CompletionMismatch);
-    expect(requests).toEqual([]);
-  });
-
-  it("exposes the v9 policy and unchanged browser capability in the build identity", () => {
+  it("exposes the v10 policy and unchanged browser capability in the build identity", () => {
     const identity = controllerBuildIdentity();
-    expect(identity.policyVersion).toBe("sayhear-pr-review-gate:v9");
+    expect(identity.policyVersion).toBe("sayhear-pr-review-gate:v10");
     expect(PR_REVIEW_REPORT_VERSION).toBe("sayhear-pr-review-report:v4");
     expect(identity.browserApprovalVersion).toBe("sayhear-pr-browser-approval:v1");
   });

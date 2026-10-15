@@ -12,10 +12,10 @@ import {
   type ReleaseImpactKind,
 } from "./daily-release-validation.ts";
 
-// v7 was reviewed and landed on main but never installed, so no signed record
-// can carry it. v8 is the installed identity and v6 the one before it; both
-// stay declared so their receipts keep reading back while v9 gates new work.
-export const PR_REVIEW_GATE_POLICY_VERSION = "sayhear-pr-review-gate:v9";
+// Historical installed policies remain readable for signed completion receipts.
+// They do not acquire the head-bound review semantics introduced by v10.
+export const PR_REVIEW_GATE_POLICY_VERSION = "sayhear-pr-review-gate:v10";
+export const PR_REVIEW_GATE_V9_POLICY_VERSION = "sayhear-pr-review-gate:v9";
 export const PR_REVIEW_GATE_LEGACY_POLICY_VERSION = "sayhear-pr-review-gate:v4";
 export const PR_REVIEW_GATE_PREVIOUS_POLICY_VERSION = "sayhear-pr-review-gate:v5";
 export const PR_REVIEW_GATE_INSTALLED_POLICY_VERSION = "sayhear-pr-review-gate:v8";
@@ -31,12 +31,11 @@ export const PR_REVIEW_GATE_CHECK_NAME = "pr-review-gate";
  *
  * `up-to-date-base` requires the PR base to equal main.
  *
- * `merge-queue` binds the approval to the head SHA and hands the merged result
- * to GitHub's merge queue, which builds and validates it on the latest main.
+ * `merge-queue` is reserved for historical configuration parsing. Activation
+ * is refused until every required check has a trusted merge-group producer.
  *
- * `serialized-merge` also binds the approval to the head SHA and blocks only on
- * a real conflict, but the controller issues the merge itself. It needs
- * `requiresUpToDate` turned off, or GitHub refuses every stale-base merge.
+ * `serialized-merge` separates reusable head review from current-main evidence.
+ * The controller issues the merge under an App-only main writer guard.
  */
 export type IntegrationMode =
   | "up-to-date-base"
@@ -230,11 +229,7 @@ export type PrReviewGateInput = Readonly<{
     baseSha: string;
     mergeSha: string | null;
     /**
-     * GitHub's mergeability for this PR against the *current* base tip. The
-     * merge-queue integration mode reads this instead of comparing
-     * `baseSha` to `repository.defaultBranchSha`, so an approval is not
-     * invalidated merely because main moved: only a real conflict or an
-     * unknown mergeability state blocks the merge candidate.
+     * GitHub's mergeability for this PR against the current base tip.
      */
     mergeable?: boolean | null;
     mergeableState?: string | null;
@@ -265,6 +260,9 @@ export type PrReviewGateInput = Readonly<{
     baseSha: string;
     policyVersion: string;
     requirementDigest: string;
+    // Derived by the controller from authenticated base changes, never a model
+    // assertion. Omission cannot authorize reuse across main advancement.
+    baseReviewSafe?: boolean;
     decision:
       | "approve"
       | "request_changes"
@@ -309,11 +307,6 @@ export type PrReviewGateInput = Readonly<{
     /**
      * How integration against the current main is proven before a merge.
      * `up-to-date-base` is the historical rule: the PR base must equal main.
-     * `merge-queue` binds the approval to the head SHA and lets the GitHub
-     * merge queue build and validate the merged result on the latest main.
-     * `serialized-merge` binds the approval to the head SHA too and blocks only
-     * on a real conflict, but the controller issues the merge itself. It needs
-     * `requiresUpToDate` turned off for GitHub to accept a stale base.
      * The mode comes from the trusted controller config, never from PR text.
      * An absent value keeps `up-to-date-base`, so a runtime that predates this
      * field can never relax a check by omission.
@@ -914,6 +907,9 @@ export function parsePrReviewGateInput(value: unknown): PrReviewGateInput {
         review.requirementDigest,
         "review.requirementDigest",
       ),
+      ...(review.baseReviewSafe === undefined ? {} : {
+        baseReviewSafe: requiredBoolean(review.baseReviewSafe, "review.baseReviewSafe"),
+      }),
       decision,
       diffComplete: requiredBoolean(review.diffComplete, "review.diffComplete"),
       reviewerAppId: requiredPositiveInteger(
@@ -1033,11 +1029,6 @@ export function integrationModeOf(
   return input.runtime.integrationMode ?? "up-to-date-base";
 }
 
-/**
- * Whether the approval binds to the head SHA instead of demanding the PR base
- * equal main. Both head-bound modes survive main moving on its own. They differ
- * only in who performs the merge and what the repository has to provide.
- */
 function headBoundApproval(input: Pick<PrReviewGateInput, "runtime">): boolean {
   return integrationModeOf(input) !== "up-to-date-base";
 }
@@ -1327,7 +1318,8 @@ function verifyEvidence(
       source.workflowPath !== PR_VALIDATE_WORKFLOW_PATH ||
       source.workflowBlobSha !== policy.validateWorkflowBlobSha ||
       source.headSha !== input.pullRequest.headSha ||
-      source.baseSha !== input.pullRequest.baseSha ||
+      source.baseSha !== (integrationModeOf(input) === "serialized-merge"
+        ? input.repository.defaultBranchSha : input.pullRequest.baseSha) ||
       source.mergeSha !== input.pullRequest.mergeSha
     ) {
       return {
@@ -1391,11 +1383,20 @@ export function evaluatePrReviewGate(
     input.review.repositoryId !== input.repository.id ||
     input.review.pullRequestNumber !== input.pullRequest.number ||
     input.review.headSha !== input.pullRequest.headSha ||
-    input.review.baseSha !== input.pullRequest.baseSha
+    (integrationModeOf(input) !== "serialized-merge" &&
+      input.review.baseSha !== input.pullRequest.baseSha)
   ) {
     return outcome(input, "awaiting_verification", {
       code: "stale_review",
       message: "The review report does not match the current repository, PR, head, and base.",
+    });
+  }
+  if (integrationModeOf(input) === "serialized-merge" &&
+      input.review.baseSha !== input.repository.defaultBranchSha &&
+      input.review.baseReviewSafe !== true) {
+    return outcome(input, "awaiting_verification", {
+      code: "stale_base_review_risk",
+      message: "Main changed after this review and its effect on the reviewed code has not been cleared.",
     });
   }
   if (
@@ -1437,10 +1438,7 @@ export function evaluatePrReviewGate(
     });
   }
   if (headBoundApproval(input)) {
-    // The approval binds to the head SHA and survives main moving, so the
-    // candidate only stops for a confirmed conflict or for a mergeability
-    // GitHub has not reported yet. The exact `clean`/`behind` state is
-    // enforced where the merge actually happens (`mergeActionFor`), because
+    // The exact clean/behind state is enforced by mergeActionFor because
     // this check run is itself a required check: it stays `failure` until the
     // merge candidate is reached, which keeps GitHub reporting `blocked` for
     // a healthy PR even after the App review lands.
@@ -1595,6 +1593,12 @@ export function evaluatePrReviewGate(
         "Merge-queue integration is configured, but main does not enforce a merge queue.",
     });
   }
+  if (integrationModeOf(input) === "merge-queue") {
+    return outcome(input, "human_decision", {
+      code: "merge_queue_not_supported",
+      message: "Native queue integration lacks a trusted gate producer for merge-group commits and cannot be activated.",
+    });
+  }
   // Serialized-merge lets the controller merge a PR whose head is behind main,
   // so GitHub must stop requiring an up-to-date branch. Leaving it on would
   // stall every stale-base merge with no visible reason.
@@ -1608,11 +1612,6 @@ export function evaluatePrReviewGate(
         "Serialized-merge integration is configured, but main still requires branches to be up to date before merging.",
     });
   }
-  // Serialized-merge performs the merge itself and only refuses a real
-  // conflict, so main may move between the snapshot and the merge request.
-  // GitHub recomputes the merge against the live main, but it cannot undo
-  // another writer's push, so the repository has to show that main is
-  // updatable only through the approval App. Anything unverifiable stops here.
   if (integrationModeOf(input) === "serialized-merge") {
     const guard = mainWriterGuardReason(input, policy);
     if (guard !== null) {
@@ -1716,6 +1715,12 @@ export function evaluatePrReviewGate(
 
   const deferred = verification.deferred;
   if (deferred.length > 0) {
+    if (integrationModeOf(input) === "serialized-merge") {
+      return outcome(input, "human_decision", {
+        code: "serialized_deferred_merge_not_supported",
+        message: "Serialized integration requires all pre-merge checks to pass before an immediate guarded merge.",
+      }, uniqueRequiredIds, verification.accepted);
+    }
     if (policy.humanApprovalChannel === "browser") {
       return outcome(
         input,

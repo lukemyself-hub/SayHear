@@ -19,9 +19,13 @@ export type CompletionIdentity = Readonly<{
   humanChannel?: "app" | "browser";
   humanReviewId?: number;
   epoch?: string | null;
-  // Absent on every receipt written before merge-queue integration existed,
-  // which all used the pinned-merge path.
   integrationMode?: IntegrationMode;
+  reviewIdentity?: Readonly<{
+    diffDigest: string;
+    changeDigest: string;
+    workflowBlobSha: string;
+  }>;
+  mergeAction?: "merge-now";
 }>;
 export type CompletionPhase = "merge_unconfirmed" | "issues_pending" | "complete" | "needs_attention";
 export type CompletionRecord = Readonly<{
@@ -32,6 +36,8 @@ export type CompletionRecord = Readonly<{
   nextRetryAt: number;
   reason: string | null;
   mergeSha: string | null;
+  // Absence means an older operation whose delivery must be reconciled.
+  mergeWriteState?: "not-sent" | "uncertain" | "rejected" | "accepted";
 }>;
 export class CompletionMismatch extends Error {}
 export class CompletionUnavailable extends Error {
@@ -71,6 +77,11 @@ function digest(value: unknown, length: number): string {
 export function parseCompletionRecord(value: unknown): CompletionRecord {
   if (!record(value) || value.version !== 1 || !record(value.identity)) throw new Error("completion_schema_invalid");
   const identity = value.identity;
+  const reviewIdentity = identity.reviewIdentity;
+  if (reviewIdentity !== undefined && !record(reviewIdentity)) throw new Error("completion_schema_invalid");
+  if (identity.mergeAction !== undefined && identity.mergeAction !== "merge-now") throw new Error("completion_schema_invalid");
+  if (value.mergeWriteState !== undefined &&
+      !["not-sent", "uncertain", "rejected", "accepted"].includes(string(value.mergeWriteState))) throw new Error("completion_schema_invalid");
   if (!Array.isArray(identity.issueNumbers) || identity.issueNumbers.length === 0 || identity.issueNumbers.length > 100) throw new Error("completion_schema_invalid");
   const phase = value.phase;
   if (phase !== "merge_unconfirmed" && phase !== "issues_pending" && phase !== "complete" && phase !== "needs_attention") throw new Error("completion_schema_invalid");
@@ -87,12 +98,19 @@ export function parseCompletionRecord(value: unknown): CompletionRecord {
       humanChannel: identity.humanChannel === "browser" ? "browser" : "app",
       humanReviewId: identity.humanReviewId === undefined ? positive(identity.reviewId) : positive(identity.humanReviewId),
       epoch: identity.epoch === undefined || identity.epoch === null ? null : string(identity.epoch),
-      // One parser decides what an integration mode is. A receipt that stores
-      // anything else is corrupt, not silently "up-to-date-base".
       integrationMode: completionIntegrationMode(identity.integrationMode),
+      ...(record(reviewIdentity) ? { reviewIdentity: {
+        diffDigest: digest(reviewIdentity.diffDigest, 64),
+        changeDigest: digest(reviewIdentity.changeDigest, 64),
+        workflowBlobSha: digest(reviewIdentity.workflowBlobSha, 40),
+      } } : {}),
+      ...(identity.mergeAction === "merge-now" ? { mergeAction: "merge-now" as const } : {}),
     },
     phase, attempts: integer(value.attempts), nextRetryAt: integer(value.nextRetryAt),
     reason: value.reason === null ? null : string(value.reason), mergeSha: value.mergeSha === null ? null : digest(value.mergeSha, 40),
+    ...(value.mergeWriteState === "not-sent" || value.mergeWriteState === "uncertain" ||
+      value.mergeWriteState === "rejected" || value.mergeWriteState === "accepted"
+      ? { mergeWriteState: value.mergeWriteState } : {}),
   };
   if ((phase === "issues_pending" || phase === "complete") && result.mergeSha === null) throw new Error("completion_schema_invalid");
   return result;

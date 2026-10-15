@@ -3,7 +3,7 @@ import { mkdtemp, readFile, writeFile, symlink, chmod, realpath } from "node:fs/
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, it, expect } from "vitest";
-import { SignedCompletionStore, recoverCompletion, CompletionMismatch, CompletionUnavailable, type CompletionRecord, type CompletionStore, type CompletionClock } from "../scripts/pr-approval/completion.ts";
+import { SignedCompletionStore, recoverCompletion, parseCompletionRecord, CompletionMismatch, CompletionUnavailable, type CompletionRecord, type CompletionStore, type CompletionClock } from "../scripts/pr-approval/completion.ts";
 import { confirmCompletionMerge, githubRetryAfterMs, requestProtectedMerge, controllerBuildIdentity, completeLinkedIssuesAfterMerge, GitHubApiError, type GitHubApi } from "../scripts/pr-approval-controller.ts";
 import { PR_REVIEW_GATE_POLICY_VERSION, SAYHEAR_REPOSITORY_ID } from "../scripts/pr-review-gate.ts";
 
@@ -223,6 +223,25 @@ describe("durable PR completion", () => {
     const { store } = await signedStore();
     await store.save({ ...initial, identity: { ...initial.identity, integrationMode: "serialized-merge" } });
     await expect(store.read(339)).resolves.toMatchObject({ identity: { integrationMode: "serialized-merge" } });
+  });
+
+  it("retains immutable review identity and merge delivery state through signed recovery", async () => {
+    const { store } = await signedStore();
+    const reviewIdentity = {
+      diffDigest: "1".repeat(64), changeDigest: "2".repeat(64), workflowBlobSha: "3".repeat(40),
+    };
+    const receipt: CompletionRecord = {
+      ...initial, mergeWriteState: "uncertain",
+      identity: { ...initial.identity, integrationMode: "serialized-merge", mergeAction: "merge-now", reviewIdentity },
+    };
+    await store.save(receipt);
+    await expect(store.read(339)).resolves.toMatchObject({
+      mergeWriteState: "uncertain", identity: { reviewIdentity, mergeAction: "merge-now" },
+    });
+    expect(() => parseCompletionRecord({ ...receipt, mergeWriteState: "assume-success" })).toThrow("completion_schema_invalid");
+    expect(() => parseCompletionRecord({ ...receipt, identity: { ...receipt.identity, mergeAction: "arm-auto-merge" } })).toThrow("completion_schema_invalid");
+    expect(() => parseCompletionRecord({ ...receipt, identity: { ...receipt.identity, reviewIdentity: { ...reviewIdentity, diffDigest: "" } } })).toThrow("completion_schema_invalid");
+    expect(parseCompletionRecord(initial).identity.reviewIdentity).toBeUndefined();
   });
 });
 

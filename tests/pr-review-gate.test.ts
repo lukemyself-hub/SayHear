@@ -199,6 +199,7 @@ function input(
       }),
       decision: "approve",
       diffComplete: true,
+      baseReviewSafe: true,
       reviewerAppId: REVIEW_APP_ID,
       reviewerActorId: 303,
       declaredImpacts,
@@ -268,7 +269,11 @@ function input(
             ...overrides.branchProtection,
           },
     runtime: { ...base.runtime, ...overrides.runtime },
-    evidence: overrides.evidence ?? base.evidence,
+    evidence: overrides.evidence ?? base.evidence.map((entry) =>
+      overrides.runtime?.integrationMode === "serialized-merge"
+        ? { ...entry, source: { ...entry.source,
+            baseSha: overrides.repository?.defaultBranchSha ?? BASE_SHA } }
+        : entry),
   };
 }
 
@@ -533,7 +538,7 @@ describe("PR review gate", () => {
     expect(report.reasons[0]?.code).toBe("base_or_merge_ref_changed");
   });
 
-  it("approves a merge-queue candidate whose base is behind main", () => {
+  it("refuses native queue activation until all merge-group checks have producers", () => {
     const report = evaluatePrReviewGate(
       input({
         repository: { defaultBranchSha: "f".repeat(40) },
@@ -543,10 +548,8 @@ describe("PR review gate", () => {
       policy,
     );
 
-    expect(report.outcome).toBe("merge_candidate");
-    expect(report.reasons.map((reason) => reason.code)).not.toContain(
-      "base_or_merge_ref_changed",
-    );
+    expect(report.outcome).toBe("human_decision");
+    expect(report.reasons[0]?.code).toBe("merge_queue_not_supported");
   });
 
   it("keeps two PRs on the same older main as independent merge candidates", () => {
@@ -554,13 +557,14 @@ describe("PR review gate", () => {
     const otherMerge = "8".repeat(40);
     const staleMain = { defaultBranchSha: "f".repeat(40) };
     const queue = {
-      integrationMode: "merge-queue" as const,
-      mergeQueueAvailable: true,
+      integrationMode: "serialized-merge" as const,
+      mainWriterGuard: APP_ONLY_MAIN_WRITER_GUARD,
     };
     const first = evaluatePrReviewGate(
       input({
         repository: staleMain,
         pullRequest: { mergeable: true, mergeableState: "clean" },
+        branchProtection: { requiresUpToDate: false },
         runtime: queue,
       }),
       policy,
@@ -568,6 +572,7 @@ describe("PR review gate", () => {
     const second = evaluatePrReviewGate(
       input({
         repository: staleMain,
+        branchProtection: { requiresUpToDate: false },
         pullRequest: {
           number: 322,
           headSha: otherHead,
@@ -594,7 +599,10 @@ describe("PR review gate", () => {
               coveredCheckIds: ["server:deterministic-behavior"],
             }),
           ] satisfies WorkflowEvidenceRecord[]
-        ).map((record) => rebindEvidence(record, otherHead, otherMerge)),
+        ).map((record) => {
+          const rebound = rebindEvidence(record, otherHead, otherMerge);
+          return { ...rebound, source: { ...rebound.source, baseSha: staleMain.defaultBranchSha } };
+        }),
         runtime: queue,
       }),
       policy,
@@ -726,6 +734,32 @@ describe("PR review gate", () => {
         "merge_queue_unavailable",
       );
     }
+  });
+
+  it("reuses a historical review only after clearing main changes and validating the current integration", () => {
+    const currentMain = "f".repeat(40);
+    const candidate = input({
+      repository: { defaultBranchSha: currentMain },
+      pullRequest: { baseSha: currentMain, mergeable: true, mergeableState: "clean" },
+      branchProtection: { requiresUpToDate: false },
+      runtime: { integrationMode: "serialized-merge", mainWriterGuard: APP_ONLY_MAIN_WRITER_GUARD },
+      review: { baseSha: BASE_SHA, baseReviewSafe: true },
+    });
+    expect(evaluatePrReviewGate(candidate, policy).outcome).toBe("merge_candidate");
+    for (const baseReviewSafe of [false, undefined]) {
+      const blocked = evaluatePrReviewGate({
+        ...candidate, review: { ...candidate.review, baseReviewSafe },
+      }, policy);
+      expect(blocked.reasons[0]?.code).toBe("stale_base_review_risk");
+    }
+    const oldEvidence = candidate.evidence.map((entry) =>
+      entry.kind === "deferred-before-merge" ? entry :
+        { ...entry, source: { ...entry.source, baseSha: BASE_SHA } });
+    expect(evaluatePrReviewGate({ ...candidate, evidence: oldEvidence }, policy).reasons[0]?.code)
+      .toBe("required_evidence_missing");
+    expect(evaluatePrReviewGate({
+      ...candidate, pullRequest: { ...candidate.pullRequest, headSha: "9".repeat(40) },
+    }, policy).reasons[0]?.code).toBe("stale_review");
   });
 
   it("refuses serialized-merge while main still requires an up-to-date branch", () => {
@@ -1419,12 +1453,12 @@ describe("PR review gate", () => {
     expect(report.acceptedEvidenceIds).toEqual([]);
   });
 
-  it.each(["v4", "v5", "v6", "v7", "v8"])("invalidates %s policy reviews while keeping the report schema unchanged", (version) => {
+  it.each(["v4", "v5", "v6", "v7", "v8", "v9"])("invalidates %s policy reviews while keeping the report schema unchanged", (version) => {
     const report = evaluatePrReviewGate(input({
       review: { policyVersion: `sayhear-pr-review-gate:${version}` },
     }), policy);
 
-    expect(PR_REVIEW_GATE_POLICY_VERSION).toBe("sayhear-pr-review-gate:v9");
+    expect(PR_REVIEW_GATE_POLICY_VERSION).toBe("sayhear-pr-review-gate:v10");
     expect(PR_REVIEW_REPORT_VERSION).toBe("sayhear-pr-review-report:v4");
     expect(report.reasons[0]?.code).toBe("policy_version_mismatch");
   });
@@ -1489,6 +1523,23 @@ describe("PR review gate", () => {
     for (const entry of report.deferredEvidence) {
       expect(entry.followUp.stage).toBe("acceptance");
       expect(entry.followUp.command.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("refuses deferred auto-merge for serialized integration on either human channel", () => {
+    const candidate = deferralInput();
+    const serialized: PrReviewGateInput = {
+      ...candidate,
+      pullRequest: { ...candidate.pullRequest, mergeable: true, mergeableState: "clean" },
+      branchProtection: { ...input().branchProtection!, requiresUpToDate: false },
+      runtime: { ...candidate.runtime, integrationMode: "serialized-merge",
+        mainWriterGuard: APP_ONLY_MAIN_WRITER_GUARD },
+    };
+    for (const humanApprovalChannel of ["browser", "legacy-root"] as const) {
+      const report = evaluatePrReviewGate(serialized, { ...policy, humanApprovalChannel });
+      expect(report.outcome).toBe("human_decision");
+      expect(report.reasons[0]?.code).toBe("serialized_deferred_merge_not_supported");
+      expect(report.deferredEvidence).toEqual([]);
     }
   });
 
@@ -1705,7 +1756,7 @@ describe("PR review gate", () => {
       policy,
     );
 
-    expect(PR_REVIEW_GATE_POLICY_VERSION).toBe("sayhear-pr-review-gate:v9");
+    expect(PR_REVIEW_GATE_POLICY_VERSION).toBe("sayhear-pr-review-gate:v10");
     expect(PR_REVIEW_REPORT_VERSION).toBe("sayhear-pr-review-report:v4");
     expect(report.outcome).toBe("awaiting_verification");
     expect(report.reasons[0]?.code).toBe("policy_version_mismatch");

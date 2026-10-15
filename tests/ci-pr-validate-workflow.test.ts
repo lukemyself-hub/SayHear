@@ -73,6 +73,7 @@ describe("PR validate workflow", () => {
     );
 
     expect(workflow).toContain("pull_request:");
+    expect(workflow).toContain("types: [opened, synchronize, reopened, ready_for_review, labeled]");
     expect(workflow).not.toContain("paths:");
     expect(workflow).not.toContain("paths-ignore:");
     expect(workflow).not.toContain("pull_request_target");
@@ -107,6 +108,10 @@ describe("PR validate workflow", () => {
     expect(identityStep).toContain('["rev-parse", "HEAD"]');
     expect(identityStep).toContain("PR_VALIDATE_HEAD_SHA");
     expect(identityStep).toContain("PR_VALIDATE_BASE_SHA");
+    expect(workflow).toContain("ref: ${{ github.sha }}");
+    expect(identityStep).toContain('["show", "-s", "--format=%P", "HEAD"]');
+    expect(identityStep).toContain("runId: Number(process.env.GITHUB_RUN_ID)");
+    expect(identityStep).toContain("runAttempt: Number(process.env.GITHUB_RUN_ATTEMPT)");
     expect(uploadStep).toContain("artifacts/vitest-report.json");
     expect(uploadStep).toContain("artifacts/pr-validate-source.json");
   });

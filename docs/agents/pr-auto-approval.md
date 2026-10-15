@@ -51,8 +51,9 @@ Provider/配置专项的证据限制继续有效，没有新增 deferral 或豁�
 ### 可恢复合并收尾
 
 #339 将合并意图与 Issue 收尾分开持久保存。签名意图在请求合并前落盘，绑定已审
-PR、仓库、head、base、App approval 和交付 Issue。恢复只读核验并补 Issue 收尾，
-不重复批准或合并。未完成或明确不匹配的记录阻止后续合入。
+PR、仓库、head、base、App approval 和交付 Issue。已确认合入后只补 Issue 收尾，
+不重复批准或合并。v10 对未确认的即时合入重新核验完整门禁后才重试；写入状态
+不明仍阻断后续合入，明确拒绝与已合入的收尾失败只阻断本 PR，详见集成模式。
 单次最多五次确认、等待不超过 60 秒，最多十个自动执行周期，遵守 Retry-After。
 来源、签名信任、回归证据、受控安装及回滚步骤见
 [收尾实施说明](../plans/pr-approval-recoverable-completion.md)。
@@ -83,9 +84,9 @@ Luke 于 2026-10-12 确认：PR 可以引用多个 Issue；合入后自动关闭
 - 多 Issue 版本安装时审批策略为 `sayhear-pr-review-gate:v8`，报告结构为
   `sayhear-pr-review-report:v4`。旧报告与人工绑定保留各自原版本，不能用于新审批，
   也不能改标成当前版本号。
-- 串行合并交付把审批策略提高到 `sayhear-pr-review-gate:v9`，报告结构仍是
+- 串行合并修复把审批策略提高到 `sayhear-pr-review-gate:v10`，报告结构仍是
   `sayhear-pr-review-report:v4`，并加入 main 写入守卫。已签发收据的恢复允许列表为
-  v4、v5、v6、v8、v9。v7 只存在于源码与审核记录中，从未安装，因此从未写过收据；
+  v4、v5、v6、v8、v9、v10。v7 只存在于源码与审核记录中，从未安装，因此从未写过收据；
   不猜它的需求投影，位置不对的版本一律拒绝，而不是按最近的版本套用。
 - `prepare` 返回 `issue_completion_pending` 时，使用固定 `scan --pr 数字` 恢复合入后
   收尾。只开启 auto-merge 时继续等待并保留执行占用；必须回读 `merged=true` 和匹配
@@ -95,92 +96,67 @@ Luke 于 2026-10-12 确认：PR 可以引用多个 Issue；合入后自动关闭
 
 ### 集成模式与合并队列
 
-Luke 于 2026-10-14 要求：不要因为 main 前进就强制每个 PR rebase 并重新审批，
-真正要避免的是代码冲突。为此在受信任的 controller 配置中加入集成模式
-`integrationMode`，有三种取值：`up-to-date-base`（历史默认）、`merge-queue`
-（GitHub 原生合并队列）和 `serialized-merge`（轻量串行合并，不依赖原生队列）。
-模式只来自 root-owned `config.json`，PR 正文、评论或 Issue 都不能切换它；配置
-缺失时按 `up-to-date-base` 处理，方向是更严格，不会因省略而放松。
+Luke 于 2026-10-14 选择轻量串行集成模式：独立 PR 并行开发和审查，controller
+依次验证并合入。配置只来自 root-owned `config.json`。默认
+`integrationMode=up-to-date-base` 保留精确 base 规则；发布本 PR 不启用新模式，也不
+修改仓库保护设置。v10 修复 v9 的审批复用、集成 CI 触发与中断恢复问题，旧 v9
+安装包不能用于启用轻量模式。
 
-- 审批绑定 head SHA。两种 head-bound 模式（`merge-queue`、`serialized-merge`）
-  下 gate 只要求 GitHub 报告 `mergeable === true`。真实冲突（`mergeable === false`）
-  返回 `pull_request_conflict` 并交回修复；尚未算出合并结果的读取返回
-  `mergeability_unknown` 并等待，该原因可重试，不会释放 Issue 占用。它不再比较
-  `baseSha` 与 main。审批报告仍绑定当时的 PR base 与需求摘要；main 前进本身不会
-  使代码审查失效，也不会要求 rebase。
-- `clean`/`behind` 不在 gate 里判定，而在真正合入时判定。gate 写的
-  `pr-review-gate` 本身是 main 的必需检查，在审批窗口内它的结论必然是
-  `failure`/`action_required`，GitHub 因此对健康 PR 也报 `blocked`。若 gate 要求
-  `clean`，就会出现“检查变绿才判 clean、判 clean 才让检查变绿”的死循环，任何 PR
-  都无法合入。所以 gate 只挡真冲突与未知，`mergeActionFor` 在合入前要求 GitHub 报
-  `clean` 或 `behind`，否则 `wait`，从不 arm 延迟 auto-merge。
-- 审查与合并验证解耦但不省略。审批证明被审 head，集成步骤负责证明它与最新 main
-  的合并结果：`merge-queue` 交给原生队列在最新 main 上构建并测试；`serialized-merge`
-  由 controller 检查当前 PR merge ref 的第一父提交等于最新 main，并要求可信
-  `validate` workflow artifact 记录的 checkout SHA 与该 merge ref 完全相同。main
-  前进后旧 CI 不再满足集成验证，须等待针对新 merge ref 的 Validate；原审批仍可复用。
-- `.github/workflows/pr-validate.yml` 在 checkout 后写入 `pr-validate-source.json`，
-  与测试报告一起上传。head-bound 模式下 controller 校验事件、PR/head/base 和
-  checkout SHA，缺收据或对不上都按缺少集成验证处理，不能把 PR head 的绿色状态冒充
-  合并结果测试。`up-to-date-base` 保持历史容忍度：它仍要求 run 元数据里的 base 与
-  head 匹配当前值，并由 gate 要求 base 等于 main，因此不额外要求收据。否则新
-  controller 一安装、而收据 workflow 还没落到 main 时，会把现有 PR 的证据全部判
-  失败并误交接 Issue。
-- `merge-queue` 要求 `mergeQueueAvailable === true`，否则返回
-  `merge_queue_unavailable` 转人工；规则集读不到时按无队列处理，fail-closed。
-- `serialized-merge` 要求 main 关闭 `requiresUpToDate`。仍开启时 GitHub 会拒绝所有
-  落后 base 的合并，gate 读到即返回 `requires_up_to_date_still_enabled` 转人工。
-- `serialized-merge` 还要求 main 只有一个写入者，也就是审批 App。controller 先用
-  `/rulesets?includes_parents=true` 取规则集编号，再逐个读 `/rulesets/{id}` 详情，
-  因为列表接口只返回摘要，`conditions`、`rules` 和 `bypass_actors` 只在详情里。只看
-  覆盖默认分支、处于 active、且带 `update` 规则的条目：必须存在这样的规则，并且它的
-  bypass actor 恰好只有审批 App。缺规则返回 `main_writer_guard_missing`；多出人工、
-  团队或别的 App 返回 `main_writer_guard_bypass_actors`；规则集列表、详情、
-  `rules` 或 `conditions` 读不全返回 `main_writer_guard_unreadable`。GitHub 只对持有
-  administration 权限的调用者返回 `bypass_actors`，所以详情里没有该字段时按“未证明”
-  处理（`bypassActorsEnumerated === false`），返回
-  `main_writer_guard_bypass_actors_unreadable`，而不是当成“没有别的写入者”。四条都是
-  转人工，fail-closed。`status` 无论什么模式都报告 `mainWriterGuard`，Luke 可以先在
-  `up-to-date-base` 下确认守卫是否可读，再决定是否启用。
-- `up-to-date-base` 与 `merge-queue` 不读 main 写入守卫，branch protection 的 bypass
-  判断改为“除审批 App 之外还有别的 bypass actor 才不合格”。审批 App 本来就要能合入，
-  被 Luke 的 ruleset 列为 bypass 是预期配置，不再单独判为 `branch_protection_incomplete`。
-- 规则集详情读不到时 `readBranchProtection` 不再整体失败。旧实现用列表接口并要求
-  `bypass_actors` 存在，只要仓库出现任何 ruleset 就让每次审批都停在
-  `branch_protection_unreadable`；读取改为详情接口后按能读到的部分判断，严格的那条
-  仍在 `serialized-merge` 的守卫里。
-- 并发放宽只限 head-bound 模式。`up-to-date-base` 仍保持一次只推进一个 PR；两种
-  head-bound 模式由队列或 controller 自身串行化合并，其他开放 PR 不再阻断本 PR
-  的审批，同一旧 base 上的多个 PR 互为独立候选。
-- 合并动作按模式区分。`merge-queue` 为 `enqueue`：只提交一次队列条目，并用
-  `expectedHeadOid` 固定到已审 head，head 变动后 GitHub 会拒绝，已有条目视为已
-  完成。`serialized-merge` 为 `merge-now`：只有 GitHub 报告 `mergeable === true`
-  且状态为 `clean`（base 已是最新）或 `behind`（base 落后但仍可合并）时才当场
-  pinned merge，其余情况一律 `wait`，且从不 arm 延迟 auto-merge，避免绕过串行化。
-  两种 head-bound 模式的判定条件完全相同，只有动作不同。恢复路径按收据里的
-  `integrationMode` 重新执行对应动作，不强行回到 pinned merge。
-- 仓库未启用 GitHub 原生 merge queue 前不得打开 `merge-queue` 模式；`serialized-merge`
-  不依赖原生队列，但需要 main 关闭 `requiresUpToDate`，两者都是 Luke 操作的仓库设置。
-  规则集启用与 controller 安装都需要 Luke 操作，本线程只交付源码、测试与安装说明。
-- `serialized-merge` 的串行化由两部分组成：controller 的全局锁把本 controller 的合并
-  排成一次一个，main 的写入守卫把其他写入者挡在 main 之外。GitHub merge API 没有
-  expected-base 参数，所以只用锁不足以防住外部维护者在最后一次 main 回读与 merge
-  请求之间手动合入别的 PR；只有“main 仅审批 App 可更新”的 ruleset 才能把这段窗口
-  关掉。缺这个守卫时 gate 直接转人工，不会以“有锁”为由放行。残余风险是守卫本身依赖
-  Luke 的仓库设置正确，因此每次审批都回读 ruleset，而不是假设它仍存在。
-- 合并队列要求必需检查在 `merge_group` 事件上运行。`.github/workflows/pr-validate.yml`
-  已加上 `merge_group` 触发，并把 concurrency group 与 artifact 名改为
-  `github.event.pull_request.number || github.event.merge_group.head_sha`，否则
-  `validate` 在 `gh-readonly-queue/main/...` ref 上永不报告，队列条目会一直等待。
-  该文件属受保护路径，随本交付一起需要人工授权。仓库为 public，原生队列无需额外套餐；
-  但当前 rulesets 与 branch rules 均为空，启用队列仍是 Luke 的仓库设置操作。
+- `serialized-merge` 的代码审查绑定 head、完整 diff/change digest、全部需求摘要、
+  受保护路径、被审 workflow blob 与策略版本。历史 base 保存在报告中，不改写成
+  当前 main。main 前进时，controller 完整读取认证的 base 变化，确认没有触及
+  PR 文件或安全、依赖、迁移、策略等实质风险路径，才复用已有审查；截断、读取失败
+  或风险不明都要求重新审查。head、需求或完整 diff 改变也使旧审查失效。
+- 审核报告的 `baseSha` 从包内 `reviewContext.baseSha` 取得。严格模式下它仍是
+  PR base；v10 轻量模式下它是本次审查针对的 main SHA。`pullRequest.baseSha`
+  始终保留 GitHub 原值。这样实质 main 风险可以通过重新审查当前集成解除，无须
+  为了改变报告身份而强制提交一次 rebase。
+- 浏览器新挑战用 `reviewBinding=head-v2` 标识可复用的授权。只有 controller 已证明
+  main 变化安全时，才允许比较忽略 base；作者、审核者、head、完整 diff、需求、
+  路径与 workflow blob 仍精确绑定。旧 exact-base 挑战不能升级为 head-v2 收据。
+- 轻量模式的 legacy root 授权额外绑定 `approvedBaseSha` 与精确
+  `approvedHeadSha`。缺少被审 main 基线的旧记录不能获得新模式权限；main 引入
+  实质风险时，重新审查并安装新的 root 绑定。默认严格模式保留旧记录的原有解释。
+- 集成证据始终绑定当前 main、被审 head 和 GitHub 当前 merge ref。controller
+  验证 merge commit 的两个父提交，并检查可信 Validate artifact 的 checkout SHA、
+  两个父 SHA、run ID 与 attempt。旧 run 的绿色结果不能证明新集成。最终写入前再次
+  回读 head/main/merge ref，变化时等待新证据。
+- Validate 使用无特权的 `pull_request` 事件，固定 checkout 为事件的 `github.sha`，
+  写入 `pr-validate-source.json` 后与测试报告一起上传。workflow 增加 `labeled`
+  事件，App 用保留的 `ci-int:<mergeSHA>` PR 标签请求一次当前集成运行。
+  标签只请求 CI，不授予批准。每次添加 PR 标签都会运行完整 Validate，这是保留
+  单一 required check 与现有事件来源的成本。
+- 只有完整可信的已结束旧 run 能触发集成刷新。排队、运行、缺失、未知、缺 artifact
+  或读取失败继续等待。刷新请求先持久化，再写 GitHub；丢失响应或中断后回读请求
+  状态，不能因为尚未发现 run 就重复触发。当前集成失败不会盲目重跑。
+- `mergeable=false` 是真实冲突，交回原 PR 修复；未知状态继续等待。gate 不要求
+  `mergeable_state=clean`，因为它自己就是 required check，尚未变绿时 GitHub 可以
+  正常报告 `blocked`。最终合入动作仍要求 `mergeable=true` 且状态为 `clean` 或
+  `behind`，不使用延后 auto-merge。
+- `serialized-merge` 必须关闭 `requiresUpToDate`，并以 active Branch ruleset 的
+  `update` 规则限制 main 写入，唯一 bypass 是审批 App `5270295`。controller 从
+  `/rulesets?includes_parents=true` 枚举编号，再读每条详情。规则、目标条件或 bypass
+  列表读不全都阻断，不能把不可见列表当成空列表。默认严格模式也拒绝不可读或
+  格式错误的 bypass 列表。
+- controller 的仓库锁保护最终写入；main 写入守卫阻止外部写入者在验证后推进 main。
+  GitHub merge API 没有 expected-base 参数，所以两者缺一不可。所有使用同一 App
+  的 main 写入程序也必须遵守同一把锁。
+- 轻量模式拒绝带未完成 pre-merge deferral 的合入，两个人工通道都不能绕到延后
+  auto-merge。签名 intent 保存原审查身份与请求结果。重试先确认实际合入，再对
+  未合入操作重新读取授权、需求、保护、当前集成和 CI，不能只凭旧 intent 重发。
+- 已确认合入但 Issue 收尾失败只保留本 PR 的待办；能够证明未合入且没有未决写入
+  的拒绝只阻断本 PR。写入响应丢失、可能仍在合入、签名或状态不可读仍阻断后续
+  合并。逐个处理 Issue，保留失败收据，不能删除收据来解除占用。
+- `merge-queue` 配置仍能被解析以识别历史状态，但本交付禁止激活。即使 GitHub
+  报告存在原生队列，也返回 `merge_queue_not_supported`。当前 workflow 的
+  `merge_group` 只提供 `validate`，必需的 `pr-review-gate` 没有 merge-group producer，
+  不能把 enqueue 接口和一个 workflow trigger 当作完整队列支持。
 
 #### 启用 serialized-merge 的操作顺序（Luke 的仓库设置）
 
-顺序不能反。在位的 v8 controller 用 `/rulesets` 列表接口读 ruleset，而该接口只
-返回摘要、从不返回 `bypass_actors`，因此只要仓库里出现任何 ruleset，v8 的
-`readBranchProtection` 就会抛错，把**每一次**审批都停在
-`branch_protection_unreadable`。所以要先装新 controller，再改仓库设置。
+先发布本 PR，再安装通过审核的 v10 bundle，最后改仓库设置并启用新模式。
+已安装的 v9 保持默认严格模式；不能用旧 v9 助手启用轻量模式。所有版本都需要
+能够读取规则集详情与完整 bypass 列表，读不到时保留阻断。
 
 另有两个前提。其一，`.github/workflows/pr-validate.yml` 的收据改动必须先在 main 上
 生效，否则 head-bound 模式要求 `pr-validate-source.json`，而这个 workflow 还不产出它，
@@ -188,6 +164,11 @@ Luke 于 2026-10-14 要求：不要因为 main 前进就强制每个 PR rebase �
 文件之后，落后 base 的 PR 需要重新审查一次以绑定新 blob。这不是代码冲突，而是“CI
 管线本身变了，要重新确认一次”；`up-to-date-base` 下同类情况表现为要求 base 等于
 main，代价相同。
+
+旧 run 如果没有新的 checkout 收据，controller 会等待，不把缺证据解释成可以重复
+派发。启用时仍有这种旧候选，维护者须先用一次 PR 标签事件生成新收据；之后
+main 单独前进由 controller 按可信终态旧 run 自动请求刷新。保留标签只作派发记录，
+不能人工把它改成 CI 已通过的证据。
 
 1. 先安装本交付的 root-owned controller（安装助手默认只换版、不动仓库设置）。
    此时 `config.json` 仍没有 `integrationMode`，行为与现在完全相同
@@ -275,7 +256,7 @@ PR 仍等待同步 main，本次未提交批准或合入。
   `base_sync_handoff_incomplete` 不可报告为已交接。
 - 此路径不创建 request changes review，不增加三轮代码修改失败计数，也不批准、合入或
   直接修改 PR 分支。实现 Agent 执行前须重读最新 main、评论、依赖与暂停，再按 Git 授权同步。
-- head-bound 模式（`merge-queue`、`serialized-merge`）下 base 落后不是缺陷，`prepare`
+- `serialized-merge` 下 base 落后本身不是缺陷，`prepare`
   与 `submit` 都不会因为 base 落后就派发这条 base-sync 交接，也不会要求实现 Agent
   rebase；base-sync 交接只服务于仍使用 `up-to-date-base` 的部署。其它非阻塞结果
   （证据缺失、`human_decision` 分诊等）仍按通用规则把 Issue 交回，真实冲突走
@@ -339,9 +320,9 @@ Luke 已确认接受以 `ui:portal-smoke` 取代设计稿所述的桌面与移�
 
 #### 版本标识
 
-新审批策略版本为 `sayhear-pr-review-gate:v9`，报告结构为
-`sayhear-pr-review-report:v4`。v8 是在位版本，v4、v5、v6 是更早的已签发版本；
-已签发收据的恢复允许列表为 v4、v5、v6、v8、v9。`status`、构建身份与审核包保留能力标识
+新审批策略版本为 `sayhear-pr-review-gate:v10`，报告结构为
+`sayhear-pr-review-report:v4`。v9 是本次修复前的在位版本，v4、v5、v6、v8 是更早的已签发版本；
+已签发收据的恢复允许列表为 v4、v5、v6、v8、v9、v10。`status`、构建身份与审核包保留能力标识
 `browserApprovalVersion=sayhear-pr-browser-approval:v1`。构建身份另记录
 `sourceDiffSha256`：源码包含 main 之上的未提交改动，只有 `sourceCommit` 不能
 证明安装版包含这些变更。
@@ -360,10 +341,10 @@ payload 里的固定数字 ID、login 与类型三元组同时核对；App bot �
 - 浏览器通道绝不用 root 记录兜底：`luke-agents` 的 PR 即使在 root 记录里出现，
   也不进入受保护路径的允许列表。
 
-冻结上下文包含仓库与 PR 的数字及 node 身份、已认证的作者与审核者、精确 head/base、
+默认模式冻结上下文包含仓库与 PR 的数字及 node 身份、已认证的作者与审核者、精确 head/base、
 完整 `diff.digest`、`requirementDigest`、受保护路径清单，以及 head 候选的
 Validate workflow blob。`prepare` 在任何 CI 结果之前冻结，避免 workflow 改动与
-绿色 CI 互证。同一上下文重复 `prepare` 幂等。
+绿色 CI 互证。同一上下文重复 `prepare` 幂等。轻量模式的 head-v2 授权另按上方集成规则核验 main 风险。
 
 浏览器批准的判定规则：
 
@@ -410,7 +391,7 @@ App 审批独自占住分支保护的审批位，从而在人工授权已失效�
   在毫秒级窗口内撤回。该窗口只能靠立即合入与合入后复查收窄，不能完全消除。
 - 已签名 v4 合入意图按原 v4 policy 与含 review 的摘要恢复，v5 按原 v5 policy 与
   排除 review 的摘要恢复。v6 继续使用 v5 摘要算法。兼容仅限已存在的 signed
-  receipt，不改标、不重新批准；新提交只接受 v6/report v4。
+  receipt，不改标、不重新批准；新提交只接受当前策略与 report v4。
 
 PR 需求摘要只排除身份同时匹配 Vercel Bot actor `35613825`、login、Bot 类型、
 GitHub App `8329` 且正文以 `[vc]: #` 开头的部署状态评论。人工评论、其他 Bot
@@ -465,13 +446,13 @@ pnpm pr:review-gate:dry-run -- --input <snapshot.json>
 ## Gate 规则
 
 - 报告绑定仓库、PR、head SHA、base SHA、策略版本，以及全部引用 Issue 的标题、正文和非 App 评论摘要。只改标签或 App 自身回写不改变需求摘要。
-- 仅接受完整 diff、非 Draft PR、指向当前 `main` 的同仓库 PR，以及完整的关联 Issue 集合。交付集合的开放 Issue 须已认领，集合外依赖须解除。`merge-queue` 模式把“base 等于最新 main”换成“无真实冲突且仓库确有合并队列”；`serialized-merge` 换成“无真实冲突且 main 已关闭 `requiresUpToDate`，由 controller 串行合入”。
+- 仅接受完整 diff、非 Draft PR、指向当前 `main` 的同仓库 PR，以及完整的关联 Issue 集合。交付集合的开放 Issue 须已认领，集合外依赖须解除。`merge-queue` 暂不可激活；`serialized-merge` 换成“无真实冲突且 main 已关闭 `requiresUpToDate`，由 controller 串行合入”。
 - 每个未排除的开放 Issue 必须处于 `ongoing`，不能同时带 `ready-for-agent`、人工处理、待补充或暂停状态。
 - PR Validate 的证据必须对应当前 head、base 和 merge SHA，并匹配可信 workflow 文件摘要、GitHub Actions App、仓库和 `pull_request` 事件。
 - 每项必要证据都必须显式为 `passed`。`skipped`、`cancelled`、`neutral`、`planned` 和 `out-of-scope` 均阻断。
 - `scripts/daily-release-validation.ts` 决定行为专项；gate 不使用它的退出码代替验收结果。
 - 涉及审批规则、CI、产品定义、删除测试、完整能力验收或生产新能力启用时转人工。UI 变化按 Luke 确认的标准，追加 `ui:portal-smoke`（`tests/portal-integration.test.ts` 与 `tests/portal-conversation-status.test.ts` 两个模块级行为测试），不再要求设计稿所述的桌面与移动端交互证据；仓库当前没有接入 PR CI 的浏览器 E2E runner。该降级是产品决定，不是测试通过，等真实浏览器 E2E 落地后可恢复。数据库迁移要求可信、无 skip 的升级兼容专项证据。
-- 只有可读的 main 保护规则、base 满足当前集成模式（`up-to-date-base` 要求等于最新 main；`merge-queue` 要求无冲突且仓库确有队列；`serialized-merge` 要求无冲突、main 已关闭 `requiresUpToDate`，且 main 的写入守卫正好只给审批 App 一个 bypass）、过期 review 失效、管理员强制执行、恰好一个审批名额、绕过 actor 符合当前模式（`up-to-date-base`/`merge-queue` 除审批 App 外不得有别的 bypass actor；`serialized-merge` 要求 bypass 恰好等于 `[reviewAppId]`），以及精确匹配来源的 `validate` 和 `pr-review-gate` 两项 required checks 同时成立时，才会生成 `merge_candidate`。
+- 只有可读的 main 保护规则、base 满足当前集成模式（`up-to-date-base` 要求等于最新 main；`merge-queue` 暂不可激活；`serialized-merge` 要求无冲突、main 已关闭 `requiresUpToDate`，且 main 的写入守卫正好只给审批 App 一个 bypass）、过期 review 失效、管理员强制执行、恰好一个审批名额、绕过 actor 符合当前模式（`up-to-date-base`/`merge-queue` 除审批 App 外不得有别的 bypass actor；`serialized-merge` 要求 bypass 恰好等于 `[reviewAppId]`），以及精确匹配来源的 `validate` 和 `pr-review-gate` 两项 required checks 同时成立时，才会生成 `merge_candidate`。
 - 所有必要证据必须来自同一个 PR Validate workflow run 和 attempt。快照采集器仍须证明它们是当前最新 run；gate 本身不连接 GitHub，也不提供全仓合入锁。
 
 ## Issue 标签交接
