@@ -1311,23 +1311,45 @@ export async function readBranchProtection(
     };
   }
   const bypassActors = new Set<number>();
-  let bypassReadable = true;
+  // A hidden bypass set (GitHub withholds `bypass_actors` from this App)
+  // does not poison readability: the rules themselves parsed, and bypass
+  // membership is decided by the main writer guard, which fails closed on
+  // anything it cannot prove. Only a corrupt visible entry is unreadable.
+  let corruptBypass = false;
   for (const ruleset of rulesets) {
-    if (!Array.isArray(ruleset.bypass_actors)) { bypassReadable = false; break; }
+    if (!Array.isArray(ruleset.bypass_actors)) continue;
     for (const actor of ruleset.bypass_actors) {
       if (!isRecord(actor) || typeof actor.actor_id !== "number" || !Number.isSafeInteger(actor.actor_id) || actor.actor_id <= 0 ||
           typeof actor.actor_type !== "string" || !["Integration", "Team", "RepositoryRole", "OrganizationAdmin", "DeployKey"].includes(actor.actor_type) ||
           !["always", "pull_request", "exempt"].includes(String(actor.bypass_mode))) {
-        bypassReadable = false;
+        corruptBypass = true;
         break;
       }
       bypassActors.add(actor.actor_id);
     }
+    if (corruptBypass) break;
   }
   const bypassActorIds = [...bypassActors].sort((left, right) => left - right);
 
+  if (corruptBypass) {
+    return {
+      readable: false,
+      protected: true,
+      branch: "main",
+      requiresUpToDate: checks?.strict === true,
+      dismissesStaleReviews: reviewRules?.dismiss_stale_reviews === true,
+      enforcesAdmins: enforceAdmins,
+      requiredApprovingReviews:
+        typeof reviewRules?.required_approving_review_count === "number"
+          ? reviewRules.required_approving_review_count
+          : 0,
+      requiredChecks,
+      bypassActorIds: [],
+    };
+  }
+
   return {
-    readable: bypassReadable,
+    readable: true,
     protected: true,
     branch: "main",
     requiresUpToDate: checks?.strict === true,

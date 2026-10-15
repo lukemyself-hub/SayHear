@@ -1320,8 +1320,10 @@ describe("PR approval controller", () => {
       readable: true,
       bypassActorIds: [98765],
     });
+    // A hidden bypass set no longer poisons readability: the rules themselves
+    // parsed, and bypass membership is the main writer guard's question now.
     await expect(readBranchProtection(hiddenBypass)).resolves.toMatchObject({
-      readable: false,
+      readable: true,
       bypassActorIds: [],
     });
     await expect(readBranchProtection(unreadableRulesets)).resolves.toMatchObject({

@@ -1789,13 +1789,24 @@ export function evaluatePrReviewGate(
         "Serialized-merge integration is configured, but main still requires branches to be up to date before merging.",
     });
   }
-  if (integrationModeOf(input) === "serialized-merge") {
+  // Whenever a ruleset restricts who can update main, the guard must prove
+  // the restriction is App-only, in every integration mode. Protection
+  // readability only means the rules parsed; a hidden bypass actor could
+  // otherwise advance main outside this controller while every rule below
+  // still looks green. Serialized-merge always needs the proof because it
+  // merges behind-main heads against a moving target; other modes need it
+  // only once such a ruleset exists. Repositories without one keep the exact
+  // historical behavior.
+  if (
+    integrationModeOf(input) === "serialized-merge" ||
+    input.runtime.mainWriterGuard?.restrictsDefaultBranchUpdates === true
+  ) {
     const guard = mainWriterGuardReason(input, policy);
     if (guard !== null) {
       return outcome(input, "human_decision", {
         code: guard,
         message:
-          "Serialized-merge integration needs main to be updatable only by the approval App, and that could not be verified.",
+          "Main can only be updated through a restriction that is not exclusively held by the approval App, or that could not be verified.",
       });
     }
   }

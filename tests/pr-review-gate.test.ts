@@ -20,6 +20,7 @@ import {
   parseIssueClosureExclusions,
   closingKeywordIssueNumbers,
   type PreMergeDeferralRecord,
+  type MainWriterAttestation,
   type PrReviewGateInput,
   type TrustedPrReviewPolicy,
   type WorkflowEvidenceRecord,
@@ -1032,6 +1033,44 @@ describe("PR review gate", () => {
       policy,
     );
 
+    expect(passing.outcome).toBe("merge_candidate");
+  });
+
+  it("holds every mode to the App-only main restriction once a ruleset exists", () => {
+    const restricting = {
+      readable: true,
+      restrictsDefaultBranchUpdates: true,
+      bypassActorIds: [],
+      bypassActorsEnumerated: false,
+      appBypassMode: "always",
+      rulesetIds: [7],
+      rulesetFingerprints: [{ id: 7, fingerprint: "a".repeat(64) }],
+    };
+    const attested: MainWriterAttestation = {
+      version: MAIN_WRITER_ATTESTATION_VERSION,
+      rulesetId: 7,
+      rulesetFingerprint: "a".repeat(64),
+      assertedBypassAppIds: [REVIEW_APP_ID],
+      attestedAt: "2026-10-15T00:00:00.000Z",
+      attestedBy: "lukemyself-hub",
+    };
+    // Strict mode with a hidden, unattested bypass set stops too: protection
+    // readability only means the rules parsed, not that the bypass list is
+    // App-only.
+    const blocked = evaluatePrReviewGate(
+      input({ runtime: { mainWriterGuard: restricting } }),
+      policy,
+    );
+    expect(blocked.outcome).toBe("human_decision");
+    expect(blocked.reasons[0]?.code).toBe("main_writer_guard_bypass_actors_unreadable");
+    // The same strict candidate passes once the attestation covers the live
+    // fingerprint.
+    const passing = evaluatePrReviewGate(
+      input({
+        runtime: { mainWriterGuard: restricting, mainWriterAttestation: attested },
+      }),
+      policy,
+    );
     expect(passing.outcome).toBe("merge_candidate");
   });
 
