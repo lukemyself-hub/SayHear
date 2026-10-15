@@ -3933,14 +3933,13 @@ export function mergeActionFor(
   if (integrationMode !== "up-to-date-base") {
     // Both head-bound modes merge the reviewed head against the live main
     // without moving it, so an out-of-date base is expected and must not block.
-    // Only a confirmed clean/behind state proceeds; every other state waits
-    // instead of arming a deferred intent that could land without fresh
-    // verification. The queue performs the merge itself; serialized merge pins
-    // it here. The gate deliberately leaves this state check to this step,
-    // because its own check run keeps GitHub reporting `blocked` until the
-    // candidate is reached.
+    // Serialized merge also accepts `blocked`: main's update restriction can
+    // keep GitHub reporting it even when the approval App may merge. The fresh
+    // gate and immediate merge guard must still prove the App-only main writer,
+    // current integration CI, and approvals before a pinned write.
     const state = pullRequest.mergeable_state;
-    if (pullRequest.mergeable !== true || (state !== "clean" && state !== "behind")) {
+    if (pullRequest.mergeable !== true ||
+        (state !== "clean" && state !== "behind" && !(integrationMode === "serialized-merge" && state === "blocked"))) {
       return "wait";
     }
     return integrationMode === "merge-queue" ? "enqueue" : "merge-now";
@@ -4746,13 +4745,12 @@ async function reportReviewResult(
     integrationModeOf(freshSnapshot.gateInput),
   );
   if (mergeAction === "wait") {
-    // Nothing is armed and no durable intent is written while the PR is not
-    // cleanly mergeable. A saved intent would only be confirmed later, which
-    // would strand an approved merge; the saved review report lets the next
-    // scan retry the pinned merge once the state is clean.
+    // Nothing is armed and no durable intent is written until mergeability and
+    // state permit the integration mode's action. The saved review report lets
+    // the next scan retry with fresh verification.
     return {
       outcome: "awaiting_verification",
-      message: `PR #${report.pullRequestNumber} is approved but not cleanly mergeable; the merge waits for a clean state.`,
+      message: `PR #${report.pullRequestNumber} is approved but mergeability or state does not permit ${integrationModeOf(freshSnapshot.gateInput)}; the merge waits for fresh verification.`,
     };
   }
   const receipt: CompletionRecord = {
