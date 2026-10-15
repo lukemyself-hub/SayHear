@@ -4127,7 +4127,8 @@ export async function guardImmediateMerge(config: ControllerConfig, identity: Co
     if (identity.humanChannel !== "browser" || !human || human.reviewId !== identity.humanReviewId || human.challenge.epoch !== identity.epoch ||
         (identity.integrationMode === "serialized-merge" && human.challenge.context.reviewBinding !== "head-v2")) throw new CompletionMismatch("human_review_binding_changed");
   } else if (identity.humanChannel === "browser") {
-    if (snapshot.humanBinding.receipt?.reviewId !== identity.humanReviewId || snapshot.humanBinding.receipt.challenge.epoch !== identity.epoch) throw new CompletionMismatch("human_review_binding_changed");
+    const human = snapshot.humanBinding.receipt;
+    if (!human || human.reviewId !== identity.humanReviewId || human.challenge.epoch !== identity.epoch) throw new CompletionMismatch("human_review_binding_changed");
   }
   const approval = await findExistingAppReview(config, report);
   if (!approval || approval.id !== identity.reviewId || approval.state !== "APPROVED" || appReviewOutcomeForIdentity(approval.body, report) !== "approve") throw new CompletionMismatch("reviewer_mismatch");

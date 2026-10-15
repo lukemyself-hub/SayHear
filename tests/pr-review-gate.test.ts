@@ -746,9 +746,10 @@ describe("PR review gate", () => {
       review: { baseSha: BASE_SHA, baseReviewSafe: true },
     });
     expect(evaluatePrReviewGate(candidate, policy).outcome).toBe("merge_candidate");
-    for (const baseReviewSafe of [false, undefined]) {
+    const { baseReviewSafe: _baseReviewSafe, ...unverifiedReview } = candidate.review;
+    for (const review of [{ ...unverifiedReview, baseReviewSafe: false }, unverifiedReview]) {
       const blocked = evaluatePrReviewGate({
-        ...candidate, review: { ...candidate.review, baseReviewSafe },
+        ...candidate, review,
       }, policy);
       expect(blocked.reasons[0]?.code).toBe("stale_base_review_risk");
     }

@@ -341,7 +341,7 @@ describe("migration evidence collection", () => {
         slug: "sayhear-pr-review-gate",
         productionMergeAuthorized: false,
         ordinaryMergeTriggersProduction: false,
-        integrationMode: options.integrationMode,
+        ...(options.integrationMode ? { integrationMode: options.integrationMode } : {}),
       },
       policy: {
         repositoryId: SAYHEAR_REPOSITORY_ID,
@@ -2685,7 +2685,8 @@ describe("guarded serialized controller completion", () => {
 
   it("never promotes old open completion receipts into head-bound authority", async () => {
     const f = await serializedControllerFixture("legacy-root");
-    await expect(guardImmediateMerge(f.config, { ...f.receipt.identity, policyVersion: "sayhear-pr-review-gate:v9", reviewIdentity: undefined })).rejects.toThrow("fresh_merge_authorization_required");
+    const { reviewIdentity: _reviewIdentity, ...legacyIdentity } = f.receipt.identity;
+    await expect(guardImmediateMerge(f.config, { ...legacyIdentity, policyVersion: "sayhear-pr-review-gate:v9" })).rejects.toThrow("fresh_merge_authorization_required");
     expect(f.writes.some((write) => write.includes("/pulls/321/merge"))).toBe(false);
   });
 
@@ -2694,11 +2695,12 @@ describe("guarded serialized controller completion", () => {
     const request: Parameters<typeof readHumanBinding>[1] = { pullRequest: f.pull, number: 321, repositoryNodeId: "R_SayHear", reviews: [],
       diffDigest: f.rootAuthorization.diffDigest, diffComplete: true, changedFiles: [{ path: "scripts/pr-approval-controller.ts", status: "modified" }],
       requirement: f.rootAuthorization.requirementDigest, headSha: HEAD_SHA, currentMainSha: BASE_SHA, freeze: false };
-    for (const authorization of [ { ...f.rootAuthorization, approvedBaseSha: undefined }, { ...f.rootAuthorization, approvedHeadSha: "8".repeat(40) } ]) {
+    const { approvedBaseSha: _approvedBaseSha, ...legacyAuthorization } = f.rootAuthorization;
+    for (const authorization of [ legacyAuthorization, { ...f.rootAuthorization, approvedHeadSha: "8".repeat(40) } ]) {
       const binding = await readHumanBinding({ ...f.config, app: { ...f.config.app, humanReviewAuthorizations: [authorization] } }, request);
       expect(binding.paths).toEqual([]);
     }
-    const defaultBinding = await readHumanBinding({ ...f.config, app: { ...f.config.app, integrationMode: "up-to-date-base", humanReviewAuthorizations: [{ ...f.rootAuthorization, approvedBaseSha: undefined }] } }, request);
+    const defaultBinding = await readHumanBinding({ ...f.config, app: { ...f.config.app, integrationMode: "up-to-date-base", humanReviewAuthorizations: [legacyAuthorization] } }, request);
     expect(defaultBinding.paths).toEqual(["scripts/pr-approval-controller.ts"]);
   });
 
