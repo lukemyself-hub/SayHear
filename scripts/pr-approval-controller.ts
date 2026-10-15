@@ -1425,11 +1425,15 @@ function stableStringify(value: unknown): string {
  * Content fingerprint of one ruleset detail record.
  *
  * Only fields the App token can actually read enter the fingerprint: id,
- * enforcement, target, conditions, rules, and `updated_at`. GitHub bumps
- * `updated_at` on any ruleset mutation, including bypass list edits, so a
- * fingerprint taken at attestation time stops matching after any touch.
- * Array order is significant on purpose: a reordering the API actually
- * reports is treated as a change and fails closed.
+ * enforcement, target, conditions, rules, and the `updated_at` instant.
+ * GitHub bumps `updated_at` on any ruleset mutation, including bypass list
+ * edits, so a fingerprint taken at attestation time stops matching after any
+ * touch. The instant is hashed as epoch milliseconds, never as the raw
+ * string: GitHub renders the same instant differently per caller (UTC `Z`
+ * form for the App token, local offset form for a user token), and hashing
+ * the raw text would make identical rulesets mismatch forever. Array order
+ * is significant on purpose: a reordering the API actually reports is
+ * treated as a change and fails closed.
  */
 export function fingerprintRuleset(detail: JsonRecord): string {
   const id = detail.id;
@@ -1440,6 +1444,10 @@ export function fingerprintRuleset(detail: JsonRecord): string {
     if (typeof detail[key] !== "string") {
       throw new Error(`Ruleset detail has no usable ${key}.`);
     }
+  }
+  const updatedAt = Date.parse(detail.updated_at as string);
+  if (!Number.isSafeInteger(updatedAt)) {
+    throw new Error("Ruleset detail has no parsable updated_at instant.");
   }
   if (!isRecord(detail.conditions) || !Array.isArray(detail.rules)) {
     throw new Error("Ruleset detail has no usable conditions or rules.");
@@ -1452,7 +1460,7 @@ export function fingerprintRuleset(detail: JsonRecord): string {
         target: detail.target,
         conditions: detail.conditions,
         rules: detail.rules,
-        updatedAt: detail.updated_at,
+        updatedAt,
       }),
     )
     .digest("hex");
