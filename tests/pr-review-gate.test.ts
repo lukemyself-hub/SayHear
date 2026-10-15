@@ -7,6 +7,7 @@ import {
   type ReleaseImpactKind,
 } from "../scripts/daily-release-validation.ts";
 import {
+  MAIN_WRITER_ATTESTATION_VERSION,
   PR_REVIEW_GATE_POLICY_VERSION,
   PR_REVIEW_REPORT_VERSION,
   PR_VALIDATE_WORKFLOW_PATH,
@@ -865,7 +866,7 @@ describe("PR review gate", () => {
             rulesetFingerprints: [{ id: 7, fingerprint: "a".repeat(64) }],
           },
           mainWriterAttestation: {
-            version: 1,
+            version: MAIN_WRITER_ATTESTATION_VERSION,
             rulesetId: 7,
             rulesetFingerprint: "a".repeat(64),
             assertedBypassAppIds: [REVIEW_APP_ID],
@@ -924,7 +925,7 @@ describe("PR review gate", () => {
               ...guardOverride,
             },
             mainWriterAttestation: {
-              version: 1,
+              version: MAIN_WRITER_ATTESTATION_VERSION,
               rulesetId: 7,
               rulesetFingerprint: "a".repeat(64),
               assertedBypassAppIds: [REVIEW_APP_ID],
@@ -958,7 +959,7 @@ describe("PR review gate", () => {
             rulesetFingerprints: [{ id: 7, fingerprint: "a".repeat(64) }],
           },
           mainWriterAttestation: {
-            version: 1,
+            version: MAIN_WRITER_ATTESTATION_VERSION,
             rulesetId: 7,
             rulesetFingerprint: "a".repeat(64),
             assertedBypassAppIds: [REVIEW_APP_ID, 42],
@@ -978,7 +979,7 @@ describe("PR review gate", () => {
     // Attestation never overrides live enumeration: when GitHub does report
     // the set, the live list alone decides.
     const stale = {
-      version: 1,
+      version: MAIN_WRITER_ATTESTATION_VERSION,
       rulesetId: 7,
       rulesetFingerprint: "a".repeat(64),
       assertedBypassAppIds: [REVIEW_APP_ID],
@@ -1019,7 +1020,7 @@ describe("PR review gate", () => {
             rulesetFingerprints: [{ id: 7, fingerprint: "b".repeat(64) }],
           },
           mainWriterAttestation: {
-            version: 1,
+            version: MAIN_WRITER_ATTESTATION_VERSION,
             rulesetId: 7,
             rulesetFingerprint: "a".repeat(64),
             assertedBypassAppIds: [REVIEW_APP_ID],

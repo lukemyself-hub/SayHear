@@ -1078,8 +1078,10 @@ function optionalMainWriterAttestation(
   if (!isRecord(value)) {
     throw new Error("runtime.mainWriterAttestation must be an object.");
   }
-  if (value.version !== 1) {
-    throw new Error("runtime.mainWriterAttestation.version must be 1.");
+  if (value.version !== MAIN_WRITER_ATTESTATION_VERSION) {
+    throw new Error(
+      `runtime.mainWriterAttestation.version must be ${MAIN_WRITER_ATTESTATION_VERSION}.`,
+    );
   }
   const asserted = value.assertedBypassAppIds;
   if (
@@ -1103,7 +1105,7 @@ function optionalMainWriterAttestation(
     );
   }
   return {
-    version: 1,
+    version: MAIN_WRITER_ATTESTATION_VERSION,
     rulesetId: requiredPositiveInteger(value.rulesetId, "runtime.mainWriterAttestation.rulesetId"),
     rulesetFingerprint: fingerprint,
     assertedBypassAppIds: [...asserted as readonly number[]].sort((left, right) => left - right),
