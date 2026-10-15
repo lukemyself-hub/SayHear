@@ -649,31 +649,6 @@ function boundedMilliseconds(
 }
 
 /**
- * The verify driver's controllable test clock: the file content is the frozen
- * "now" for every clock call. It must be readable and hold one ISO timestamp,
- * because a silent fallback to wall time would fake a real clock. Test deployment
- * only, enforced by assertSafeRuntimeConfiguration.
- */
-function readTestNowFile(path: string): Date {
-  if (path.trim().length === 0) {
-    throw new Error("SAYHEAR_TEST_NOW_FILE must name a file.");
-  }
-  let instant: Date;
-  try {
-    // Use the runtime builtin lazily because this module is also imported by
-    // instrumentation, which can be bundled for a non-Node runtime.
-    const { readFileSync } = process.getBuiltinModule("node:fs");
-    instant = new Date(readFileSync(path, "utf8").trim());
-  } catch {
-    throw new Error("SAYHEAR_TEST_NOW_FILE could not be read.");
-  }
-  if (Number.isNaN(instant.getTime())) {
-    throw new Error("SAYHEAR_TEST_NOW_FILE must contain a valid ISO timestamp.");
-  }
-  return instant;
-}
-
-/**
  * The verify driver's toggleable deterministic fault: a missing or empty file
  * means no fault, a non-negative integer is the chunk ceiling where the stream
  * fails, and anything else fails loudly rather than silently faking a clean

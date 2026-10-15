@@ -1,22 +1,23 @@
 {
-  "recordedAt": "2026-10-15T19:44:00.000Z",
+  "recordedAt": "2026-10-15T20:05:00.000Z",
   "baseCommit": "b7fac60d3111726616c571840f33126d9a4b6e41",
-  "evidenceCommit": "00092a3ba1135a7f80ebcdb21770252067d3c84a",
-  "workingTree": "The history and cross-date journeys ran on clean commit 00092a3; only the untracked handoff/log/config files remained. The history retry on c93823f first selected an anchor outside the bounded page and failed; the selector was corrected before the passing run. The linked artifact directories retain browser, database and cleanup evidence.",
+  "evidenceCommit": "297445795ebacb420b29a1370d359722b61aeb71",
+  "workingTree": "The final keyboard, history, interruption and cross-date runs used the 2974457 checkout plus the tracked working-tree changes recorded in driverSha256. Each run copied that source into its isolated instance; cleanup receipts confirm scratch removal and evidence retention. Earlier passing runs remain linked below.",
+  "testedWorkingTree": "Dirty source copy at launch: runtime-config.ts removed the duplicate test-clock helper; runtime-config.test.ts merged clock coverage; verify-browser.mjs added reload, event-by-event pagination, selected-date heading and exact copy/export assertions. Documentation was updated after these runs.",
   "latestCrossDateRun": {
-    "run": "issue-345-cross-date-7",
+    "run": "issue-345-final-cross-date-1",
     "profile": "timeline",
-    "commit": "00092a3ba1135a7f80ebcdb21770252067d3c84a",
+    "testedHead": "297445795ebacb420b29a1370d359722b61aeb71",
     "passed": true,
-    "evidence": "../../../../artifacts/verify/issue-345-cross-date-7",
+    "evidence": "../../../../artifacts/verify/issue-345-final-cross-date-1",
     "journey": "cross-date",
     "logicalDates": ["2026-07-27", "2026-07-28"],
     "journals": "Both dates have one statement and a current published Journal; each published after two scans, with zero failed scans.",
-    "browserChecks": ["date entry", "date URL", "copy exactly matches that date's Journal", "export exactly matches that date's prose and excludes the other date", "view that day's conversation"],
-    "proseLengths": {"2026-07-27": 119, "2026-07-28": 120},
+    "browserChecks": ["date entry and heading", "date URL and heading", "copy exactly matches that date's Journal", "export exactly matches the selected date, prose and final newline, and excludes the other date", "view that day's conversation"],
+    "proseLengths": {"2026-07-27": 125, "2026-07-28": 126},
     "substitutions": ["test-only file clock re-read per request", "60 second inactivity window", "driver-invoked scans", "local Workflow runtime"],
     "scratchRemoved": true,
-    "cleanupReceipt": "../../../../artifacts/verify/issue-345-cross-date-7/cleanup.json"
+    "cleanupReceipt": "../../../../artifacts/verify/issue-345-final-cross-date-1/cleanup.json"
   },
   "reviewFollowups": {
     "history": {
@@ -33,11 +34,13 @@
       "cleanupReceipt": "../../../../artifacts/verify/issue-345-history-5/cleanup.json"
     },
     "crossDateCopyExport": {
-      "run": "issue-345-cross-date-7",
+      "run": "issue-345-final-cross-date-1",
       "profile": "timeline",
       "passed": true,
+      "dateHeadingsExact": true,
       "copyExact": true,
-      "exportExactAndExcludesOtherDate": true
+      "exportExactAndExcludesOtherDate": true,
+      "proseLengths": {"2026-07-27": 125, "2026-07-28": 126}
     },
     "failedHistoryAttempt": {
       "run": "issue-345-history-3",
@@ -48,15 +51,107 @@
       "cleanupReceipt": "../../../../artifacts/verify/issue-345-history-3/cleanup.json"
     }
   },
-  "driverSha256": {
+  "finalRuns": {
+    "keyboard": {
+      "run": "issue-345-final-keyboard-3",
+      "profile": "local",
+      "passed": true,
+      "evidence": "../../../../artifacts/verify/issue-345-final-keyboard-3",
+      "responseRequests": 1,
+      "reloadVerified": true,
+      "canonicalMessages": 2,
+      "substitution": "CDP Input.imeSetComposition; real operating-system IME, candidate selection and composition editing remain human-pending",
+      "scratchRemoved": true,
+      "cleanupReceipt": "../../../../artifacts/verify/issue-345-final-keyboard-3/cleanup.json"
+    },
+    "history": {
+      "run": "issue-345-final-history-1",
+      "profile": "local",
+      "passed": true,
+      "evidence": "../../../../artifacts/verify/issue-345-final-history-1",
+      "exchanges": 30,
+      "storedEvents": 60,
+      "recentWindow": 50,
+      "everyRenderedEventMatchesOrderedCanonicalRows": true,
+      "continuedFollowAfterRepin": true,
+      "olderPageAnchorShiftPx": 0.84375,
+      "scratchRemoved": true,
+      "cleanupReceipt": "../../../../artifacts/verify/issue-345-final-history-1/cleanup.json"
+    },
+    "interruption": {
+      "run": "issue-345-final-interruption-2",
+      "profile": "fault",
+      "passed": true,
+      "evidence": "../../../../artifacts/verify/issue-345-final-interruption-2",
+      "retryReplayAddedNoEvents": true,
+      "reloadVerified": true,
+      "interruptedTurnAndRetryRemainSeparate": true,
+      "substitution": "One-chunk deterministic Provider fault and controlled clock",
+      "scratchRemoved": true,
+      "cleanupReceipt": "../../../../artifacts/verify/issue-345-final-interruption-2/cleanup.json"
+    },
+    "crossDate": {
+      "run": "issue-345-final-cross-date-1",
+      "profile": "timeline",
+      "passed": true,
+      "evidence": "../../../../artifacts/verify/issue-345-final-cross-date-1",
+      "journalsPublishedPerDate": 1,
+      "scansUntilPublishedPerDate": 2,
+      "failedScans": 0,
+      "scratchRemoved": true,
+      "cleanupReceipt": "../../../../artifacts/verify/issue-345-final-cross-date-1/cleanup.json"
+    }
+  },
+  "failedFinalAttempts": [
+    {
+      "run": "issue-345-final-keyboard-1",
+      "journey": "keyboard",
+      "passed": false,
+      "reason": "Default Playwright Chromium executable was absent. No browser journey ran; the instance was cleaned. Subsequent runs used the installed /Applications/Google Chrome.app binary.",
+      "scratchRemoved": true,
+      "cleanupReceipt": "../../../../artifacts/verify/issue-345-final-keyboard-1/cleanup.json"
+    },
+    {
+      "run": "issue-345-final-keyboard-2",
+      "journey": "keyboard",
+      "passed": false,
+      "reason": "The new reload assertion compared the assistant article including its timestamp with the canonical body. The selector was narrowed to the message paragraph; keyboard-3 passed.",
+      "scratchRemoved": true,
+      "cleanupReceipt": "../../../../artifacts/verify/issue-345-final-keyboard-2/cleanup.json"
+    },
+    {
+      "run": "issue-345-final-interruption-1",
+      "journey": "interruption",
+      "passed": false,
+      "reason": "The new retry reload assertion included the timestamp in the assistant article text. The selector was narrowed to the reply paragraph; interruption-2 passed.",
+      "scratchRemoved": true,
+      "cleanupReceipt": "../../../../artifacts/verify/issue-345-final-interruption-1/cleanup.json"
+    }
+  ],
+  "testedSourceSha256": {
     "scripts/verify-control.mjs": "7f29fbb0b077fe957ba531198a97bb2271ec8f4d70f557aa7e6c0a8de76e0b9a",
     "scripts/verify-fixture.mjs": "fa4d9f22a7afc36c5c56d24e7d296d4f983036b0076ac39131eeae255a134dd6",
-    "scripts/verify-browser.mjs": "4b5ab72614064c209b2498fb9f2b7331778ce0c9b43ade39ce6dc2450ee6bd86"
+    "scripts/verify-browser.mjs": "bdafca2dd78030df700577fc9fefe2945b5a7eabfcc09b0a309a851718cf1a08",
+    "apps/web/src/runtime-config.ts": "0dc332f6e9482b60ca836ea9d6037522feabc28aa7c6fd0d46b1850633b4b6e9",
+    "tests/runtime-config.test.ts": "fcdf1516b203d9e0d78caed0845e1c7c82dfbc994f2a1472d31cd39d78ea99ab"
+  },
+  "evidenceDocumentSha256": {
+    ".agents/skills/verify/features/conversation.md": "53ddf550909028a944d656ffdc8fb88dea28d1ddea6ed96c0840d4a9d4a3faad",
+    ".agents/skills/verify/features/journal.md": "9bae535d9c9dcc9f289825b9210a0accbf2526c229ac0fd32fcc02daf6b41678",
+    "docs/verification/README.md": "10ec1e5bf18e97a6511eb19452764a8cc0265fb5a3ed215604017fc0b4865f6b"
+  },
+  "validation": {
+    "command": "pnpm validate",
+    "passed": true,
+    "node": "24.18.0",
+    "postgres": "17.10, two disposable test databases",
+    "tests": {"filesPassed": 209, "testsPassed": 2990},
+    "checks": ["check:runtime", "check:boundaries", "check:purge-surfaces", "check:schema-extensions", "typecheck", "test:ci", "production build", "browser bundle credential check"]
   },
   "mergedMain": {
     "mergeCommit": "527afb99a9f2e0f2c086e47d3eeb71484a97cc3d",
     "mainCommit": "acaa502f1558d29dc0de97168c842257644ce30a",
-    "note": "After these runs the branch synced main (#347, the #344 follow-up fix) by merge commit 527afb9. Only .agents/skills/verify/features/conversation.md needed an explicit resolution that keeps both sides; git merge-tree confirms every other file auto-merged identically. The pinned driverSha256 values still describe the revision the runs above used; in the merged tree only scripts/verify-browser.mjs hashes differently (8e968178...). A post-merge smoke of the merged driver passed: dev-345-merge-smoke ran the text journey on the merged commit (2 events, visible reply 406 ms, instance cleaned; artifacts/verify/dev-345-merge-smoke)."
+    "note": "Historical: after the runs above, the branch synced main (#347, the #344 follow-up fix) by merge commit 527afb9. Only .agents/skills/verify/features/conversation.md needed an explicit resolution that kept both sides; git merge-tree confirmed every other file auto-merged identically. The post-merge smoke dev-345-merge-smoke passed on that then-current tree (2 events, visible reply 406 ms, instance cleaned; artifacts/verify/dev-345-merge-smoke). Current final run hashes are recorded under testedSourceSha256 and belong to the dirty source copy described by testedWorkingTree."
   },
   "host": "macOS, Node 24.18.0, PostgreSQL 17.10, playwright-core 1.61.1 with cached Chrome for Testing build 1200, no locale in the environment",
   "runs": {

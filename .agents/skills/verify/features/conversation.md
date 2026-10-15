@@ -47,7 +47,8 @@ session rows. Past-date navigation needs a completed prior-day exchange.
   `/api/internal/conversation/responses` request, starts a browser-level
   composition with CDP `Input.imeSetComposition` and requires Enter during it to
   send nothing, then sends one multiline message with a single Enter and requires
-  exactly one request, the stored canonical text and a settled reply.
+  exactly one request, the stored canonical text and a settled reply. It then
+  reloads and requires each persisted message to render once with the same body.
   `keyboard-stored.json` records the observed composition and keydown events.
   This is emulated browser input; a real operating-system IME stays
   human-pending.
@@ -58,8 +59,11 @@ session rows. Past-date navigation needs a completed prior-day exchange.
   viewport not to move and `回到最新` to appear. After re-pinning, it sends
   another exchange and requires the viewport to keep following. It then opens
   `/internal?date=YYYY-MM-DD`, requires `加载更早消息`, loads the rest, and
-  requires all 30 exchanges exactly once with the anchor's viewport offset
-  preserved.
+  compares every rendered actor, body and assistant command link with the
+  ordered canonical database events, requires all 30 exchanges exactly once,
+  and keeps the anchor's viewport offset within four pixels. The
+  `history-stored.json` and `history-result.json` files retain the counts and
+  measured shift.
 - Fault journey: run `... interruption` on `fault`. It writes a one-chunk
   ceiling to the test-only fault file, sends a real reply that interrupts after
   the first delta, requires the interrupted item, `Retry response` and no
@@ -67,8 +71,9 @@ session rows. Past-date navigation needs a completed prior-day exchange.
   requires the read-only date page to only guide (`前往当前交流`) without
   writing, then clears the fault file, retries on `/internal` and requires one
   settled assistant message, one canonical user message and an idempotent replay
-  of the exact retry request. A real Provider or network interruption stays
-  unverified.
+  of the exact retry request. It reloads and requires the interrupted item,
+  retry control, user message and successful reply to render without duplication.
+  A real Provider or network interruption stays unverified.
 - Past-date entry: the `delivery` journey clicks the exact
   `a[href='/internal?date=YYYY-MM-DD']` for the ended exchange's date and
   requires the same read-only history as the URL entry; it checks the ended

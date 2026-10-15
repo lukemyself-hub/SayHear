@@ -64,15 +64,18 @@ launches `timeline` or `fault`: both carry the test-only file clock, and
   It sends a day-1 exchange, advances the controlled test clock two minutes, runs
   the scheduled scan until the first Journal publishes, advances the clock 24
   hours, sends a day-2 exchange, and publishes the second Journal. It then reads
-  each date through its module date entry and its URL, compares the rendered
-  prose with that date's stored statements, requires copied text and exported
-  prose to match that date exactly without the other date's Journal, and follows
-  查看当天聊天, requiring each date's own expression and not the other's. The
-  clock file is re-read per request; no session row or generation result is
-  edited. Three 2026-10-13 attempts lost a Journal workflow to the #340 deadlock
-  (`dev-345-cross-date-1` and `dev-345-cross-date-4` at day-1, `dev-345-cross-date-2`
-  at day-2 after day-1 published). After the fix, `issue-345-cross-date-6` passed
-  on 2026-10-15; its run-specific evidence is in
+  each date through its module date entry and its URL, checks that each title
+  names the selected date, and compares rendered prose with that date's stored
+  statements. Copy must equal that prose byte-for-byte; export must equal the
+  selected date, two newlines, that prose and the final newline, with no text
+  from the other Journal. It follows `查看当天聊天` and requires each date's own
+  expression and not the other's. The clock file is re-read per request; no
+  session row or generation result is edited. Three 2026-10-13 attempts lost a
+  Journal workflow to the #340 deadlock (`dev-345-cross-date-1` and
+  `dev-345-cross-date-4` at day-1, `dev-345-cross-date-2` at day-2 after day-1
+  published). The prior passing run was `issue-345-cross-date-7`; the latest run
+  `issue-345-final-cross-date-1` passed on 2026-10-15 with the stricter title,
+  copy and export checks. Both run records are in
   `docs/verification/evidence/coverage-completion-proof.json`.
 
 ## Gotchas

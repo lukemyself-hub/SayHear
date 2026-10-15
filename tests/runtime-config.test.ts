@@ -213,8 +213,10 @@ describe("runtime safety configuration", () => {
     writeFileSync(clockFile, "2026-07-28T07:30:00.000Z");
     expect(configuration.clock().toISOString()).toBe("2026-07-28T07:30:00.000Z");
 
-    // An invalid instant never silently falls back to wall time, and the
-    // static and file-backed clocks cannot both be configured.
+    // Blank and invalid instants never silently fall back to wall time, and
+    // the static and file-backed clocks cannot both be configured.
+    writeFileSync(clockFile, "  \n");
+    expect(() => configuration.clock()).toThrow("SAYHEAR_TEST_NOW_FILE");
     writeFileSync(clockFile, "not-a-date");
     expect(() => configuration.clock()).toThrow("SAYHEAR_TEST_NOW_FILE");
     expect(() =>
@@ -284,38 +286,6 @@ describe("runtime safety configuration", () => {
         SAYHEAR_TEST_NOW_FILE: "/tmp/clock.txt",
       }),
     ).toBe("test");
-  });
-
-  it("reads a controlled clock from SAYHEAR_TEST_NOW_FILE on every clock call", () => {
-    const file = join(temporaryDirectory(), "clock.txt");
-    writeFileSync(file, "2026-07-27T16:00:00.000Z");
-    const configuration = loadRuntimeConfiguration({
-      ...testRuntimeEnvironment(),
-      SAYHEAR_TEST_NOW_FILE: file,
-    });
-    expect(configuration.clock().toISOString()).toBe("2026-07-27T16:00:00.000Z");
-    writeFileSync(file, "2026-07-28T16:30:00.000Z\n");
-    expect(configuration.clock().toISOString()).toBe("2026-07-28T16:30:00.000Z");
-    writeFileSync(file, "  \n");
-    expect(() => configuration.clock()).toThrow(
-      "SAYHEAR_TEST_NOW_FILE must contain a valid ISO timestamp.",
-    );
-    writeFileSync(file, "not-a-time");
-    expect(() => configuration.clock()).toThrow(
-      "SAYHEAR_TEST_NOW_FILE must contain a valid ISO timestamp.",
-    );
-  });
-
-  it("does not allow both static and file-backed test clocks", () => {
-    const file = join(temporaryDirectory(), "clock.txt");
-    writeFileSync(file, "2026-08-01T00:00:00.000Z");
-    expect(() =>
-      loadRuntimeConfiguration({
-        ...testRuntimeEnvironment(),
-        SAYHEAR_TEST_NOW: "2026-07-27T16:00:00.000Z",
-        SAYHEAR_TEST_NOW_FILE: file,
-      }),
-    ).toThrow("SAYHEAR_TEST_NOW_FILE and SAYHEAR_TEST_NOW cannot both be set");
   });
 
   it("toggles the deterministic chunk fault through SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS_FILE", () => {

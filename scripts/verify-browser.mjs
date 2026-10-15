@@ -434,6 +434,10 @@ async function recordBrowserInput() {
 }
 const recordedInput = () => page.evaluate(() => window.__verifyInput);
 const journalProse = (journal) => journal.locator(".journalStatement").allInnerTexts().then((statements) => statements.map((statement) => statement.trim()).join("\n\n"));
+const logicalDateHeading = (logicalDate) => {
+  const [year, month, day] = logicalDate.split("-").map(Number);
+  return `${year}年${month}月${day}日`;
+};
 const storedJournalProse = (logicalDate) => rows(`SELECT statement.statement_text FROM journals journal INNER JOIN daily_sessions session ON session.daily_session_id = journal.daily_session_id INNER JOIN journal_versions version ON version.journal_id = journal.journal_id AND version.journal_version_id = journal.current_version_id INNER JOIN journal_statements statement ON statement.journal_version_id = version.journal_version_id WHERE session.logical_date = '${logicalDate}' ORDER BY statement.statement_index`).map((row) => row.statement_text.trim()).join("\n\n");
 
 // Drives the scheduled scan and reloads the selected Journal date until a
@@ -525,8 +529,22 @@ async function keyboardJourney() {
   assert(squash(await page.locator(".userMessage").innerText()).includes(squash(multiline)), "The rendered user message differs from what Enter sent.");
   await snapshot("sent");
   const afterSend = await recordedInput();
-  save("stored", { attempts: storedAttempts(), ime: { compositionEvents: composition.compositions, enterDuringComposition: imeEnter, method: "CDP Input.imeSetComposition" }, keyEvents: afterSend.keys, multiline, stored });
-  return { entries: ["/internal composer", "CDP Input.imeSetComposition + Enter", "Shift+Enter", "Enter"], ime: { compositionEvents: composition.compositions.map((event) => event.type), enterDuringComposition: imeEnter, method: "browser-level composition through CDP Input.imeSetComposition; a real operating-system IME stays human-pending" }, responseRequests: responseCount(), unverified: ["a real operating-system IME (human pending)", "candidate selection and composition editing"] };
+  const attempts = storedAttempts();
+  save("stored", { attempts, ime: { compositionEvents: composition.compositions, enterDuringComposition: imeEnter, method: "CDP Input.imeSetComposition" }, keyEvents: afterSend.keys, multiline, stored });
+
+  action("Reload after the send and verify the canonical messages render once from persisted state.");
+  await page.reload({ waitUntil: "networkidle" });
+  await page.getByRole("region", { name: "Text conversation" }).waitFor();
+  assert.equal(await page.locator(".userMessage").count(), 1);
+  assert.equal(await page.locator(".assistantMessage:not(.waitingMessage)").count(), 1);
+  assert.equal(squash(await page.locator(".userMessage").last().innerText()).includes(squash(multiline)), true);
+  assert.equal(squash(await page.locator(".assistantMessage:not(.waitingMessage) > p").last().innerText()), squash(DETERMINISTIC_REPLY));
+  assert.deepEqual(storedMessages().map(({ actor, canonical_text }) => ({ actor, text: canonical_text })), [
+    { actor: "user", text: multiline },
+    { actor: "assistant", text: DETERMINISTIC_REPLY },
+  ]);
+  await snapshot("reloaded");
+  return { entries: ["/internal composer", "CDP Input.imeSetComposition + Enter", "Shift+Enter", "Enter", "reload and verify persisted messages"], ime: { compositionEvents: composition.compositions.map((event) => event.type), enterDuringComposition: imeEnter, method: "browser-level composition through CDP Input.imeSetComposition; a real operating-system IME stays human-pending" }, responseRequests: responseCount(), unverified: ["a real operating-system IME (human pending)", "candidate selection and composition editing"] };
 }
 
 async function historyJourney() {
@@ -608,14 +626,27 @@ async function historyJourney() {
   })();
   assert(Math.abs(anchorAfter - anchorBefore) <= 4, `The reading position moved ${anchorBefore} -> ${anchorAfter} while older messages loaded.`);
   assert.equal(await list.getByRole("button", { name: "加载更早消息" }).count(), 0, "The pagination control must disappear after the oldest page.");
-  const rendered = (await list.locator(".userMessage .messageBody p").allInnerTexts()).map(squash).sort();
-  const expected = Array.from({ length: totalExchanges }, (_, index) => squash(messageText(index + 1))).sort();
-  assert.deepEqual(rendered, expected, "Older messages are missing or duplicated.");
-  assert.equal(await list.locator(".userMessage").count(), totalExchanges, "The read-only history omitted user messages.");
-  assert.equal(await list.locator(".assistantMessage").count(), totalExchanges, "The read-only history omitted assistant replies.");
-  assert.equal(storedMessages().length, 2 * totalExchanges);
+  const storedEvents = rows("SELECT event.actor, revision.canonical_text, event.sequence_no, event.generation_command_id FROM conversation_events event INNER JOIN conversation_event_revisions revision ON revision.conversation_event_revision_id = event.current_revision_id ORDER BY event.sequence_no");
+  const renderedEvents = await list.locator(":scope > article").evaluateAll((articles) => articles.map((article) => {
+    const actor = article.classList.contains("userMessage") ? "user" : "assistant";
+    const text = actor === "user"
+      ? article.querySelector(".messageBody p")?.textContent?.trim()
+      : article.querySelector(":scope > p")?.textContent?.trim();
+    const contextLink = article.querySelector("a.contextInspectIcon");
+    const generationCommandId = contextLink === null
+      ? null
+      : new URL(contextLink.href).searchParams.get("generation_command_id");
+    return { actor, text, generationCommandId };
+  }));
+  const expectedEvents = storedEvents.map((event) => ({
+    actor: event.actor,
+    text: event.canonical_text,
+    generationCommandId: event.generation_command_id,
+  }));
+  assert.deepEqual(renderedEvents, expectedEvents, "Older pagination rendered missing, duplicated, reordered or substituted events.");
+  assert.equal(storedEvents.length, 2 * totalExchanges);
   await snapshot("all-messages");
-  save("stored", { anchorAfter, anchorBefore, exchangeCount: totalExchanges, olderMessageRequests: requestsTo("/api/internal/conversation/messages").length, responseRequests: requestsTo(responsesPath).length, storedEvents: storedMessages().length });
+  save("stored", { anchorAfter, anchorBefore, exchangeCount: totalExchanges, olderMessageRequests: requestsTo("/api/internal/conversation/messages").length, responseRequests: requestsTo(responsesPath).length, storedEvents: storedEvents.length });
   return { entries: [`/internal composer × ${composerExchanges}`, "scroll follow and 回到最新", `/internal?date=${logicalDate} with 加载更早消息`], anchorShiftPx: Math.abs(anchorAfter - anchorBefore), unverified: ["interrupted items inside a long history", "tampered pagination cursors"], window: { recent: 50, storedEvents: 2 * totalExchanges } };
 }
 
@@ -692,7 +723,18 @@ async function interruptionJourney() {
   const afterReplay = rows("SELECT (SELECT count(*)::int FROM conversation_events WHERE actor = 'assistant') AS assistant_messages, (SELECT count(*)::int FROM conversation_events WHERE actor = 'user' AND event_type = 'message') AS user_messages, (SELECT count(*)::int FROM interaction_turns) AS turns");
   assert.deepEqual(afterReplay, [{ assistant_messages: 1, turns: 2, user_messages: 1 }], "The replayed retry appended events.");
   save("stored", { afterReplay, guidanceText, interruptedState, replayEvents, retried, retryRequest: JSON.parse(retryRequest.body), turns });
-  return { entries: ["/internal composer", "test-only Provider fault file", `/internal?date=${dayA} history guidance`, "Retry response", "POST /api/internal/conversation/retries replay"], substitutions: ["one-chunk deterministic fault instead of a real Provider interruption", "controlled test clock advanced 24 hours instead of a real day change"], unverified: ["a real Provider or network interruption", "retry against a quiesced historical session"] };
+
+  action("Reload after retry replay; the interrupted turn and its separate successful reply must render without duplication.");
+  await page.reload({ waitUntil: "networkidle" });
+  await page.getByRole("region", { name: "Text conversation" }).waitFor();
+  await page.getByRole("button", { name: "Retried separately" }).waitFor();
+  assert.equal(await page.locator(".interruptedMessage").count(), 1);
+  assert.equal(await page.locator(".assistantMessage:not(.interruptedMessage):not(.waitingMessage)").count(), 1);
+  assert.equal(squash(await page.locator(".assistantMessage:not(.interruptedMessage):not(.waitingMessage) > p").last().innerText()), squash(DETERMINISTIC_REPLY));
+  assert.equal(await page.locator(".userMessage").count(), 1);
+  assert.deepEqual(rows("SELECT (SELECT count(*)::int FROM conversation_events WHERE actor = 'assistant') AS assistant_messages, (SELECT count(*)::int FROM conversation_events WHERE actor = 'user' AND event_type = 'message') AS user_messages, (SELECT count(*)::int FROM interaction_turns) AS turns"), [{ assistant_messages: 1, turns: 2, user_messages: 1 }]);
+  await snapshot("reloaded-after-retry");
+  return { entries: ["/internal composer", "test-only Provider fault file", `/internal?date=${dayA} history guidance`, "Retry response", "POST /api/internal/conversation/retries replay", "reload and verify persisted interruption/retry state"], substitutions: ["one-chunk deterministic fault instead of a real Provider interruption", "controlled test clock advanced 24 hours instead of a real day change"], unverified: ["a real Provider or network interruption", "retry against a quiesced historical session"] };
 }
 
 async function crossDateJourney() {
@@ -737,11 +779,12 @@ async function crossDateJourney() {
     const journal = page.getByRole("region", { name: "日记" });
     await journal.waitFor();
     assert.equal(await journalProse(journal), expected.prose, `The date entry did not show ${day}'s own Journal.`);
-    assert.equal(await journal.locator(".journalViewTitle").innerText(), expected.heading, "The heading does not name the selected date.");
+    assert.equal(await journal.locator(".journalViewTitle").innerText(), logicalDateHeading(day), "The heading does not name the selected date.");
 
     action(`Open /internal/journals?date=${day} directly; the URL must show the same prose.`);
     await page.goto(`${state.origin}/internal/journals?date=${day}`, { waitUntil: "networkidle" });
     await journal.waitFor();
+    assert.equal(await journal.locator(".journalViewTitle").innerText(), logicalDateHeading(day), "The direct URL heading does not name the selected date.");
     assert.equal(await journalProse(journal), expected.prose);
 
     action(`Choose 复制 for ${day} and compare the clipboard with the visible prose.`);
@@ -749,8 +792,8 @@ async function crossDateJourney() {
     await journal.getByRole("button", { name: "复制", exact: true }).click();
     await journal.getByRole("button", { name: "已复制", exact: true }).waitFor();
     const copied = await page.evaluate(() => navigator.clipboard.readText());
-    assert.equal(squash(copied), squash(expected.prose), `The ${day} clipboard differs from the visible Journal.`);
-    assert(!squash(copied).includes(squash(otherJournal.prose)), `The ${day} clipboard includes the other date's Journal.`);
+    assert.equal(copied, expected.prose, `The ${day} clipboard differs from the visible Journal.`);
+    assert(!copied.includes(otherJournal.prose), `The ${day} clipboard includes the other date's Journal.`);
 
     action(`Choose 导出 for ${day} and read the downloaded file.`);
     const pending = page.waitForEvent("download");
@@ -761,8 +804,8 @@ async function crossDateJourney() {
     assert.equal(download.suggestedFilename(), `sayhear-journal-${day}.txt`, "The export does not carry the selected date.");
     const exportedText = readFileSync(exported, "utf8");
     assert(exportedText.startsWith(`${day}\n\n`), "The export does not open with the Journal's date.");
-    assert.equal(squash(exportedText.slice(`${day}\n\n`.length)), squash(expected.prose), "The export differs from the visible Journal prose.");
-    assert(!squash(exportedText).includes(squash(otherJournal.prose)), `The ${day} export includes the other date's Journal.`);
+    assert.equal(exportedText, `${day}\n\n${expected.prose}\n`, "The export differs from the selected date and visible Journal prose.");
+    assert(!exportedText.includes(otherJournal.prose), `The ${day} export includes the other date's Journal.`);
 
     action(`Choose 查看当天聊天 for ${day}; only that day's read-only Conversation may open.`);
     await journal.getByRole("link", { name: "查看当天聊天", exact: true }).click();
