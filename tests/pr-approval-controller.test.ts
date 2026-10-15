@@ -54,6 +54,7 @@ import {
   type ModelReviewReport,
 } from "../scripts/pr-approval-controller.ts";
 import {
+  MAIN_WRITER_ATTESTATION_VERSION,
   PR_VALIDATE_WORKFLOW_PATH,
   PR_REVIEW_GATE_POLICY_VERSION,
   PR_REVIEW_REPORT_VERSION,
@@ -2690,13 +2691,13 @@ describe("guarded serialized controller completion", () => {
     expect(f.writes.some((write) => write.includes("/pulls/321/merge") || write.includes("/labels"))).toBe(false);
   });
 
-  it("carries a startup-loaded attestation into the snapshot without touching the disk", async () => {
+  it("carries a startup-loaded attestation into the snapshot via config", async () => {
     // The attestation lives in config (loaded once in the privileged launcher
     // context). Snapshot and status paths must never hit the protected
     // filesystem mid-flow, or unit runs outside macOS break: realpath
     // '/Library' does not exist on Linux CI.
     const attestation = {
-      version: 1 as const,
+      version: MAIN_WRITER_ATTESTATION_VERSION,
       rulesetId: 9,
       rulesetFingerprint: "a".repeat(64),
       assertedBypassAppIds: [98765],
