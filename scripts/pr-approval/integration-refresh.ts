@@ -6,7 +6,7 @@ export type IntegrationRefreshRecord = Readonly<{
   pullRequestNumber: number;
   target: IntegrationTarget;
   staleRunId: number;
-  phase: "intent" | "requested";
+  phase: "intent" | "dispatching" | "requested";
 }>;
 export interface IntegrationRefreshStore {
   read(number: number): Promise<IntegrationRefreshRecord | null>;
@@ -21,7 +21,7 @@ export function parseIntegrationRefresh(value: unknown): IntegrationRefreshRecor
       !Number.isSafeInteger(value.pullRequestNumber) || value.pullRequestNumber < 1 ||
       !("staleRunId" in value) || typeof value.staleRunId !== "number" ||
       !Number.isSafeInteger(value.staleRunId) || value.staleRunId < 1 ||
-      !("phase" in value) || (value.phase !== "intent" && value.phase !== "requested")) {
+      !("phase" in value) || (value.phase !== "intent" && value.phase !== "dispatching" && value.phase !== "requested")) {
     throw new Error("integration_refresh_schema_invalid");
   }
   const target = value.target;
@@ -45,8 +45,8 @@ export function integrationRefreshLabel(target: IntegrationTarget): string {
   return `ci-int:${target.mergeSha}`;
 }
 
-// The caller holds the repository lock. Persist before any write so a lost
-// response or crash never turns a missing run into a second automatic request.
+// The caller holds the repository lock. Only dispatching may have delivered
+// a PR label event. An intent can resume after a crash during label preparation.
 export async function requestIntegrationRefresh(
   store: IntegrationRefreshStore,
   number: number,
@@ -55,19 +55,37 @@ export async function requestIntegrationRefresh(
   actions: Readonly<{
     recheck: () => Promise<boolean>;
     labels: () => Promise<readonly string[]>;
+    prepareLabel: (label: string) => Promise<void>;
     addLabel: (label: string) => Promise<void>;
+    definitiveRejection: (error: unknown) => boolean;
   }>,
 ): Promise<"requested" | "waiting" | "target_changed"> {
   const previous = await store.read(number);
   if (previous && previous.target.mergeSha === target.mergeSha &&
-      previous.target.headSha === target.headSha && previous.target.mainSha === target.mainSha) return "waiting";
+      previous.target.headSha === target.headSha && previous.target.mainSha === target.mainSha &&
+      previous.phase !== "intent") return "waiting";
   if (!await actions.recheck()) return "target_changed";
   const label = integrationRefreshLabel(target);
   const present = (await actions.labels()).includes(label);
   const record: IntegrationRefreshRecord = { version: 1, pullRequestNumber: number, target, staleRunId, phase: "intent" };
   await store.save(record);
-  if (present) return "waiting";
-  await actions.addLabel(label);
+  if (present) {
+    await store.save({ ...record, phase: "requested" });
+    return "waiting";
+  }
+  await actions.prepareLabel(label);
+  if (!await actions.recheck()) return "target_changed";
+  if ((await actions.labels()).includes(label)) {
+    await store.save({ ...record, phase: "requested" });
+    return "waiting";
+  }
+  await store.save({ ...record, phase: "dispatching" });
+  try {
+    await actions.addLabel(label);
+  } catch (error) {
+    if (actions.definitiveRejection(error)) await store.save(record);
+    throw error;
+  }
   await store.save({ ...record, phase: "requested" });
   return "requested";
 }

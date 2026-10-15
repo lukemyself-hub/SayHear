@@ -546,12 +546,14 @@ describe("channel routing in the controller", () => {
     expect(requirementProjectionFor(PR_REVIEW_GATE_POLICY_VERSION)).toBe("review-exclusive-v5");
     expect(requirementProjectionFor(PR_REVIEW_GATE_INSTALLED_POLICY_VERSION)).toBe("review-exclusive-v5");
     expect(requirementProjectionFor("sayhear-pr-review-gate:v8")).toBe("review-exclusive-v5");
+    expect(requirementProjectionFor("sayhear-pr-review-gate:v9")).toBe("review-exclusive-v5");
+    expect(requirementProjectionFor("sayhear-pr-review-gate:v10")).toBe("review-exclusive-v5");
     expect(requirementProjectionFor("sayhear-pr-review-gate:v6")).toBe("review-exclusive-v5");
     expect(requirementProjectionFor("sayhear-pr-review-gate:v5")).toBe("review-exclusive-v5");
     expect(requirementProjectionFor("sayhear-pr-review-gate:v4")).toBe("review-inclusive-v4");
     // v7 was reviewed on main but never installed, so it never wrote a receipt.
     expect(() => requirementProjectionFor("sayhear-pr-review-gate:v7")).toThrow();
-    expect(() => requirementProjectionFor("sayhear-pr-review-gate:v10")).toThrow();
+    expect(() => requirementProjectionFor("sayhear-pr-review-gate:v11")).toThrow();
   });
 
   it("exempts a protected path once the approval names it", () => {

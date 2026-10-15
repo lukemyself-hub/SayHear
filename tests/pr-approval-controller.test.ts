@@ -11,6 +11,7 @@ import {
   readHumanBinding,
   readSavedReviewReport,
   refreshStaleIntegration,
+  scanPullRequests,
   readSnapshot,
   recoverControllerCompletion,
   applyMergeAction,
@@ -134,7 +135,7 @@ class StubApi implements GitHubApi {
       path: string,
       options?: StubRequestOptions,
     ) => unknown = () => ({}),
-    private readonly pageValues: (path: string) => unknown[] = () => [],
+    private readonly pageValues: (path: string) => unknown[] | Promise<unknown[]> = () => [],
     private readonly archiveBytes: () => Uint8Array = () => new Uint8Array(),
   ) {}
 
@@ -146,7 +147,7 @@ class StubApi implements GitHubApi {
   }
 
   async pages<T>(path: string): Promise<T[]> {
-    return this.pageValues(path) as T[];
+    return (await this.pageValues(path)) as T[];
   }
 
   async bytes(_path: string): Promise<Uint8Array> {
@@ -1885,6 +1886,9 @@ describe("pre-merge deferral evidence collection", () => {
       headSha: HEAD_SHA,
       baseSha: BASE_SHA,
       checkoutSha: options.checkoutSha ?? MERGE_SHA,
+      parentShas: [BASE_SHA, HEAD_SHA],
+      runId: COLLECTOR_RUN_ID,
+      runAttempt: 1,
     }), "utf8");
     const archive = storedZipArchiveWithZeroCrc([
       { name: "vitest-report.json", content: new Uint8Array(reportBytes) },
@@ -2022,10 +2026,13 @@ describe("pre-merge deferral evidence collection", () => {
     });
   });
 
-  it("rejects otherwise green CI when a head-bound merge tested an older integration commit", async () => {
+  it.each([
+    { checkoutSha: MERGE_SHA, result: "passed" },
+    { checkoutSha: "f".repeat(40), result: "failed" },
+  ])("binds otherwise valid head-bound CI to the tested checkout $checkoutSha", async ({ checkoutSha, result }) => {
     const { config } = collector({
       reportPaths: ["tests/runtime-config.test.ts"],
-      checkoutSha: "f".repeat(40),
+      checkoutSha,
       integrationMode: "serialized-merge",
     });
     const collected = await collectEvidence(
@@ -2041,10 +2048,10 @@ describe("pre-merge deferral evidence collection", () => {
 
     expect(
       collected.evidence.find((entry) => entry.checkId === "baseline:test"),
-    ).toMatchObject({ result: "failed" });
+    ).toMatchObject({ result });
     expect(
       collected.evidence.find((entry) => entry.checkId === "baseline:typecheck"),
-    ).toMatchObject({ result: "failed" });
+    ).toMatchObject({ result });
   });
 
   it("keeps the pre-existing tolerance while base must still equal main", async () => {
@@ -2523,6 +2530,41 @@ async function serializedControllerFixture(channel: "browser" | "legacy-root") {
 }
 
 describe("guarded serialized controller completion", () => {
+  it.each(["preparation", "rejected", "uncertain"] as const)("continues scanning other PRs after %s refresh failure", async (failure) => {
+    const f = await serializedControllerFixture("browser");
+    f.advanceMain(false);
+    let failOnce = true;
+    let deliveries = 0;
+    const api = new StubApi((path, options) => {
+      if (path.endsWith("/issues/321/labels") && options?.method === "POST") deliveries++;
+      if (failOnce && options?.method === "POST" &&
+          path.endsWith(failure === "preparation" ? "/SayHear/labels" : "/issues/321/labels")) {
+        failOnce = false;
+        if (failure === "uncertain") throw new Error("label response lost");
+        throw new GitHubApiError(failure === "preparation" ? 503 : 422, "POST", path);
+      }
+      return f.api.request(path, options);
+    }, (path) => path.endsWith("/pulls?state=open")
+      ? [structuredClone(f.pull), { ...structuredClone(f.pull), number: 322, draft: true }]
+      : f.api.pages(path));
+    api.bytes = f.api.bytes.bind(f.api);
+    const config = { ...f.config, api };
+    const first = await scanPullRequests(config, null);
+    expect(first).toEqual([
+      expect.objectContaining({ pullRequest: 321, status: "integration_refresh_blocked",
+        reason: expect.stringContaining(failure === "uncertain" ? "label response lost" : `HTTP ${failure === "preparation" ? 503 : 422}`) }),
+      expect.objectContaining({ pullRequest: 322, status: "skipped" }),
+    ]);
+    const snapshot = await readSnapshot(config, 321);
+    const record = await config.integrationRefreshStore?.read(321);
+    expect(record?.phase).toBe(failure === "uncertain" ? "dispatching" : "intent");
+    expect(await refreshStaleIntegration(config, snapshot)).toBe(true);
+    expect(deliveries).toBe(failure === "rejected" ? 2 : 1);
+    expect((await config.integrationRefreshStore?.read(321))?.phase).toBe(failure === "uncertain" ? "dispatching" : "requested");
+    expect(f.issue).toMatchObject({ state: "open", labels: ["ongoing"] });
+    expect(f.writes.some((write) => write.includes("/pulls/321/merge"))).toBe(false);
+  });
+
   it.each(["browser", "legacy-root"] as const)("merges and completes Issues through the full current guard for %s", async (channel) => {
     const f = await serializedControllerFixture(channel);
     const completed = await recoverControllerCompletion(f.config, f.receipt, f.clock);

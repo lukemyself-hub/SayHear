@@ -4351,14 +4351,18 @@ export async function refreshStaleIntegration(config: ControllerConfig, snapshot
       },
       labels: async () => (await config.api.pages<JsonRecord>(repositoryPath(`/issues/${pull.number}/labels`)))
         .map((label) => recordString(label, "name")),
-      addLabel: async (label) => {
+      prepareLabel: async (label) => {
         try { await config.api.request(repositoryPath(`/labels/${encodeURIComponent(label)}`)); }
         catch (error) {
           if (!(error instanceof GitHubApiError) || error.status !== 404) throw error;
           await config.api.request(repositoryPath("/labels"), { method: "POST", body: { name: label, color: "ededed", description: "Current-main integration validation request" } });
         }
+      },
+      addLabel: async (label) => {
         await config.api.request(repositoryPath(`/issues/${pull.number}/labels`), { method: "POST", body: { labels: [label] } });
       },
+      definitiveRejection: (error) => error instanceof GitHubApiError &&
+        [400, 401, 403, 404, 405, 409, 422].includes(error.status),
     });
   return true;
 }
@@ -4727,7 +4731,7 @@ function requestedPullNumber(args: Map<string, string>): number | null {
   return requiredPositiveInteger(Number(value), "--pr");
 }
 
-async function scanPullRequests(
+export async function scanPullRequests(
   config: ControllerConfig,
   onlyPullNumber: number | null,
   prepareOnly = false,
@@ -4833,9 +4837,17 @@ async function scanPullRequests(
       continue;
     }
 
-    if (!prepareOnly && await refreshStaleIntegration(config, snapshot)) {
-      results.push({ pullRequest: pullRequest.number, status: "waiting_for_validation", reason: "Current-main integration validation requested or awaiting reconciliation." });
-      continue;
+    if (!prepareOnly) {
+      try {
+        if (await refreshStaleIntegration(config, snapshot)) {
+          results.push({ pullRequest: pullRequest.number, status: "waiting_for_validation", reason: "Current-main integration validation requested or awaiting reconciliation." });
+          continue;
+        }
+      } catch (error) {
+        results.push({ pullRequest: pullRequest.number, status: "integration_refresh_blocked",
+          reason: error instanceof Error ? error.message : String(error) });
+        continue;
+      }
     }
     const saved = await readSavedReviewReport(config, snapshot);
     if (saved) {
