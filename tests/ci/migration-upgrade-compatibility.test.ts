@@ -56,13 +56,6 @@ const STORE_TEST_DATABASE_VARIABLES: Readonly<Record<OneA3bG1SchemaStore, string
   "purge-marker": "TEST_PURGE_MARKER_DATABASE_URL",
 };
 
-/**
- * Synthetic rows written in the base tree's own column shape before the head
- * migrations run. The three tables the head migration touches are represented:
- * a started Evidence attempt that never received the ownership columns, and a
- * Journal workflow outcome that never received the recovery counter. Every id
- * is fixed so the assertions can name the row they mean.
- */
 const SEED_OWNER_ID = "01984477-1f9a-7b25-a5cc-83c3b21fbc68";
 const SEED_DAILY_SESSION_ID = "01984477-2a00-7000-8000-000000000001";
 const SEED_TURN_ID = "01984477-2a00-7000-8000-000000000002";
@@ -147,13 +140,28 @@ async function seedBaseWriterRows(
       SEED_EXTRACTION_POLICY_VERSION,
     ],
   );
+  const ownershipColumns = await pool.query(
+    `SELECT column_name FROM information_schema.columns
+     WHERE table_schema = current_schema()
+       AND table_name = 'evidence_model_run_attempts' AND column_name = 'user_id'`,
+  );
+  const hasOwnership = ownershipColumns.rows.length > 0;
   await pool.query(
     `INSERT INTO evidence_model_run_attempts (evidence_model_run_attempt_id,
        evidence_source_snapshot_id, role, provider, model, config_version,
-       extraction_policy_version, prompt_fingerprint, status, created_at)
+       extraction_policy_version, prompt_fingerprint, status, created_at
+       ${hasOwnership ? ", user_id, daily_session_id, source_revision, expected_data_epoch" : ""})
      VALUES ($1, $2, 'evidence.extract', 'openai', 'gpt-5.4', 'evidence-extraction:v1',
-       $3, 'migration-drill-fingerprint', 'started', CURRENT_TIMESTAMP)`,
-    [SEED_ATTEMPT_ID, SEED_SNAPSHOT_ID, SEED_EXTRACTION_POLICY_VERSION],
+       $3, 'migration-drill-fingerprint', 'started', CURRENT_TIMESTAMP
+       ${hasOwnership ? ", $4, $5, $6, $7" : ""})`,
+    [
+      SEED_ATTEMPT_ID,
+      SEED_SNAPSHOT_ID,
+      SEED_EXTRACTION_POLICY_VERSION,
+      ...(hasOwnership
+        ? [SEED_OWNER_ID, SEED_DAILY_SESSION_ID, SEED_SOURCE_REVISION, SEED_DATA_EPOCH]
+        : []),
+    ],
   );
   await pool.query(
     `INSERT INTO evidence_items (evidence_item_id, user_id, evidence_source_snapshot_id,
