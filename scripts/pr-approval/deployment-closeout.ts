@@ -54,6 +54,8 @@ const NON_RUNTIME_PREFIXES = [
 
 function isNonRuntimePath(path: string): boolean {
   if (path === "GLOSSARY.md") return true;
+  const basename = path.slice(path.lastIndexOf("/") + 1);
+  if (basename === "README.md") return true;
   if (!path.includes("/") && path.endsWith(".md")) return true;
   return NON_RUNTIME_PREFIXES.some((prefix) => path.startsWith(prefix));
 }
@@ -80,38 +82,46 @@ function isFailureState(state: string): boolean {
   return state === "failure" || state === "error";
 }
 
-function newestStatusTime(deployment: DeploymentInput): number {
-  let best = Number.NEGATIVE_INFINITY;
-  for (const status of deployment.statuses) {
-    const time = statusTime(status.created_at);
-    if (time > best) best = time;
-  }
-  return best;
+function isPendingState(state: string): boolean {
+  return state === "queued" || state === "in_progress" || state === "pending";
 }
 
 function newestUnblockedSuccess(
   candidates: readonly DeploymentInput[],
 ): { id: number; url: string | null; at: number } | null {
-  let best: { id: number; url: string | null; at: number } | null = null;
-  for (const candidate of candidates) {
-    const ordered = newestFirst(candidate.statuses);
-    for (let index = 0; index < ordered.length; index += 1) {
-      const status = ordered[index];
-      if (status === undefined || status.state.toLowerCase() !== "success") {
-        continue;
-      }
-      const blocked = ordered
-        .slice(0, index)
-        .some((entry) => isFailureState(entry.state.toLowerCase()));
-      if (blocked) break;
-      const at = statusTime(status.created_at);
-      if (best === null || at > best.at) {
-        best = { id: candidate.id, url: status.environment_url ?? null, at };
-      }
-      break;
+  let newest: DeploymentInput | undefined = candidates[0];
+  for (const candidate of candidates.slice(1)) {
+    if (newest === undefined || candidate.id > newest.id) {
+      newest = candidate;
     }
   }
-  return best;
+  if (newest === undefined) return null;
+  const ordered = newestFirst(newest.statuses);
+  for (let index = 0; index < ordered.length; index += 1) {
+    const status = ordered[index];
+    if (status === undefined || status.state.toLowerCase() !== "success") {
+      continue;
+    }
+    // Any newer failure/error keeps reporting failure, and any newer
+    // queued/in_progress/pending means the latest attempt is still active, so
+    // neither may be masked by this older success. Plain inactive is the
+    // historical deactivation marker and does not block success.
+    const blocked = ordered
+      .slice(0, index)
+      .some((entry) => {
+        const newer = entry.state.toLowerCase();
+        return (
+          isFailureState(newer) || isPendingState(newer)
+        );
+      });
+    if (blocked) break;
+    return {
+      id: newest.id,
+      url: status.environment_url ?? null,
+      at: statusTime(status.created_at),
+    };
+  }
+  return null;
 }
 
 function newestCandidate(
@@ -119,12 +129,9 @@ function newestCandidate(
 ): DeploymentInput {
   let best = candidates[0];
   if (best === undefined) throw new Error("No deployment candidate.");
-  let bestTime = newestStatusTime(best);
   for (const candidate of candidates.slice(1)) {
-    const time = newestStatusTime(candidate);
-    if (time > bestTime || (time === bestTime && candidate.id > best.id)) {
+    if (candidate.id > best.id) {
       best = candidate;
-      bestTime = time;
     }
   }
   return best;
@@ -184,7 +191,13 @@ export function decideDeploymentCloseout(
     };
   }
   const newest = newestCandidate(candidates);
-  const latest = newestFirst(newest.statuses)[0];
+  // Inactive is only a historical deactivation marker: the fallback must read
+  // the newest substantive status so a trailing inactive cannot hide a known
+  // failure. Pending stays pending, failure/error stays failed, and plain
+  // success -> inactive still succeeds through the helper above.
+  const latest = newestFirst(newest.statuses).find(
+    (entry) => entry.state.toLowerCase() !== "inactive",
+  );
   const state = latest?.state.toLowerCase() ?? "";
   if (state === "failure" || state === "error") {
     return {
@@ -217,10 +230,79 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function parseChangedPaths(value: unknown): string[] {
+function toMergeSha(value: unknown): string | null {
+  return typeof value === "string" && /^[a-f0-9]{40}$/i.test(value)
+    ? value.toLowerCase()
+    : null;
+}
+
+function flattenSlurpedPages(stdout: string): unknown[] {
+  const value: unknown = JSON.parse(stdout) as unknown;
+  if (!Array.isArray(value)) {
+    throw new Error("Response is not slurped pages.");
+  }
+  if (value.every((page): page is unknown[] => Array.isArray(page))) {
+    return (value as unknown[][]).flat();
+  }
+  return value;
+}
+
+function parseTimelinePages(stdout: string): Record<string, unknown>[] {
+  const value: unknown = JSON.parse(stdout) as unknown;
+  if (!Array.isArray(value)) {
+    throw new Error("Timeline response is not an array.");
+  }
+  const pages: unknown[] = value.every(
+    (page): page is unknown[] => Array.isArray(page),
+  )
+    ? (value as unknown[][]).flat()
+    : value;
+  const events: Record<string, unknown>[] = [];
+  for (const entry of pages) {
+    if (!isRecord(entry)) throw new Error("Timeline event is invalid.");
+    events.push(entry);
+  }
+  return events;
+}
+
+async function readMergedEventCommitSha(
+  runner: CommandRunner,
+  pullRequestNumber: number,
+): Promise<string | null> {
+  const timeline = await runner("gh", [
+    "api",
+    "--paginate",
+    "--slurp",
+    `repos/${REPOSITORY}/issues/${pullRequestNumber}/timeline`,
+  ]);
+  if (timeline.code !== 0) return null;
+  let events: Record<string, unknown>[];
+  try {
+    events = parseTimelinePages(timeline.stdout);
+  } catch {
+    return null;
+  }
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    if (event === undefined || event.event !== "merged") continue;
+    const mergeSha = toMergeSha(event.commit_id);
+    if (mergeSha !== null) return mergeSha;
+  }
+  return null;
+}
+
+function parseChangedPaths(value: unknown): {
+  paths: string[];
+  entryCount: number;
+} {
   if (!Array.isArray(value)) throw new Error("Files response is not an array.");
+  const pages: unknown[] = value.every(
+    (page): page is unknown[] => Array.isArray(page),
+  )
+    ? (value as unknown[][]).flat()
+    : value;
   const paths: string[] = [];
-  for (const entry of value) {
+  for (const entry of pages) {
     if (!isRecord(entry) || typeof entry.filename !== "string") {
       throw new Error("File entry is invalid.");
     }
@@ -232,11 +314,16 @@ function parseChangedPaths(value: unknown): string[] {
       paths.push(entry.previous_filename);
     }
   }
-  return paths;
+  return { paths, entryCount: pages.length };
 }
 
 function parseStatuses(stdout: string): DeploymentStatusInput[] {
-  const value: unknown = JSON.parse(stdout) as unknown;
+  let value: unknown;
+  try {
+    value = flattenSlurpedPages(stdout);
+  } catch {
+    throw new Error("Statuses response is not an array.");
+  }
   if (!Array.isArray(value)) {
     throw new Error("Statuses response is not an array.");
   }
@@ -280,6 +367,8 @@ async function readDeployments(
     }
     const statuses = await runner("gh", [
       "api",
+      "--paginate",
+      "--slurp",
       `repos/${REPOSITORY}/deployments/${entry.id}/statuses?per_page=100`,
     ]);
     if (statuses.code !== 0) {
@@ -318,38 +407,93 @@ export async function collectDeploymentCloseout(
   if (!isRecord(pull) || pull.merged !== true) {
     throw new Error("pull_request_not_merged");
   }
-  const mergeSha =
-    typeof pull.merge_commit_sha === "string" &&
-    pull.merge_commit_sha.length > 0
-      ? pull.merge_commit_sha
-      : null;
+  let mergeSha = toMergeSha(pull.merge_commit_sha);
+  if (mergeSha === null) {
+    mergeSha = await readMergedEventCommitSha(runner, pullRequestNumber);
+  }
   if (mergeSha === null) throw new Error("merge_commit_sha_unavailable");
+  const changedFiles =
+    typeof pull.changed_files === "number" ? pull.changed_files : null;
 
   let changedPaths: string[] = [];
+  let filesComplete = false;
+  let filesRead = false;
+  let filesApiOk = false;
   const files = await runner("gh", [
     "api",
     "--paginate",
+    "--slurp",
     `repos/${REPOSITORY}/pulls/${pullRequestNumber}/files`,
   ]);
   if (files.code === 0) {
+    filesApiOk = true;
     try {
-      changedPaths = parseChangedPaths(JSON.parse(files.stdout) as unknown);
+      const parsed = parseChangedPaths(JSON.parse(files.stdout) as unknown);
+      changedPaths = parsed.paths;
+      filesRead = true;
+      filesComplete =
+        changedFiles === null || parsed.entryCount >= changedFiles;
     } catch {
       changedPaths = [];
+      filesRead = false;
+      filesComplete = false;
     }
+  }
+
+  // A complete docs-only file list ends the task before any deployment read.
+  if (
+    filesRead &&
+    filesComplete &&
+    !deploymentRequired(changedPaths)
+  ) {
+    return decideDeploymentCloseout({
+      pullRequestNumber,
+      mergeSha,
+      changedPaths,
+      deployments: [],
+    });
+  }
+
+  // An empty, malformed, or partial file list that was actually read stays
+  // conservative: treat it as deployment required with unverified
+  // deployments, never not_required. An unreadable files endpoint (non-zero
+  // exit) preserves the legacy behavior of continuing to the deployment read
+  // with an empty path list.
+  if (filesApiOk && (!filesRead || !filesComplete)) {
+    return decideDeploymentCloseout({
+      pullRequestNumber,
+      mergeSha,
+      changedPaths: [],
+      deployments: null,
+    });
   }
 
   let deployments: DeploymentInput[] | null = null;
   const listed = await runner("gh", [
     "api",
+    "--paginate",
+    "--slurp",
     `repos/${REPOSITORY}/deployments?sha=${mergeSha}&per_page=100`,
   ]);
   if (listed.code === 0) {
     try {
-      deployments = await readDeployments(
-        runner,
-        JSON.parse(listed.stdout) as unknown,
-      );
+      const pages: unknown = JSON.parse(listed.stdout) as unknown;
+      if (!Array.isArray(pages)) throw new Error("Deployments unreadable.");
+      const flattened: unknown[] = pages.every(
+        (page): page is unknown[] => Array.isArray(page),
+      )
+        ? (pages as unknown[][]).flat()
+        : pages;
+      if (flattened.length === 0) {
+        const single: unknown = JSON.parse(listed.stdout) as unknown;
+        if (Array.isArray(single) && !Array.isArray(single[0])) {
+          deployments = await readDeployments(runner, single);
+        } else {
+          deployments = [];
+        }
+      } else {
+        deployments = await readDeployments(runner, flattened);
+      }
     } catch {
       deployments = null;
     }
