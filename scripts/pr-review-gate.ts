@@ -655,13 +655,16 @@ function parseEvidence(
 
 /**
  * Issue numbers a GitHub closing keyword names in `text`. GitHub matches the
- * keyword anywhere, including inside "do not close #44", so this is
- * deliberately broad: a false positive only routes a deferred merge to a human.
+ * keyword anywhere, including inside "do not close #44", so negated text is
+ * still reported. Repository identity is preserved: only a bare `#N` or an
+ * explicit `lukemyself-hub/SayHear` qualified reference counts as local
+ * delivery. A same-number reference to another repository is ignored, because
+ * this parser drives delivery lifecycle writes, not just human routing.
  */
 export function closingKeywordIssueNumbers(text: string): number[] {
   const numbers = new Set<number>();
   const pattern =
-    /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b:?\s*(?:#|[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+#|https?:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/issues\/)([1-9]\d{0,8})\b/gi;
+    /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b:?\s*(?:#|lukemyself-hub\/SayHear#|https?:\/\/github\.com\/lukemyself-hub\/SayHear\/issues\/)([1-9]\d{0,8})\b/gi;
   for (const match of text.matchAll(pattern)) numbers.add(Number(match[1]));
   return [...numbers].sort((left, right) => left - right);
 }
