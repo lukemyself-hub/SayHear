@@ -198,6 +198,12 @@ Luke 于 2026-10-14 选择轻量串行集成模式：独立 PR 并行开发和�
   PR base；v10 轻量模式下它是本次审查针对的 main SHA。`pullRequest.baseSha`
   始终保留 GitHub 原值。这样实质 main 风险可以通过重新审查当前集成解除，无须
   为了改变报告身份而强制提交一次 rebase。
+- `providerContext` 是模型判断唯一的绑定身份：controller 从采集 diff 的同一快照
+  写出，`headSha`、`baseSha`、`diffDigest` 在所有集成模式下都对应 PR base。轻量模式
+  下它可以与 `reviewContext.baseSha`（合并基线）不同。`providerBehavior` 与
+  `behaviorScope` 必须逐字复制 `providerContext` 的四个字段；gate 用自己重新导出的
+  同一上下文比较，任一字段不符即按 unknown 失败关闭。包内 `reviewerInstructions`
+  重述了这条规则。
 - 浏览器新挑战用 `reviewBinding=head-v2` 标识可复用的授权，比较时忽略 base，
   main 前进不重置挑战；作者、审核者、head、完整 diff、需求、
   路径与 workflow blob 仍精确绑定。旧 exact-base 挑战不能升级为 head-v2 收据。

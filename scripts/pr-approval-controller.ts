@@ -41,6 +41,7 @@ import { pathToFileURL } from "node:url";
 
 import {
   evaluatePrReviewGate,
+  gateScopeCoveredPaths,
   HUMAN_FINAL_DECISION_VERSION,
   hasHumanFinalDecision,
   type HumanFinalDecisionBinding,
@@ -352,6 +353,13 @@ type ReviewPacket = Readonly<{
    * the gate re-derives it from the same snapshot and compares.
    */
   providerContext: ProviderReviewContext;
+  /**
+   * Restated binding rules, because `reviewContext.baseSha` is the merge base
+   * in serialized-merge while `providerContext.baseSha` is always the PR base the
+   * diff was collected against. A reviewer that copies the wrong one silently
+   * produces assessments the gate can only fail closed on.
+   */
+  reviewerInstructions: readonly string[];
   workflow: Readonly<{
     path: string;
     trustedBlobSha: string | null;
@@ -391,6 +399,13 @@ export type HumanReviewBinding = Readonly<{
   challenge: BrowserChallenge | null;
   // Requirement digest Luke's browser decision currently covers.
   coveredRequirementDigest?: string;
+  /**
+   * Luke has already made a decisive call on this PR that the current approval
+   * does not answer: an approval on an older head, a changes-request, or a
+   * dismissal. Only a CURRENT valid final approval may carry such a PR, and a
+   * fresh positive behavior scope must never excuse it.
+   */
+  humanDecisionRequired?: boolean;
 }>;
 const NO_HUMAN_BINDING: HumanReviewBinding = Object.freeze({
   channel: "unknown", paths: [], noRuntimeImpact: false, validateWorkflowBlobSha: null, receipt: null, challenge: null,
@@ -2536,7 +2551,18 @@ export async function readHumanBinding(
     await reconcileBrowserScope(store, input.number, scope.reconciliation, input.requirement);
     authorization = await read();
   }
-  if (!authorization.receipt) return { channel: "browser", paths: [], noRuntimeImpact: false, validateWorkflowBlobSha: null, receipt: null, challenge: authorization.challenge };
+  // Luke's own decisive history is trusted controller input, not model
+  // evidence. Once a decisive review that the current approval does not answer
+  // exists, Luke has taken this PR over and only a CURRENT valid final approval
+  // may carry it. `read()` above already validated identity, time, and order for
+  // every review, so this reads the same trusted history. A COMMENTED-only trail
+  // is not a takeover and leaves the automatic route untouched.
+  const decisive = decisiveLukeReview(input.reviews);
+  const humanDecisionRequired = decisive !== null &&
+    !(decisive.state === "APPROVED" &&
+      decisive.headSha.toLowerCase() === input.headSha.toLowerCase() &&
+      authorization.receipt?.reviewId === decisive.id);
+  if (!authorization.receipt) return { channel: "browser", paths: [], noRuntimeImpact: false, validateWorkflowBlobSha: null, receipt: null, challenge: authorization.challenge, ...(humanDecisionRequired ? { humanDecisionRequired } : {}) };
   // Browser channel keeps noRuntimeImpact false. The approval binds exact paths
   // and the reviewed workflow blob only; it never classifies product risk.
   return {
@@ -2547,6 +2573,7 @@ export async function readHumanBinding(
     receipt: authorization.receipt,
     challenge: authorization.receipt.challenge,
     ...(authorization.coveredRequirementDigest ? { coveredRequirementDigest: authorization.coveredRequirementDigest } : {}),
+    ...(humanDecisionRequired ? { humanDecisionRequired } : {}),
   };
 }
 
@@ -2916,7 +2943,12 @@ function evaluateSnapshot(
   config: ControllerConfig,
   snapshot: Snapshot,
   report: ModelReviewReport,
-): Readonly<{ input: PrReviewGateInput; gate: PrReviewGateReport; manualRoute: boolean }> {
+): Readonly<{
+  input: PrReviewGateInput;
+  gate: PrReviewGateReport;
+  manualRoute: boolean;
+  scopeCoveredPaths: readonly string[];
+}> {
   const input = parsePrReviewGateInput(
     createModelReviewInput(config, snapshot, report),
   );
@@ -2943,8 +2975,18 @@ function evaluateSnapshot(
     humanApprovedNoRuntimeImpact: snapshot.humanBinding.noRuntimeImpact,
     humanApprovalChannel: snapshot.humanBinding.channel,
     ...(humanFinalDecision ? { humanFinalDecision } : {}),
+    ...(snapshot.humanBinding.humanDecisionRequired === true
+      ? { humanDecisionRequired: true }
+      : {}),
   };
-  return { input, gate: evaluatePrReviewGate(input, policy), manualRoute: hasHumanFinalDecision(input, policy) };
+  return {
+    input,
+    gate: evaluatePrReviewGate(input, policy),
+    manualRoute: hasHumanFinalDecision(input, policy),
+    // The gate's own covered-path set, from the same bound scope resolution it
+    // used, so the controller never classifies protected paths a second way.
+    scopeCoveredPaths: gateScopeCoveredPaths(input),
+  };
 }
 
 function reviewPacket(
@@ -2971,6 +3013,10 @@ function reviewPacket(
     // Restated explicitly: the reviewer must always see the exact binding
     // identity, and a snapshot that somehow lost it must not reach submit.
     providerContext: providerContextOf(snapshot.gateInput),
+    reviewerInstructions: [
+      "Copy providerContext exactly into the providerBehavior and behaviorScope assessments you return: headSha, baseSha, diffDigest, and diffComplete must be the values shown here.",
+      "reviewContext.baseSha is the merge base and can differ from providerContext.baseSha in serialized-merge integration. providerContext.baseSha is always the PR base the reviewed diff was collected against, so it is the value both assessments must carry.",
+    ],
     evidence: snapshot.evidence,
     workflow: {
       path: PR_VALIDATE_WORKFLOW_PATH,
@@ -4054,11 +4100,19 @@ function mergeMethodFor(repository: JsonRecord): "MERGE" | "SQUASH" | "REBASE" {
 // The browser channel is the authorization channel for every agent-authored PR,
 // but only a PR that touches a protected path actually needs Luke's approval. An
 // ordinary agent PR merges on the pinned head with no human binding at all.
+//
+// `scopeCoveredPaths` is the gate's own set for this input (see
+// `evaluateSnapshot`), so a current bound positive scope excuses exactly the
+// protected paths the gate already excused and no more. Re-deriving coverage here
+// would be a second classifier that can disagree with the gate about whether the
+// App may approve.
 export function browserAuthorizationRequired(
   binding: HumanReviewBinding,
   changedFiles: PrReviewGateInput["pullRequest"]["changedFiles"],
+  scopeCoveredPaths: readonly string[] = [],
 ): boolean {
-  return binding.channel === "browser" && protectedReviewPaths(changedFiles).length > 0;
+  return binding.channel === "browser" &&
+    protectedReviewPaths(changedFiles, scopeCoveredPaths).length > 0;
 }
 
 // Which merge mechanism the bound human channel allows. The browser channel never
@@ -4522,9 +4576,9 @@ export async function guardImmediateMerge(config: ControllerConfig, identity: Co
   if (snapshot.diff.digest !== identity.reviewIdentity.diffDigest || snapshot.diff.changeDigest !== identity.reviewIdentity.changeDigest ||
       await readHeadWorkflowBlob(config.api, identity.headSha) !== identity.reviewIdentity.workflowBlobSha) throw new CompletionMismatch("review_content_mismatch");
   if (await refreshStaleIntegration(config, snapshot)) throw new CompletionUnavailable("waiting_for_integration_validation");
-  const { gate } = evaluateSnapshot(config, snapshot, report);
+  const { gate, scopeCoveredPaths } = evaluateSnapshot(config, snapshot, report);
   if (gate.outcome !== "merge_candidate") throw new CompletionUnavailable("fresh_merge_gate_blocked");
-  if (browserAuthorizationRequired(snapshot.humanBinding, snapshot.gateInput.pullRequest.changedFiles)) {
+  if (browserAuthorizationRequired(snapshot.humanBinding, snapshot.gateInput.pullRequest.changedFiles, scopeCoveredPaths)) {
     const human = snapshot.humanBinding.receipt;
     if (identity.humanChannel !== "browser" || !human || human.reviewId !== identity.humanReviewId || human.challenge.epoch !== identity.epoch ||
         human.challenge.context.liveness !== identity.humanLiveness ||
@@ -4910,7 +4964,35 @@ export async function reportReviewResult(
   if (await refreshStaleIntegration(config, snapshot, { rebuildMergeRef: true })) {
     return { outcome: "awaiting_verification", message: "Waiting for current-main integration Validate; no Issue handoff was created." };
   }
-  const { gate, manualRoute } = evaluateSnapshot(config, snapshot, report);
+  const { gate, manualRoute, scopeCoveredPaths } = evaluateSnapshot(config, snapshot, report);
+  // Authorization is decided before anything is published. The App must never
+  // post an approval or a merge_candidate check run for a PR this controller
+  // would then refuse to merge. The covered-path set comes from the gate's own
+  // resolution, so this guard and the gate above judge the same evidence; it
+  // stays as an explicit fail-closed net, not a second rule. Every gate outcome
+  // that is not mergeable keeps its own reason and its own Issue handoff.
+  if ((gate.outcome === "merge_candidate" || gate.outcome === "merge_candidate_with_deferrals") &&
+      browserAuthorizationRequired(snapshot.humanBinding, snapshot.gateInput.pullRequest.changedFiles, scopeCoveredPaths) &&
+      snapshot.humanBinding.receipt === null) {
+    const unauthorized: PrReviewGateReport = {
+      ...gate,
+      outcome: "human_decision",
+      deferredEvidence: [],
+      reasons: [
+        {
+          code: "browser_human_approval_required",
+          message: `PR #${report.pullRequestNumber} touches a protected path that the current scope does not cover; a live browser approval on the current head is required.`,
+        },
+      ],
+    };
+    await upsertCheckRun(config, snapshot, report, unauthorized);
+    // Wait without a handoff: handing the Issue back would let an implementation
+    // agent push a new head and void the challenge this PR is waiting on.
+    return {
+      outcome: "awaiting_verification",
+      message: `PR #${report.pullRequestNumber} is agent-authored and touches a protected path; no approval or merge candidate check run was published because a live browser approval on the current head is still required.`,
+    };
+  }
   await upsertCheckRun(config, snapshot, report, gate);
 
   if (gate.reasons.some((reason) => reason.code === "pull_request_conflict")) {
@@ -4984,7 +5066,7 @@ export async function reportReviewResult(
     {},
     report.providerBehavior,
   );
-  const { gate: freshGate } = evaluateSnapshot(config, freshSnapshot, report);
+  const { gate: freshGate, scopeCoveredPaths: freshScopeCoveredPaths } = evaluateSnapshot(config, freshSnapshot, report);
   if (freshGate.outcome !== gate.outcome) {
     await upsertCheckRun(config, freshSnapshot, report, freshGate);
     await postNonBlockingOutcome(config, freshSnapshot, report, {
@@ -5039,7 +5121,7 @@ export async function reportReviewResult(
   const baseRepository = latestPullRequest.base.repo;
   if (!isRecord(baseRepository) || baseRepository.id !== SAYHEAR_REPOSITORY_ID) throw new Error("The target base repository is unavailable.");
   const browserReceipt = freshSnapshot.humanBinding.receipt;
-  if (browserAuthorizationRequired(freshSnapshot.humanBinding, freshSnapshot.gateInput.pullRequest.changedFiles) &&
+  if (browserAuthorizationRequired(freshSnapshot.humanBinding, freshSnapshot.gateInput.pullRequest.changedFiles, freshScopeCoveredPaths) &&
       browserReceipt === null) {
     // Fail closed without throwing: an agent-authored PR whose browser approval
     // is missing or no longer live must wait here, never merge and never break
