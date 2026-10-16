@@ -13,10 +13,11 @@ export const PR_WORKER_SERVICE_DEFAULT_BASE_URL = "http://127.0.0.1:4096";
 export const PR_WORKER_SERVICE_DEFAULT_TIMEOUT_MS = 2_000;
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1"]);
 const MAX_CREDENTIAL_LENGTH = 512;
+const MAX_TIMEOUT_MS = 30_000;
 
 export type PrWorkerServiceFailureCode =
   | "endpoint_not_loopback" | "credential_unavailable" | "credential_permissions"
-  | "transport_failed" | "timeout" | "authentication_failed" | "unexpected_status"
+  | "transport_failed" | "timeout" | "invalid_timeout" | "authentication_failed" | "unexpected_status"
   | "redirect_refused" | "malformed_payload" | "instance_changed" | "session_unknown"
   | "session_not_running" | "expected_identity_missing" | "service_identity_changed";
 
@@ -118,6 +119,9 @@ function resolveConfig(config: PrWorkerServiceConfig): ResolvedConfig {
 async function requestJson(
   baseUrl: URL, fetchImpl: PrWorkerServiceFetch, password: string, timeoutMs: number, path: string, method: "GET" | "POST",
 ): Promise<HttpReply> {
+  if (!Number.isInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > MAX_TIMEOUT_MS) {
+    return { ok: false, failure: { code: "invalid_timeout", detail: "service timeout must be a positive integer within its bound" } };
+  }
   const authorization = `Basic ${Buffer.from(`${PR_WORKER_SERVICE_USER}:${password}`, "utf8").toString("base64")}`;
   const accept: Record<string, string> = { authorization, accept: "application/json" };
   const init: PrWorkerServiceFetchInit = {

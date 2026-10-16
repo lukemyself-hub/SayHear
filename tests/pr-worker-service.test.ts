@@ -377,3 +377,40 @@ describe("capturePrWorkerServiceIdentity captures the pre-dispatch target", () =
     expect(fake.calls.every((call) => new URL(call.url).hostname === "127.0.0.1")).toBe(true);
   });
 });
+
+describe("invalid timeout fails as structured unknown without service calls", () => {
+  it.each([[-1], [0], [Number.NaN], [Number.POSITIVE_INFINITY], [0.5], [30_001]])(
+    "reports invalid_timeout for timeout %s across capture/observe/probe/stop",
+    async (timeoutMs) => {
+      const captureFake = fakeFetch(observationRoutes({ data: {} }));
+      const captureCfg = { ...config(captureFake.fetchImpl), timeoutMs };
+      const captured = await capturePrWorkerServiceIdentity(captureCfg);
+      expect(captured.ok === false && captured.reason).toBe("invalid_timeout");
+      expect(captureFake.calls).toHaveLength(0);
+
+      const observeFake = fakeFetch(observationRoutes({ data: { [SESSION]: { type: "running" } } }));
+      const observeCfg = { ...config(observeFake.fetchImpl), timeoutMs };
+      const observation = await observePrWorkerSession(observeCfg, SESSION);
+      expect(observation.known === false && observation.reason).toBe("invalid_timeout");
+      expect(observeFake.calls).toHaveLength(0);
+
+      const probeFake = fakeFetch(observationRoutes({ data: { [SESSION]: { type: "running" } } }));
+      const probeCfg = { ...config(probeFake.fetchImpl), timeoutMs };
+      const probed = await probePrWorkerSession(probeCfg, { expectedService: SERVICE, sessionId: SESSION });
+      expect(probed.state).toBe("unknown");
+      expect(probed.reason).toBe("invalid_timeout");
+      expect(probeFake.calls).toHaveLength(0);
+
+      const stopFake = fakeFetch(observationRoutes({ data: { [SESSION]: { type: "running" } } }));
+      const stopCfg = { ...config(stopFake.fetchImpl), timeoutMs };
+      const stopped = await requestPrWorkerSessionStop(stopCfg, { expectedService: SERVICE, sessionId: SESSION });
+      expect(stopped.outcome).toBe("unknown");
+      expect(stopped.reason).toBe("invalid_timeout");
+      expect(stopFake.calls).toHaveLength(0);
+
+      for (const result of [captured, observation, probed, stopped]) {
+        expect(JSON.stringify(result)).not.toContain(PASSWORD);
+      }
+    },
+  );
+});
