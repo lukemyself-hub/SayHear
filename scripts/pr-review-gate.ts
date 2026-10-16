@@ -11,21 +11,58 @@ import {
   type PreMergeImpossibleReason,
   type ReleaseImpactKind,
 } from "./daily-release-validation.ts";
+import {
+  parseProviderBehaviorReview,
+  parseProviderReviewContext,
+  resolveProviderBehavior,
+  type ProviderBehaviorReview,
+  type ProviderReviewContext,
+  type ProviderReviewInput,
+} from "./provider-behavior-review.ts";
+import {
+  parseBehaviorScopeReview,
+  resolveBehaviorScope,
+  type BehaviorScopeResolution,
+  type BehaviorScopeReview,
+} from "./pr-approval/behavior-scope.ts";
 
 // Historical installed policies remain readable for signed completion receipts.
 // They do not acquire the head-bound review semantics introduced by v10.
-export const PR_REVIEW_GATE_POLICY_VERSION = "sayhear-pr-review-gate:v11";
+// v12 adds the complete human final-decision route (SPEC #362).
+export const PR_REVIEW_GATE_POLICY_VERSION = "sayhear-pr-review-gate:v12";
+export const PR_REVIEW_GATE_V11_POLICY_VERSION = "sayhear-pr-review-gate:v11";
 export const PR_REVIEW_GATE_V10_POLICY_VERSION = "sayhear-pr-review-gate:v10";
 export const PR_REVIEW_GATE_V9_POLICY_VERSION = "sayhear-pr-review-gate:v9";
 export const PR_REVIEW_GATE_LEGACY_POLICY_VERSION = "sayhear-pr-review-gate:v4";
 export const PR_REVIEW_GATE_PREVIOUS_POLICY_VERSION = "sayhear-pr-review-gate:v5";
 export const PR_REVIEW_GATE_INSTALLED_POLICY_VERSION = "sayhear-pr-review-gate:v8";
 export const PR_REVIEW_GATE_OLDER_INSTALLED_POLICY_VERSION = "sayhear-pr-review-gate:v6";
-export const PR_REVIEW_REPORT_VERSION = "sayhear-pr-review-report:v4";
+// v5 reports may carry the coordinator's scopeReconciliation.
+export const PR_REVIEW_REPORT_VERSION = "sayhear-pr-review-report:v5";
 export const SAYHEAR_REPOSITORY_ID = 1312399710;
 export const SAYHEAR_REPOSITORY_NAME = "lukemyself-hub/SayHear";
 export const PR_VALIDATE_WORKFLOW_PATH = ".github/workflows/pr-validate.yml";
 export const PR_REVIEW_GATE_CHECK_NAME = "pr-review-gate";
+
+// Trusted-policy human binding only; omission keeps automatic behavior.
+export const HUMAN_FINAL_DECISION_VERSION = "final-decision-v1";
+/** Authorized human reviewer id (Luke). */
+export const HUMAN_FINAL_DECISION_REVIEWER_ID = 236989142;
+/** Authorized human reviewer login (Luke). */
+export const HUMAN_FINAL_DECISION_REVIEWER_LOGIN = "lukemyself-hub";
+
+// Trusted-policy binding only; omission keeps automatic behavior.
+export type HumanFinalDecisionBinding = Readonly<{
+  version: typeof HUMAN_FINAL_DECISION_VERSION;
+  repositoryId: number;
+  pullRequestNumber: number;
+  headSha: string;
+  requirementDigest: string;
+  validateWorkflowBlobSha: string;
+  reviewerActorId: number;
+  reviewerLogin: string;
+  reviewId: number;
+}>;
 
 /**
  * How a PR proves it integrates with the current main before it merges.
@@ -244,6 +281,11 @@ export type DeferredEvidence = Readonly<{
   followUp: PreMergeDeferralPolicy["followUp"];
 }>;
 
+export type PrPauseState = Readonly<{
+  active: boolean;
+  source: "none" | "maintainer" | "review-app" | "unknown";
+}>;
+
 export type PrReviewIssue = Readonly<{
   number: number;
   state: "open" | "closed";
@@ -253,10 +295,7 @@ export type PrReviewIssue = Readonly<{
   discussionDigest: string;
   labels: readonly string[];
   blockedBy: readonly number[] | null;
-  pause: Readonly<{
-    active: boolean;
-    source: "none" | "maintainer" | "review-app" | "unknown";
-  }>;
+  pause: PrPauseState;
 }>;
 
 export type PrReviewGateInput = Readonly<{
@@ -297,12 +336,14 @@ export type PrReviewGateInput = Readonly<{
      * `null` means the controller could not establish the set.
      */
     closingIssueNumbers: readonly number[] | null;
+    pause: PrPauseState;
     changedFiles: readonly Readonly<{
       path: string;
       status: "added" | "modified" | "removed" | "renamed" | "copied";
     }>[];
   }>;
   issues: readonly PrReviewIssue[];
+  providerContext?: ProviderReviewContext;
   review: Readonly<{
     version: string;
     repositoryId: number;
@@ -311,9 +352,6 @@ export type PrReviewGateInput = Readonly<{
     baseSha: string;
     policyVersion: string;
     requirementDigest: string;
-    // Derived by the controller from authenticated base changes, never a model
-    // assertion. Omission cannot authorize reuse across main advancement.
-    baseReviewSafe?: boolean;
     decision:
       | "approve"
       | "request_changes"
@@ -329,6 +367,16 @@ export type PrReviewGateInput = Readonly<{
       externalMvpRelease: boolean;
     }>;
     riskFlags: Readonly<Record<(typeof REQUIRED_REVIEW_FLAGS)[number], boolean>>;
+    /**
+     * Model provider-behavior evidence bound to providerContext by the shared
+     * parser. Optional so snapshots that predate the binding still parse.
+     */
+    providerBehavior?: ProviderBehaviorReview;
+    /**
+     * Model behavior-scope evidence bound to the same providerContext by the
+     * shared parser. Optional so snapshots that predate the binding still parse.
+     */
+    behaviorScope?: BehaviorScopeReview;
     findings: readonly Readonly<{
       severity: "P0" | "P1" | "P2" | "P3";
       file: string;
@@ -399,6 +447,18 @@ export type TrustedPrReviewPolicy = Readonly<{
   humanApprovedPaths?: readonly string[];
   humanApprovedNoRuntimeImpact?: boolean;
   humanApprovalChannel?: "browser" | "legacy-root" | "unknown";
+  /**
+   * Trusted controller revocation: when true the automatic route is closed and
+   * a current human final decision is required. Set only by the trusted
+   * controller, never parsed from a model review.
+   */
+  humanDecisionRequired?: boolean;
+  /**
+   * Versioned complete-human-final-decision binding supplied by the
+   * controller from a live verified BrowserReceipt. Absent keeps the exact
+   * automatic behavior; present but mismatched never relaxes the gate.
+   */
+  humanFinalDecision?: HumanFinalDecisionBinding;
 }>;
 
 export type PrReviewGateReport = Readonly<{
@@ -629,15 +689,53 @@ function parseEvidence(
 
 /**
  * Issue numbers a GitHub closing keyword names in `text`. GitHub matches the
- * keyword anywhere, including inside "do not close #44", so this is
- * deliberately broad: a false positive only routes a deferred merge to a human.
+ * keyword anywhere, including inside "do not close #44", so negated text is
+ * still reported. Repository identity is preserved: only a bare `#N` or an
+ * explicit `lukemyself-hub/SayHear` qualified reference counts as local
+ * delivery. A same-number reference to another repository is ignored, because
+ * this parser drives delivery lifecycle writes, not just human routing.
  */
 export function closingKeywordIssueNumbers(text: string): number[] {
   const numbers = new Set<number>();
   const pattern =
-    /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b:?\s*(?:#|[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+#|https?:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/issues\/)([1-9]\d{0,8})\b/gi;
+    /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b:?\s*(?:#|lukemyself-hub\/SayHear#|https?:\/\/github\.com\/lukemyself-hub\/SayHear\/issues\/)([1-9]\d{0,8})\b/gi;
   for (const match of text.matchAll(pattern)) numbers.add(Number(match[1]));
   return [...numbers].sort((left, right) => left - right);
+}
+
+/**
+ * Issues this PR explicitly delivers: named by a closing keyword in the PR
+ * title or body or by GitHub's closing references, among the Issues the PR
+ * references, minus keep-open declarations. Other references are background:
+ * they shape the requirement digest but get no lifecycle writes and do not
+ * decide eligibility.
+ */
+export function deliveryIssueNumbers(
+  pullRequest: Readonly<{ title: string; body: string; closingIssueNumbers: readonly number[] | null; keepOpenIssueNumbers: readonly number[] }>,
+  issues: readonly Readonly<{ number: number }>[],
+): number[] {
+  const closing = new Set([
+    ...closingKeywordIssueNumbers(`${pullRequest.title}\n${pullRequest.body}`),
+    ...(pullRequest.closingIssueNumbers ?? []),
+  ]);
+  return issues.map((issue) => issue.number)
+    .filter((number) => closing.has(number) && !pullRequest.keepOpenIssueNumbers.includes(number))
+    .sort((left, right) => left - right);
+}
+
+function openDeliveryIssues(input: PrReviewGateInput): PrReviewGateInput["issues"] {
+  const delivery = deliveryIssueNumbers(input.pullRequest, input.issues);
+  return input.issues.filter((issue) => issue.state === "open" && delivery.includes(issue.number));
+}
+
+/** An explicit pause in the PR or any linked Issue title or body. Shared by the gate and controller. */
+export function hasExplicitMergeHold(
+  pullRequest: Readonly<{ title: string; body: string }>,
+  issues: readonly Readonly<{ title: string; body: string }>[],
+): boolean {
+  return /\b(?:do not merge|do not auto[- ]merge|not for merge|not to be merged)\b|不要(?:自动)?合入|暂停自动审批/i.test(
+    [pullRequest.title, pullRequest.body, ...issues.flatMap((issue) => [issue.title, issue.body])].join("\n"),
+  );
 }
 
 export function parseIssueClosureExclusions(title: string, body: string): Readonly<{
@@ -674,18 +772,25 @@ export function parseIssueClosureExclusions(title: string, body: string): Readon
   return { keepOpenIssueNumbers: [...keepOpen].sort((left, right) => left - right), ambiguous };
 }
 
+function parsePrPauseState(value: unknown, path: string): PrPauseState {
+  if (!isRecord(value)) throw new Error(`${path}.pause must be an object.`);
+  const source = (value as Record<string, unknown>).source;
+  if (source !== "none" && source !== "maintainer" && source !== "review-app" && source !== "unknown") {
+    throw new Error(`${path}.pause.source is invalid.`);
+  }
+  return {
+    active: requiredBoolean((value as Record<string, unknown>).active, `${path}.pause.active`),
+    source,
+  };
+}
+
 function parsePrReviewIssue(value: unknown, index: number): PrReviewIssue {
   const path = `issues[${index}]`;
   if (!isRecord(value)) throw new Error(`${path} must be an object.`);
   if (value.state !== "open" && value.state !== "closed") {
     throw new Error(`${path}.state must be open or closed.`);
   }
-  const pause = value.pause;
-  if (!isRecord(pause)) throw new Error(`${path}.pause must be an object.`);
-  const source = pause.source;
-  if (source !== "none" && source !== "maintainer" && source !== "review-app" && source !== "unknown") {
-    throw new Error(`${path}.pause.source is invalid.`);
-  }
+  const pause = parsePrPauseState(value.pause, path);
   return {
     number: requiredPositiveInteger(value.number, `${path}.number`),
     state: value.state,
@@ -695,7 +800,7 @@ function parsePrReviewIssue(value: unknown, index: number): PrReviewIssue {
     discussionDigest: requiredString(value.discussionDigest, `${path}.discussionDigest`),
     labels: parseStringArrayOrEmpty(value.labels, `${path}.labels`),
     blockedBy: value.blockedBy === null ? null : parseNumberArrayOrEmpty(value.blockedBy, `${path}.blockedBy`),
-    pause: { active: requiredBoolean(pause.active, `${path}.pause.active`), source },
+    pause,
   };
 }
 
@@ -947,6 +1052,7 @@ export function parsePrReviewGateInput(value: unknown): PrReviewGateInput {
               pullRequest.closingIssueNumbers,
               "pullRequest.closingIssueNumbers",
             ),
+      pause: parsePrPauseState((pullRequest as Record<string, unknown>).pause, "pullRequest"),
       changedFiles,
     },
     issues: issues.map(parsePrReviewIssue),
@@ -967,9 +1073,6 @@ export function parsePrReviewGateInput(value: unknown): PrReviewGateInput {
         review.requirementDigest,
         "review.requirementDigest",
       ),
-      ...(review.baseReviewSafe === undefined ? {} : {
-        baseReviewSafe: requiredBoolean(review.baseReviewSafe, "review.baseReviewSafe"),
-      }),
       decision,
       diffComplete: requiredBoolean(review.diffComplete, "review.diffComplete"),
       reviewerAppId: requiredPositiveInteger(
@@ -996,8 +1099,17 @@ export function parsePrReviewGateInput(value: unknown): PrReviewGateInput {
         ),
       },
       riskFlags: parsedRiskFlags,
+      ...(review.providerBehavior === undefined
+        ? {}
+        : { providerBehavior: parseProviderBehaviorReview(review.providerBehavior) }),
+      ...(review.behaviorScope === undefined
+        ? {}
+        : { behaviorScope: parseBehaviorScopeReview(review.behaviorScope) }),
       findings: review.findings.map(parseFinding),
     },
+    ...(value.providerContext === undefined
+      ? {}
+      : { providerContext: parseProviderReviewContext(value.providerContext) }),
     evidence: evidence.map(parseEvidence),
     branchProtection,
     runtime: {
@@ -1269,6 +1381,29 @@ export function requirementDigest(
   }), "utf8").digest("hex");
 }
 
+export function hasHumanFinalDecision(
+  input: PrReviewGateInput,
+  policy: TrustedPrReviewPolicy,
+): boolean {
+  if (policy.humanApprovalChannel !== "browser") return false;
+  const binding = policy.humanFinalDecision;
+  if (!binding) return false;
+  if (binding.version !== HUMAN_FINAL_DECISION_VERSION) return false;
+  if (binding.reviewerActorId !== HUMAN_FINAL_DECISION_REVIEWER_ID) return false;
+  if (binding.reviewerLogin !== HUMAN_FINAL_DECISION_REVIEWER_LOGIN) return false;
+  if (!Number.isSafeInteger(binding.reviewId) || binding.reviewId < 1) return false;
+  if (!Number.isSafeInteger(binding.repositoryId) || binding.repositoryId < 1) return false;
+  if (!Number.isSafeInteger(binding.pullRequestNumber) || binding.pullRequestNumber < 1) return false;
+  if (binding.repositoryId !== input.repository.id) return false;
+  if (binding.repositoryId !== policy.repositoryId) return false;
+  if (binding.pullRequestNumber !== input.pullRequest.number) return false;
+  if (binding.headSha !== input.pullRequest.headSha) return false;
+  if (binding.requirementDigest !== requirementDigest(input.issues, input.pullRequest)) return false;
+  if (typeof policy.validateWorkflowBlobSha !== "string" || policy.validateWorkflowBlobSha.length === 0) return false;
+  if (binding.validateWorkflowBlobSha !== policy.validateWorkflowBlobSha) return false;
+  return true;
+}
+
 function outcome(
   input: PrReviewGateInput,
   result: GateOutcome,
@@ -1338,7 +1473,11 @@ export function protectedReviewPaths(
   });
 }
 
-function requiresHumanReview(input: PrReviewGateInput, policy: TrustedPrReviewPolicy): Readonly<{ code: string; message: string }> | null {
+function requiresHumanReview(
+  input: PrReviewGateInput,
+  policy: TrustedPrReviewPolicy,
+  scopeCoveredPaths: readonly string[] = [],
+): Readonly<{ code: string; message: string }> | null {
   if (input.pullRequest.externalReviewState === "needs-human") {
     return { code: "human_review_required", message: "A human review or review thread needs attention." };
   }
@@ -1356,10 +1495,20 @@ function requiresHumanReview(input: PrReviewGateInput, policy: TrustedPrReviewPo
   // reason the browser channel treats as "wait for Luke", so letting it mask a
   // pause, a triage label, or a dependency would turn a real blocker into a wait
   // and hide that blocker from the check run.
+  //
+  // A current positive scope may excuse exactly the protected paths its
+  // coveredPaths contain. Coverage is derived proof of locations, never an
+  // authorization grant, and it must never rewrite humanApprovedPaths or mint a
+  // human receipt: only the same current positive scope excuses, nothing else.
+  const scopeCovered = new Set(scopeCoveredPaths.map((path) => path.replaceAll("\\", "/")));
   let protectedReason: Readonly<{ code: string; message: string }> | null = null;
   for (const { path, status } of input.pullRequest.changedFiles) {
     const normalized = path.replaceAll("\\", "/");
-    if (protectedReason === null && unreviewedProtectedPaths.has(normalized)) {
+    if (
+      protectedReason === null &&
+      unreviewedProtectedPaths.has(normalized) &&
+      !scopeCovered.has(normalized)
+    ) {
       protectedReason = {
         code: policy.humanApprovalChannel === "browser" ? "browser_human_approval_required" : "human_review_required",
         message: `The change touches protected review or product policy path ${normalized}.`,
@@ -1381,30 +1530,32 @@ function requiresHumanReview(input: PrReviewGateInput, policy: TrustedPrReviewPo
   }
   const numbers = input.issues.map((issue) => issue.number);
   const linked = input.pullRequest.linkedIssueNumbers;
-  if (numbers.length === 0 || new Set(numbers).size !== numbers.length ||
+  if (new Set(numbers).size !== numbers.length ||
     new Set(linked).size !== linked.length || numbers.length !== linked.length ||
     linked.some((number) => !numbers.includes(number))) {
     return { code: "human_review_required", message: "The PR must supply every referenced Issue exactly once." };
   }
   if (input.pullRequest.state !== "open") return { code: "human_review_required", message: "The PR is closed." };
-  const exclusions = parseIssueClosureExclusions(input.pullRequest.title, input.pullRequest.body);
-  if (input.pullRequest.issueClosureAmbiguous || exclusions.ambiguous ||
-    exclusions.keepOpenIssueNumbers.join() !== [...input.pullRequest.keepOpenIssueNumbers].sort((a, b) => a - b).join() ||
-    input.pullRequest.keepOpenIssueNumbers.some((number) => !numbers.includes(number))) {
-    return { code: "human_review_required", message: "The PR's keep-open Issue declarations are ambiguous or inconsistent." };
+  const closure = closureDeclarationReason(input);
+  if (closure) return closure;
+  // No delivered Issue is ordinary: the PR body then carries the requirement.
+  const delivery = deliveryIssueNumbers(input.pullRequest, input.issues);
+  if (delivery.length === 0 && input.pullRequest.body.trim().length === 0) {
+    return { code: "human_review_required", message: "The PR names no delivered Issue and states no requirement." };
   }
-  const deliveryIssues = input.issues.filter((issue) => !input.pullRequest.keepOpenIssueNumbers.includes(issue.number));
-  if (!deliveryIssues.some((issue) => issue.state === "open")) {
-    return { code: "human_review_required", message: "All referenced Issues are already closed." };
+  if (input.pullRequest.pause.active || input.pullRequest.pause.source === "unknown") {
+    return { code: "human_review_required", message: "The PR is paused or its pause state cannot be trusted." };
   }
   for (const issue of input.issues) {
-    if (issue.body.trim().length === 0) return { code: "human_review_required", message: `Issue #${issue.number} has no review requirement.` };
     if (input.pullRequest.keepOpenIssueNumbers.includes(issue.number)) continue;
+    // Pauses are holds, so they apply to background references too.
     if (issue.pause.active || issue.pause.source === "unknown") {
       return { code: "human_review_required", message: `Issue #${issue.number} is paused or its pause state cannot be trusted.` };
     }
+    if (!delivery.includes(issue.number)) continue;
+    if (issue.body.trim().length === 0) return { code: "human_review_required", message: `Issue #${issue.number} has no review requirement.` };
     if (issue.state === "closed") continue;
-    if (issue.blockedBy === null || issue.blockedBy.some((number) => !deliveryIssues.some((target) => target.number === number))) {
+    if (issue.blockedBy === null || issue.blockedBy.some((number) => !delivery.includes(number))) {
       return { code: "human_review_required", message: `Issue #${issue.number} still has blocking dependencies outside this PR.` };
     }
     if (issue.labels.some((label) =>
@@ -1413,6 +1564,47 @@ function requiresHumanReview(input: PrReviewGateInput, policy: TrustedPrReviewPo
     }
   }
   return protectedReason;
+}
+
+// Which Issues completion writes after the merge follows from these
+// declarations, so both routes require them to be unambiguous.
+function closureDeclarationReason(input: PrReviewGateInput): Readonly<{ code: string; message: string }> | null {
+  const numbers = input.issues.map((issue) => issue.number);
+  const exclusions = parseIssueClosureExclusions(input.pullRequest.title, input.pullRequest.body);
+  if (input.pullRequest.issueClosureAmbiguous || exclusions.ambiguous ||
+    exclusions.keepOpenIssueNumbers.join() !== [...input.pullRequest.keepOpenIssueNumbers].sort((a, b) => a - b).join() ||
+    input.pullRequest.keepOpenIssueNumbers.some((number) => !numbers.includes(number))) {
+    return { code: "human_review_required", message: "The PR's keep-open Issue declarations are ambiguous or inconsistent." };
+  }
+  return null;
+}
+
+// Issues GitHub itself would close on merge (the Development-sidebar closing
+// set) must sit inside delivery before an immediate merge, on either route. A
+// null (unreadable) set fails closed; a keep-open number or a number outside
+// deliveryIssueNumbers stops the merge. An empty set with zero Issues, or a
+// set exactly equal to delivery, still passes.
+function immediateClosingSetReason(input: PrReviewGateInput): Readonly<{ code: string; message: string }> | null {
+  const closing = input.pullRequest.closingIssueNumbers;
+  if (closing === null) {
+    return { code: "human_review_required", message: "The Issues GitHub would close on merge could not be read (closing_set_unverified)." };
+  }
+  const keepOpen = closing.filter((number) => input.pullRequest.keepOpenIssueNumbers.includes(number));
+  if (keepOpen.length > 0) {
+    return {
+      code: "human_review_required",
+      message: `GitHub would close ${keepOpen.map((number) => `#${number}`).join(", ")} on merge, but the PR declares them keep-open (closing_set_outside_delivery). Remove the Development links or the keep-open declarations so the Issue lifecycle is unambiguous.`,
+    };
+  }
+  const delivery = new Set(deliveryIssueNumbers(input.pullRequest, input.issues));
+  const outside = closing.filter((number) => !delivery.has(number));
+  if (outside.length > 0) {
+    return {
+      code: "human_review_required",
+      message: `GitHub would close ${outside.map((number) => `#${number}`).join(", ")} on merge outside the delivery Issues (closing_set_outside_delivery). Remove the closing keywords and Development links so the Issues stay open.`,
+    };
+  }
+  return null;
 }
 
 function deferralPolicyEquals(
@@ -1532,6 +1724,100 @@ function verifyEvidence(
   return { accepted, deferred, blocker: null };
 }
 
+/**
+ * The controller-owned binding context both judgments share.
+ *
+ * The base is always the PR base, because that is the base the controller
+ * collected the reviewed diff against in every integration mode. A serialized
+ * merge lands on whatever main is at that moment, but main moving on its own
+ * does not change the reviewed diff, so binding to the default-branch tip here
+ * would invalidate an otherwise current assessment on every unrelated merge.
+ * What must still match is the live head and base: a self-bound assessment on
+ * the wrong head or base fails here, so it can never satisfy either judgment.
+ */
+function gateBindingContext(
+  input: PrReviewGateInput,
+): ProviderReviewContext | undefined {
+  const context = input.providerContext;
+  if (context === undefined) return undefined;
+  if (context.headSha !== input.pullRequest.headSha) return undefined;
+  if (context.baseSha !== input.pullRequest.baseSha) return undefined;
+  return context;
+}
+
+/**
+ * Current scope judgment for the automatic route. Missing, stale, or
+ * incomplete evidence resolves through the shared resolver, and the gate maps
+ * that resolution to an explicit outcome without inferring semantics.
+ */
+function gateScopeResolution(
+  input: PrReviewGateInput,
+): BehaviorScopeResolution {
+  return resolveBehaviorScope(
+    input.review.behaviorScope,
+    gateBindingContext(input),
+    input.pullRequest.changedFiles,
+  );
+}
+
+/**
+ * The protected paths the current bound scope excuses, exactly as the gate's own
+ * human-review check computes them. The controller asks for this set instead of
+ * re-classifying protected paths, so the requirement it enforces before it
+ * publishes anything is the same single judgment the gate makes.
+ */
+export function gateScopeCoveredPaths(
+  input: PrReviewGateInput,
+): readonly string[] {
+  return gateScopeResolution(input).coveredPaths;
+}
+
+function gateScopeOutcome(
+  input: PrReviewGateInput,
+  resolution: BehaviorScopeResolution,
+): PrReviewGateReport | null {
+  if (resolution.verdict === "in-scope") {
+    // coveredPaths are the changed-file paths the resolver already matched by
+    // exact equality, so plain set membership is the whole coverage test.
+    const covered = new Set(resolution.coveredPaths);
+    const fullyCovered = input.pullRequest.changedFiles.length > 0 &&
+      input.pullRequest.changedFiles.every(({ path }) => covered.has(path));
+    if (fullyCovered) return null;
+    return outcome(input, "human_decision", {
+      code: "behavior_scope_incomplete",
+      message:
+        `The current behavior scope does not cover every changed path${resolution.reason.length > 0 ? `: ${resolution.reason}` : "."}`,
+    });
+  }
+  if (resolution.verdict === "needs-human") {
+    return outcome(input, "human_decision", {
+      code: "behavior_scope_needs_human",
+      message: `The current behavior scope requires a human decision: ${resolution.reason}`,
+    });
+  }
+  const stale = resolution.missingEvidence.some((entry) =>
+    entry === "matching-head-sha" ||
+    entry === "matching-base-sha" ||
+    entry === "matching-diff-digest",
+  );
+  const incomplete = resolution.missingEvidence.some((entry) =>
+    entry === "complete-diff" ||
+    entry === "behavior-scope-context" ||
+    entry === "behavior-scope-assessment",
+  );
+  if (stale || incomplete) {
+    return outcome(input, "awaiting_verification", {
+      code: stale ? "behavior_scope_stale" : "behavior_scope_incomplete",
+      message:
+        `The current behavior scope evidence is not bound to this diff: ${resolution.reason}`,
+    });
+  }
+  return outcome(input, "human_decision", {
+    code: "behavior_scope_needs_human",
+    message: `The current behavior scope requires a human decision: ${resolution.reason}`,
+  });
+}
+
 export function evaluatePrReviewGate(
   input: PrReviewGateInput,
   policy: TrustedPrReviewPolicy,
@@ -1568,14 +1854,6 @@ export function evaluatePrReviewGate(
       message: "The review report does not match the current repository, PR, head, and base.",
     });
   }
-  if (integrationModeOf(input) === "serialized-merge" &&
-      input.review.baseSha !== input.repository.defaultBranchSha &&
-      input.review.baseReviewSafe !== true) {
-    return outcome(input, "awaiting_verification", {
-      code: "stale_base_review_risk",
-      message: "Main changed after this review and its effect on the reviewed code has not been cleared.",
-    });
-  }
   if (
     input.review.requirementDigest !==
     requirementDigest(input.issues, input.pullRequest)
@@ -1586,23 +1864,90 @@ export function evaluatePrReviewGate(
     });
   }
 
-  if (
-    input.pullRequest.externalReviewState === "unavailable" ||
-    input.issues.some((issue) => issue.state === "open" && !input.pullRequest.keepOpenIssueNumbers.includes(issue.number) && issue.blockedBy === null)
-  ) {
-    return outcome(input, "awaiting_verification", {
-      code: "github_context_unavailable",
-      message:
-        "The current PR reviews, Issue discussion, or dependency state could not be read.",
-    });
-  }
+  const manual = hasHumanFinalDecision(input, policy);
+  // Resolved once and reused: both the human-review routing below and the
+  // unlocated-impact check further down judge the same bound scope evidence.
+  const scopeResolution = gateScopeResolution(input);
+  if (!manual) {
+    if (
+      input.pullRequest.externalReviewState === "unavailable" ||
+      openDeliveryIssues(input).some((issue) => issue.blockedBy === null)
+    ) {
+      return outcome(input, "awaiting_verification", {
+        code: "github_context_unavailable",
+        message:
+          "The current PR reviews, Issue discussion, or dependency state could not be read.",
+      });
+    }
 
-  const humanReason = requiresHumanReview(input, policy);
-  if (humanReason) {
-    return outcome(input, "human_decision", {
-      code: humanReason.code,
-      message: humanReason.message,
-    });
+    // A revoked automatic route stays revoked: a dismissed or old-head human
+    // approval cannot fall back to auto, and a fresh positive scope cannot
+    // excuse the trusted controller's explicit human requirement. The reason
+    // names the action Luke has to take, because this fires precisely when he
+    // cannot approve yet: his earlier approval is stale or dismissed, and no
+    // current decision exists to satisfy it.
+    if (policy.humanDecisionRequired === true) {
+      return outcome(input, "human_decision", {
+        code: "human_decision_required",
+        message:
+          "Luke already decided on this PR with an approval on an older head, requested changes, or a dismissed review. Approve again on the current head once the PR's review challenge has been prepared.",
+      });
+    }
+
+    // A trusted authorization requirement outranks a model-evidence gap. A
+    // protected path still needs Luke whether or not the reviewer has finished
+    // scoping the diff, so the scope blocker must not mask it with a reason
+    // that reads as "keep waiting for the model". Covered paths come from the
+    // same single resolution either way, so a complete positive scope still
+    // excuses exactly the protected paths it covers.
+    const scopeCoveredPaths = scopeResolution.coveredPaths;
+    const humanReason = requiresHumanReview(input, policy, scopeCoveredPaths);
+    if (humanReason) {
+      return outcome(input, "human_decision", {
+        code: humanReason.code,
+        message: humanReason.message,
+      });
+    }
+
+    const scopeBlocker = gateScopeOutcome(input, scopeResolution);
+    if (scopeBlocker) return scopeBlocker;
+  } else {
+    if (input.pullRequest.externalReviewState === "unavailable") {
+      return outcome(input, "awaiting_verification", {
+        code: "github_context_unavailable",
+        message:
+          "The current PR reviews, Issue discussion, or dependency state could not be read.",
+      });
+    }
+    if (hasExplicitMergeHold(input.pullRequest, input.issues)) {
+      return outcome(input, "human_decision", {
+        code: "human_review_required",
+        message: "The PR or Issue explicitly pauses automatic merging.",
+      });
+    }
+    if (input.pullRequest.state !== "open") {
+      return outcome(input, "human_decision", {
+        code: "human_review_required",
+        message: "The PR is closed.",
+      });
+    }
+    const closure = closureDeclarationReason(input);
+    if (closure) return outcome(input, "human_decision", closure);
+    if (input.pullRequest.pause.active || input.pullRequest.pause.source === "unknown") {
+      return outcome(input, "human_decision", {
+        code: "human_review_required",
+        message: "The PR is paused or its pause state cannot be trusted.",
+      });
+    }
+    for (const issue of input.issues) {
+      if (input.pullRequest.keepOpenIssueNumbers.includes(issue.number)) continue;
+      if (issue.pause.active || issue.pause.source === "unknown") {
+        return outcome(input, "human_decision", {
+          code: "human_review_required",
+          message: `Issue #${issue.number} is paused or its pause state cannot be trusted.`,
+        });
+      }
+    }
   }
   if (
     input.pullRequest.draft ||
@@ -1653,11 +1998,12 @@ export function evaluatePrReviewGate(
       message: "The complete PR diff was not available to the reviewer.",
     });
   }
-  if (
-    input.review.decision === "request_changes" ||
-    input.review.decision === "awaiting_verification" ||
-    input.review.decision === "human_decision"
-  ) {
+  if (!manual) {
+    if (
+      input.review.decision === "request_changes" ||
+      input.review.decision === "awaiting_verification" ||
+      input.review.decision === "human_decision"
+    ) {
     if (
       input.review.decision === "request_changes" &&
       !input.review.findings.some(
@@ -1691,14 +2037,14 @@ export function evaluatePrReviewGate(
       message: "The review says approve but contains a P0, P1, or P2 finding.",
     });
   }
-  if (input.issues.some((issue) => issue.state === "open" && !input.pullRequest.keepOpenIssueNumbers.includes(issue.number) && !issue.labels.some((label) => label.toLowerCase() === "ongoing"))) {
+  if (openDeliveryIssues(input).some((issue) => !issue.labels.some((label) => label.toLowerCase() === "ongoing"))) {
     return outcome(input, "awaiting_verification", {
       code: "issue_not_claimed",
       message: "The linked Issue does not have the ongoing execution label.",
     });
   }
   if (
-    input.issues.some((issue) => issue.state === "open" && !input.pullRequest.keepOpenIssueNumbers.includes(issue.number) && issue.labels.some(
+    openDeliveryIssues(input).some((issue) => issue.labels.some(
       (label) => label.toLowerCase() === "ready-for-agent",
     ))
   ) {
@@ -1706,6 +2052,7 @@ export function evaluatePrReviewGate(
       code: "issue_label_conflict",
       message: "The linked Issue has both ongoing and ready-for-agent state.",
     });
+  }
   }
   if (
     policy.reviewAppId === null ||
@@ -1850,6 +2197,27 @@ export function evaluatePrReviewGate(
       message: "Ordinary merges trigger production deployment, but that effect is not authorized.",
     });
   }
+  // Same checked context the scope judgment used, and for the same reason: a
+  // context that no longer names the live head and base is not evidence about
+  // this diff, so it is dropped rather than paired with a self-consistent but
+  // stale assessment. On the automatic route the scope check above has already
+  // returned on that input, because the scope judgment reads the same dropped
+  // context first. The manual route never reaches that check, so this is the
+  // only place the stale context is refused there. That refusal costs nothing on
+  // this route: every consumer of `plan` below is `!manual`-gated and the manual route
+  // requires the fixed baseline, so the drop is here to keep one binding rule
+  // for the plan rather than because the plan would otherwise act on a stale
+  // context.
+  const boundContext = gateBindingContext(input);
+  const providerInput: ProviderReviewInput | undefined =
+    boundContext === undefined && input.review.providerBehavior === undefined
+      ? undefined
+      : {
+          ...(boundContext === undefined ? {} : { context: boundContext }),
+          ...(input.review.providerBehavior === undefined
+            ? {}
+            : { assessment: input.review.providerBehavior }),
+        };
   const plan = planDailyReleaseValidation({
     version: DAILY_RELEASE_VALIDATION_REQUEST_VERSION,
     change: {
@@ -1858,8 +2226,19 @@ export function evaluatePrReviewGate(
       changedPaths: input.pullRequest.changedFiles.map(({ path }) => path),
     },
     capability: input.review.capability,
+    ...(providerInput === undefined ? {} : { provider: providerInput }),
   });
-  if (plan.fullAcceptance.required) {
+  // Automated Provider unknown blocks before any owner-located tooling excuse:
+  // other known impacts or capability state cannot mask a missing binding.
+  const providerResolution = resolveProviderBehavior(providerInput);
+  const providerUnknown = providerResolution.verdict === "unknown";
+  if (!manual && providerUnknown) {
+    return outcome(input, "awaiting_verification", {
+      code: "provider_behavior_unknown",
+      message: `The provider behavior for this diff is unknown: ${providerResolution.reason}`,
+    });
+  }
+  if (!manual && plan.fullAcceptance.required) {
     return outcome(input, "human_decision", {
       code: "full_acceptance_required",
       message: "This change requires full capability acceptance and a human release decision.",
@@ -1877,18 +2256,37 @@ export function evaluatePrReviewGate(
           [".gitignore", "AGENTS.md", "CODEOWNERS", "package.json", "pnpm-lock.yaml"].includes(path) ||
           /^tsconfig[^/]*\.json$/.test(path))),
     );
-  if (plan.requiresImpactLocation && !ownerLocatedTooling) {
+  if (!manual && plan.requiresImpactLocation && !ownerLocatedTooling) {
     return outcome(input, "awaiting_verification", {
       code: "impact_not_located",
       message: "The change impact is unknown and must be classified before approval.",
     });
   }
+  // A current full-coverage no-runtime scope resolves only the unrelated
+  // unlocated-other-impact gap: it never excuses Provider unknown (handled
+  // above) and never drops targeted checks. An unaffected Provider verdict is
+  // not general scope or no-runtime proof on its own.
+  if (!manual && plan.requiresImpactLocation && ownerLocatedTooling) {
+    const hasTargeted = plan.targeted.length > 0 || plan.reused.length > 0;
+    const scopeExcuse = !providerUnknown &&
+      !hasTargeted &&
+      scopeResolution.verdict === "in-scope" &&
+      scopeResolution.noRuntimeImpact;
+    if (!scopeExcuse) {
+      return outcome(input, "awaiting_verification", {
+        code: "impact_not_located",
+        message: "The change impact is unknown and must be classified before approval.",
+      });
+    }
+  }
 
-  const requiredEvidenceIds = [
-    ...plan.fixedBaseline,
-    ...plan.targeted,
-    ...plan.reused,
-  ].map(({ check }) => check.id);
+  const requiredEvidenceIds = manual
+    ? [...FIXED_PR_CI_BASELINE]
+    : [
+        ...plan.fixedBaseline,
+        ...plan.targeted,
+        ...plan.reused,
+      ].map(({ check }) => check.id);
   const uniqueRequiredIds = [...new Set(requiredEvidenceIds)];
   const verification = verifyEvidence(input, policy, uniqueRequiredIds);
   if (verification.blocker) {
@@ -1946,6 +2344,16 @@ export function evaluatePrReviewGate(
         verification.accepted,
       );
     }
+  }
+  const immediateClosing = immediateClosingSetReason(input);
+  if (immediateClosing) {
+    return outcome(
+      input,
+      "human_decision",
+      immediateClosing,
+      uniqueRequiredIds,
+      verification.accepted,
+    );
   }
   return {
     version: PR_REVIEW_REPORT_VERSION,

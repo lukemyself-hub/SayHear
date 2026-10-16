@@ -4,5 +4,29 @@
     "summary": "ordinary server-side fix to private write gate",
     "declaredImpacts": ["server-business"],
     "changedPaths": ["apps/web/src/server/private-write-gate.ts"]
+  },
+  "provider": {
+    "context": {
+      "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "baseSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "diffDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "diffComplete": true
+    },
+    "assessment": {
+      "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "baseSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "diffDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "verdict": "unaffected",
+      "rationale": "Ordinary private write gate fix in apps/web/src/server/private-write-gate.ts with no Provider call, routing or effective config change.",
+      "evidence": [
+        {
+          "file": "apps/web/src/server/private-write-gate.ts",
+          "line": 42,
+          "before": "if (!owner) deny();",
+          "after": "if (!owner) denyWithAudit();"
+        }
+      ],
+      "missingEvidence": []
+    }
   }
 }

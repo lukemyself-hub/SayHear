@@ -35,6 +35,13 @@ import {
   parseEffectiveConfigurationSnapshot,
 } from "./effective-runtime-config-gate";
 import { buildG1PromotionConfigReport } from "./g1-promotion-config-report";
+import {
+  parseProviderBehaviorReview,
+  parseProviderReviewContext,
+  resolveProviderBehavior,
+  type ProviderResolution,
+  type ProviderReviewInput,
+} from "./provider-behavior-review";
 
 const execFileAsync = promisify(execFile);
 
@@ -519,6 +526,7 @@ export type ReleaseValidationImpact = Readonly<{
   hinted: readonly ReleaseImpactKind[];
   effective: readonly ReleaseImpactKind[];
   located: boolean;
+  provider: ProviderResolution;
 }>;
 
 export type ReleaseValidationArtifact = Readonly<{
@@ -557,6 +565,7 @@ export type ReleaseValidationRequest = Readonly<{
   }>;
   previousArtifacts?: readonly ReleaseValidationArtifact[];
   currentInputs?: readonly ReleaseValidationInput[];
+  provider?: ProviderReviewInput;
   effectiveConfig?: Readonly<{ baseline: unknown; candidate: unknown }>;
   releaseStage?: ReleaseStage;
   promotionConfig?: ReleaseValidationPromotionConfig;
@@ -589,7 +598,8 @@ export type SelectedReleaseCheck = Readonly<{
     | "declared-impact"
     | "path-hint"
     | "capability-trigger"
-    | "release-stage";
+    | "release-stage"
+    | "provider-assessment";
   disposition: ReleaseValidationDisposition;
   execution: ReleaseCheckExecutionStatus;
   contentIdentity?: string;
@@ -659,7 +669,9 @@ const NON_RUNTIME_TOOL_PATHS: ReadonlySet<string> = new Set([
   "tests/f3-role-provider-provisioning.test.ts",
   "tests/g1-capture-provider-adapters.test.ts",
   // PR approval apparatus: the controller, gate, planner, build, verifier,
-  // their tests, their fixtures, and their documentation.
+  // SPEC #362 tooling, their tests, their fixtures, and their documentation.
+  "docs/adr/0154-human-review-is-a-complete-pr-approval-path.md",
+  "docs/agents/pr-approval-v12-migration.md",
   "docs/agents/pr-auto-approval.md",
   "docs/plans/pr-approval-browser-channel.md",
   "docs/plans/pr-approval-large-diff.md",
@@ -670,13 +682,19 @@ const NON_RUNTIME_TOOL_PATHS: ReadonlySet<string> = new Set([
   "scripts/daily-release-validation.ts",
   "scripts/pr-approval-controller.ts",
   "scripts/pr-approval-launcher.c",
+  "scripts/pr-approval/behavior-scope.ts",
   "scripts/pr-approval/browser-approval.ts",
   "scripts/pr-approval/completion.ts",
+  "scripts/pr-approval/deployment-closeout.ts",
   "scripts/pr-approval/diff.ts",
   "scripts/pr-approval/integration-refresh.ts",
   "scripts/pr-approval/merge-ref-rebuild.ts",
   "scripts/pr-approval/signed-store.ts",
   "scripts/pr-review-gate.ts",
+  "scripts/pr-work-coordination.ts",
+  "scripts/pr-worker-coordinator.ts",
+  "scripts/pr-worker-service.ts",
+  "scripts/provider-behavior-review.ts",
   "scripts/verify-pr-approval-bundle.mjs",
   "tests/daily-release-validation.test.ts",
   "tests/fixtures/daily-release-validation/baseline.json",
@@ -698,11 +716,18 @@ const NON_RUNTIME_TOOL_PATHS: ReadonlySet<string> = new Set([
   "tests/pr-approval-integration-refresh.test.ts",
   "tests/pr-approval-merge-ref-rebuild.test.ts",
   "tests/pr-review-gate.test.ts",
+  "tests/pr-approval-behavior-scope.test.ts",
+  "tests/pr-approval-deployment-closeout.test.ts",
+  "tests/pr-work-coordination.test.ts",
+  "tests/pr-worker-coordinator.test.ts",
+  "tests/pr-worker-service.test.ts",
+  "tests/provider-behavior-review.test.ts",
 ]);
 
 export function classifyReleaseImpact(
   declared: readonly ReleaseImpactKind[],
   changedPaths: readonly string[],
+  provider?: ProviderReviewInput,
 ): ReleaseValidationImpact {
   const declaredUnique = [...new Set(declared)];
   const hintedUnique: ReleaseImpactKind[] = [];
@@ -716,9 +741,16 @@ export function classifyReleaseImpact(
       }
     }
   }
-  const effective = [...declaredUnique];
-  for (const impact of hintedUnique) {
+  const providerResolution = resolveProviderBehavior(provider);
+  const hintedWithoutProvider: ReleaseImpactKind[] = hintedUnique.filter(
+    (impact) => impact !== "provider-migration",
+  );
+  const effective: ReleaseImpactKind[] = [...declaredUnique.filter((impact) => impact !== "provider-migration")];
+  for (const impact of hintedWithoutProvider) {
     if (!effective.includes(impact)) effective.push(impact);
+  }
+  if (providerResolution.verdict === "affected") {
+    if (!effective.includes("provider-migration")) effective.push("provider-migration");
   }
   return {
     declared: declaredUnique,
@@ -726,6 +758,7 @@ export function classifyReleaseImpact(
     effective,
     located: effective.length > 0 ||
       (changedPaths.length > 0 && changedPaths.every((path) => NON_RUNTIME_TOOL_PATHS.has(path))),
+    provider: providerResolution,
   };
 }
 
@@ -791,9 +824,11 @@ export function planDailyReleaseValidation(
   const impact = classifyReleaseImpact(
     request.change.declaredImpacts,
     request.change.changedPaths,
+    request.provider,
   );
   const trigger = capabilityTrigger(request.capability);
-  const requiresImpactLocation = !impact.located && trigger === null;
+  const requiresImpactLocation =
+    impact.provider.verdict === "unknown" || (!impact.located && trigger === null);
 
   const previousByCheck = new Map(
     (request.previousArtifacts ?? []).map((artifact) => [
@@ -869,18 +904,24 @@ export function planDailyReleaseValidation(
   for (const entry of reused) selectedIds.add(entry.check.id);
 
   for (const impactKind of impact.effective) {
-    const source = impact.declared.includes(impactKind)
-      ? "declared-impact"
-      : "path-hint";
+    const source: SelectedReleaseCheck["source"] =
+      impactKind === "provider-migration" && impact.provider.verdict === "affected"
+        ? "provider-assessment"
+        : impact.declared.includes(impactKind)
+          ? "declared-impact"
+          : "path-hint";
     for (const id of IMPACT_CHECK_IDS[impactKind]) {
       if (selectedIds.has(id)) continue;
       const check = CHECK_BY_ID.get(id);
       if (!check) throw new Error(`Unknown targeted check ${id}`);
+      const entryRationale =
+        source === "provider-assessment"
+          ? `Provider behavior review confirms a provider behavior change: ${impact.provider.reason}`
+          : (CHECK_RATIONALE[id] ?? `Relevant to the ${impactKind} behavior impact.`);
       const entry = select(
         check,
         source,
-        CHECK_RATIONALE[id] ??
-          `Relevant to the ${impactKind} behavior impact.`,
+        entryRationale,
       );
       const withIdentity: SelectedReleaseCheck = configDigest &&
         (id === "prompt-budget:effective-config-diff" ||
@@ -965,6 +1006,15 @@ export function planDailyReleaseValidation(
  * One compact summary. Detail and evidence stay in the written report and in
  * the referenced locations so the agent does not re-parse the same bytes.
  */
+
+/**
+ * Render one provider summary field on a single physical line.
+ * JSON.stringify escapes line breaks and control characters; the
+ * U+2028/U+2029 replacements keep Unicode line separators escaped too.
+ */
+function escapeProviderSummaryField(value: string): string {
+  return JSON.stringify(value).slice(1, -1).replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");
+}
 export function formatDailyReleaseValidationSummary(
   plan: ReleaseValidationPlan,
 ): string {
@@ -980,6 +1030,7 @@ export function formatDailyReleaseValidationSummary(
       plan.impact.hinted.join(",") || "none"
     }`,
     `requires_impact_location=${plan.requiresImpactLocation}`,
+    `provider=verdict:${plan.impact.provider.verdict} reason:${escapeProviderSummaryField(plan.impact.provider.reason)} missing:${plan.impact.provider.missingEvidence.map(escapeProviderSummaryField).join(",") || "none"}`,
     `full_acceptance=${
       plan.fullAcceptance.trigger ?? "not-required"
     }`,
@@ -1298,9 +1349,26 @@ export function parseDailyReleaseValidationRequest(
     ...(raw.currentInputs !== undefined
       ? { currentInputs: parseInputs(raw.currentInputs) }
       : {}),
+    ...(raw.provider !== undefined
+      ? { provider: parseProviderReviewInput(raw.provider) }
+      : {}),
     ...(effectiveConfig ? { effectiveConfig } : {}),
     ...(releaseStage ? { releaseStage } : {}),
     ...(promotionConfig ? { promotionConfig } : {}),
+  };
+}
+
+function parseProviderReviewInput(value: unknown): ProviderReviewInput {
+  const raw = assertObject(value, "Daily release validation provider");
+  const allowed = new Set(["context", "assessment"]);
+  for (const key of Object.keys(raw)) {
+    if (!allowed.has(key)) {
+      throw new Error(`Daily release validation provider field ${key} is not known.`);
+    }
+  }
+  return {
+    ...(raw.context !== undefined ? { context: parseProviderReviewContext(raw.context) } : {}),
+    ...(raw.assessment !== undefined ? { assessment: parseProviderBehaviorReview(raw.assessment) } : {}),
   };
 }
 

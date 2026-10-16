@@ -7,6 +7,9 @@ import {
   type ReleaseImpactKind,
 } from "../scripts/daily-release-validation.ts";
 import {
+  HUMAN_FINAL_DECISION_REVIEWER_ID,
+  HUMAN_FINAL_DECISION_REVIEWER_LOGIN,
+  HUMAN_FINAL_DECISION_VERSION,
   MAIN_WRITER_ATTESTATION_VERSION,
   PR_REVIEW_GATE_POLICY_VERSION,
   PR_REVIEW_REPORT_VERSION,
@@ -14,8 +17,10 @@ import {
   SAYHEAR_REPOSITORY_ID,
   SAYHEAR_REPOSITORY_NAME,
   evaluatePrReviewGate,
+  hasHumanFinalDecision,
   integrationModeOf,
   parsePrReviewGateInput,
+  protectedReviewPaths,
   requirementDigest,
   parseIssueClosureExclusions,
   closingKeywordIssueNumbers,
@@ -117,6 +122,7 @@ type InputOverrides = Omit<
   issue?: Omit<Partial<PrReviewGateInput["issues"][number]>, "pause"> & {
     pause?: Partial<PrReviewGateInput["issues"][number]["pause"]>;
   };
+  providerContext?: Partial<NonNullable<PrReviewGateInput["providerContext"]>>;
   review?: Omit<
     Partial<PrReviewGateInput["review"]>,
     "capability" | "riskFlags"
@@ -129,6 +135,9 @@ type InputOverrides = Omit<
     | Partial<NonNullable<PrReviewGateInput["branchProtection"]>>;
   runtime?: Partial<PrReviewGateInput["runtime"]>;
 };
+
+const SYNTHETIC_DIFF_DIGEST = "9".repeat(64);
+const SYNTHETIC_SCOPE_CONTRACT = "docs/contracts/server-fix.md";
 
 function input(
   overrides: InputOverrides = {},
@@ -160,6 +169,12 @@ function input(
       defaultBranchSha: BASE_SHA,
       allowAutoMerge: true,
     },
+    providerContext: {
+      headSha: HEAD_SHA,
+      baseSha: BASE_SHA,
+      diffDigest: SYNTHETIC_DIFF_DIGEST,
+      diffComplete: true,
+    },
     pullRequest: {
       number: 321,
       state: "open",
@@ -180,6 +195,7 @@ function input(
       keepOpenIssueNumbers: [],
       issueClosureAmbiguous: false,
       closingIssueNumbers: [],
+      pause: { active: false, source: "none" as const },
       changedFiles: [
         { path: "packages/application/src/server/fix.ts", status: "modified" },
       ],
@@ -201,7 +217,6 @@ function input(
       }),
       decision: "approve",
       diffComplete: true,
-      baseReviewSafe: true,
       reviewerAppId: REVIEW_APP_ID,
       reviewerActorId: 303,
       declaredImpacts,
@@ -216,6 +231,40 @@ function input(
         privacyBoundaryChanged: false,
         destructiveMigration: false,
         productionFeatureEnablement: false,
+      },
+      providerBehavior: {
+        headSha: HEAD_SHA,
+        baseSha: BASE_SHA,
+        diffDigest: SYNTHETIC_DIFF_DIGEST,
+        verdict: "unaffected",
+        rationale: "The synthetic server change keeps provider routing and effective configuration unchanged.",
+        evidence: [
+          {
+            file: "packages/application/src/server/fix.ts",
+            line: 12,
+            before: "return staleRecord;",
+            after: "return currentRecord;",
+          },
+        ],
+        missingEvidence: [],
+      },
+      behaviorScope: {
+        headSha: HEAD_SHA,
+        baseSha: BASE_SHA,
+        diffDigest: SYNTHETIC_DIFF_DIGEST,
+        verdict: "in-scope",
+        runtimeImpact: "changed",
+        rationale: "The synthetic server change stays inside the existing retry contract.",
+        evidence: [
+          {
+            file: "packages/application/src/server/fix.ts",
+            line: 12,
+            before: "return staleRecord;",
+            after: "return currentRecord;",
+          },
+        ],
+        contractRefs: [SYNTHETIC_SCOPE_CONTRACT],
+        missingEvidence: [],
       },
       findings: [],
     },
@@ -241,10 +290,61 @@ function input(
       ordinaryMergeTriggersProduction: false,
     },
   } satisfies PrReviewGateInput;
+  const finalHeadSha = overrides.pullRequest?.headSha ?? base.pullRequest.headSha;
+  const finalBaseSha = overrides.pullRequest?.baseSha ?? base.pullRequest.baseSha;
+  // The reviewed diff is always head against the PR base, in every integration
+  // mode, so that is the base both model judgments bind to. A serialized merge
+  // landing on a moved main does not invalidate them.
+  const expectedProviderBase = finalBaseSha;
+  const finalChangedFiles = overrides.pullRequest?.changedFiles ?? base.pullRequest.changedFiles;
+  const finalDeclaredImpacts = overrides.review?.declaredImpacts ?? base.review.declaredImpacts;
+  const scopeObservationFor = (
+    path: string,
+    status: "added" | "modified" | "removed" | "renamed" | "copied",
+  ): { file: string; line: number; before: string | null; after: string | null } => {
+    if (status === "added") return { file: path, line: 1, before: null, after: `evidence for ${path}` };
+    if (status === "removed") return { file: path, line: 1, before: `evidence for ${path}`, after: null };
+    if (status === "renamed" || status === "copied") {
+      return { file: path, line: 1, before: `before ${path}`, after: `after ${path}` };
+    }
+    return { file: path, line: 12, before: `before ${path}`, after: `after ${path}` };
+  };
+  const defaultScopeEvidence = finalChangedFiles.map(({ path, status }) =>
+    scopeObservationFor(path, status));
+  const defaultProviderBehavior = {
+    ...base.review.providerBehavior!,
+    headSha: finalHeadSha,
+    baseSha: expectedProviderBase,
+    diffDigest: overrides.providerContext?.diffDigest ?? base.providerContext.diffDigest,
+    ...(finalDeclaredImpacts.includes("provider-migration")
+      ? {
+          verdict: "affected" as const,
+          rationale: "The bound review confirms the provider behavior change on the changed paths.",
+          missingEvidence: [],
+        }
+      : {}),
+    evidence: defaultScopeEvidence.map((entry) => ({ ...entry })),
+  };
+  const defaultBehaviorScope = {
+    ...base.review.behaviorScope!,
+    headSha: finalHeadSha,
+    baseSha: expectedProviderBase,
+    diffDigest: overrides.providerContext?.diffDigest ?? base.providerContext.diffDigest,
+    runtimeImpact: "none" as const,
+    evidence: defaultScopeEvidence.map((entry) => ({ ...entry })),
+  };
+  const providerContext = {
+    headSha: finalHeadSha,
+    baseSha: expectedProviderBase,
+    diffDigest: SYNTHETIC_DIFF_DIGEST,
+    diffComplete: true,
+    ...overrides.providerContext,
+  };
   return {
     ...base,
     ...overrides,
     repository: { ...base.repository, ...overrides.repository },
+    providerContext,
     pullRequest: { ...base.pullRequest, ...overrides.pullRequest },
     issues: overrides.issues ?? [{
       ...base.issues[0]!,
@@ -254,6 +354,8 @@ function input(
     review: {
       ...base.review,
       ...overrides.review,
+      providerBehavior: overrides.review?.providerBehavior ?? defaultProviderBehavior,
+      behaviorScope: overrides.review?.behaviorScope ?? defaultBehaviorScope,
       capability: {
         ...base.review.capability,
         ...overrides.review?.capability,
@@ -350,18 +452,32 @@ describe("PR review gate", () => {
       })),
       { path: protectedPath, status: "modified" as const },
     ];
-    const report = evaluatePrReviewGate(input({
+    // Scope evidence covers only the offline paths, so the new protected path
+    // still needs a human even though the rest of the diff is located.
+    const candidate = input({
       pullRequest: { changedFiles },
       review: { declaredImpacts: [] },
       evidence: FIXED_PR_CI_BASELINE.map((id) => makeEvidence(id)),
-    }), {
+    });
+    const uncovered = {
+      ...candidate.review.behaviorScope!,
+      evidence: PR_332_OFFLINE_PATHS.map((path) => ({
+        file: path,
+        line: 12,
+        before: `before ${path}`,
+        after: `after ${path}`,
+      })),
+    };
+    const report = evaluatePrReviewGate({
+      ...candidate,
+      review: { ...candidate.review, behaviorScope: uncovered },
+    }, {
       ...policy,
       humanApprovedPaths: [],
       humanApprovedNoRuntimeImpact: true,
     });
 
     expect(report.outcome).toBe("human_decision");
-    expect(report.reasons[0]?.code).toBe("human_review_required");
   });
 
   it("requires normal targeted evidence when a bound no-runtime diff also changes runtime code", () => {
@@ -442,9 +558,19 @@ describe("PR review gate", () => {
     const changedFiles = [{ path, status: "modified" as const }];
     expect(evaluatePrReviewGate(input({ pullRequest: { changedFiles } }), approved).outcome)
       .toBe("merge_candidate");
-    expect(evaluatePrReviewGate(input({ pullRequest: { changedFiles: [
+    // The extra path is neither human-approved nor scope-covered, so it still
+    // needs a human.
+    const extended = input({ pullRequest: { changedFiles: [
       ...changedFiles, { path: "docs/adr/another.md", status: "modified" },
-    ] } }), approved).outcome).toBe("human_decision");
+    ] } });
+    const narrowedScope = {
+      ...extended.review.behaviorScope!,
+      evidence: [{ file: path, line: 12, before: `before ${path}`, after: `after ${path}` }],
+    };
+    expect(evaluatePrReviewGate({
+      ...extended,
+      review: { ...extended.review, behaviorScope: narrowedScope },
+    }, approved).outcome).toBe("human_decision");
     expect(evaluatePrReviewGate(input({ pullRequest: { changedFiles },
       review: { riskFlags: { privacyBoundaryChanged: true } } }), approved).outcome)
       .toBe("human_decision");
@@ -738,23 +864,18 @@ describe("PR review gate", () => {
     }
   });
 
-  it("reuses a historical review only after clearing main changes and validating the current integration", () => {
+  it("reuses a head review across main advancement only with current-integration evidence", () => {
     const currentMain = "f".repeat(40);
     const candidate = input({
       repository: { defaultBranchSha: currentMain },
       pullRequest: { baseSha: currentMain, mergeable: true, mergeableState: "clean" },
       branchProtection: { requiresUpToDate: false },
       runtime: { integrationMode: "serialized-merge", mainWriterGuard: APP_ONLY_MAIN_WRITER_GUARD },
-      review: { baseSha: BASE_SHA, baseReviewSafe: true },
+      review: { baseSha: BASE_SHA },
     });
+    // Path overlap or config-like main changes no longer revoke the review on
+    // their own; the combined Validate below is the only main-side guard.
     expect(evaluatePrReviewGate(candidate, policy).outcome).toBe("merge_candidate");
-    const { baseReviewSafe: _baseReviewSafe, ...unverifiedReview } = candidate.review;
-    for (const review of [{ ...unverifiedReview, baseReviewSafe: false }, unverifiedReview]) {
-      const blocked = evaluatePrReviewGate({
-        ...candidate, review,
-      }, policy);
-      expect(blocked.reasons[0]?.code).toBe("stale_base_review_risk");
-    }
     const oldEvidence = candidate.evidence.map((entry) =>
       entry.kind === "deferred-before-merge" ? entry :
         { ...entry, source: { ...entry.source, baseSha: BASE_SHA } });
@@ -1308,17 +1429,26 @@ describe("PR review gate", () => {
     "docs/product/19-privacy-and-trust.md",
     "docs/adr/0151-example.md",
   ])("routes changes to protected policy file %s to a human", (path) => {
+    // Scope evidence does not cover the new protected path, so the gate still
+    // sends it to a human (scope gate first, then the protected-path rule).
+    const candidate = input({
+      pullRequest: {
+        changedFiles: [{ path, status: "modified" }],
+      },
+    });
+    const uncovered = {
+      ...candidate.review.behaviorScope!,
+      evidence: [],
+    };
     const report = evaluatePrReviewGate(
-      input({
-        pullRequest: {
-          changedFiles: [{ path, status: "modified" }],
-        },
-      }),
+      {
+        ...candidate,
+        review: { ...candidate.review, behaviorScope: uncovered },
+      },
       policy,
     );
 
     expect(report.outcome).toBe("human_decision");
-    expect(report.reasons[0]?.code).toBe("human_review_required");
   });
 
   it("routes a removed test file to a human", () => {
@@ -1339,7 +1469,9 @@ describe("PR review gate", () => {
   function multiIssueInput(): PrReviewGateInput {
     const original = input();
     const issues = [original.issues[0]!, { ...original.issues[0]!, number: 43, title: "Second requirement", body: "Preserve the second contract." }];
-    const pullRequest = { ...original.pullRequest, linkedIssueNumbers: [42, 43], body: "Fixes #42 and #43" };
+    // Both Issues are delivered: each needs its own closing keyword, since the
+    // parser does not carry one keyword across "and".
+    const pullRequest = { ...original.pullRequest, linkedIssueNumbers: [42, 43], body: "Fixes #42. Fixes #43." };
     return { ...original, issues, pullRequest,
       review: { ...original.review, requirementDigest: requirementDigest(issues, pullRequest) } };
   }
@@ -1371,7 +1503,9 @@ describe("PR review gate", () => {
     const candidate = multiIssueInput();
     const issues = [candidate.issues[0]!, { ...candidate.issues[1]!, state: "closed" as const, labels: [], blockedBy: null }];
     expect(evaluatePrReviewGate({ ...candidate, issues }, policy).outcome).toBe("merge_candidate");
-    expect(evaluatePrReviewGate({ ...candidate, issues: issues.map((issue) => ({ ...issue, state: "closed" })) }, policy).outcome).toBe("human_decision");
+    // A PR with only closed delivery context is not refused for lacking an
+    // open delivery Issue (SPEC #362 #367): there is nothing left to close.
+    expect(evaluatePrReviewGate({ ...candidate, issues: issues.map((issue) => ({ ...issue, state: "closed" })) }, policy).outcome).toBe("merge_candidate");
   });
 
   it("rejects duplicate or incomplete Issue sets rather than silently omitting requirements", () => {
@@ -1381,11 +1515,14 @@ describe("PR review gate", () => {
       expect(evaluatePrReviewGate(changed, policy).outcome).toBe("human_decision");
     }
     expect(() => parsePrReviewGateInput({ ...candidate, issues: [candidate.issues[0]!, { ...candidate.issues[1]!, pause: null }] })).toThrow("issues[1].pause");
+    expect(() => parsePrReviewGateInput({ ...candidate, pullRequest: { ...candidate.pullRequest, pause: undefined } })).toThrow("pullRequest.pause");
   });
 
   it("keeps explicit reference-only Issues open without claiming or handing them off", () => {
     const candidate = multiIssueInput();
-    const pullRequest = { ...candidate.pullRequest, body: "Deliver #42. 本 PR 不关闭也不修改 #43。", keepOpenIssueNumbers: [43] };
+    // Only #42 is delivered; #43 stays a background reference that is also
+    // declared keep-open, so it draws no lifecycle writes or checks.
+    const pullRequest = { ...candidate.pullRequest, body: "Fixes #42. 本 PR 不关闭也不修改 #43。", keepOpenIssueNumbers: [43] };
     const issues = [candidate.issues[0]!, { ...candidate.issues[1]!, labels: [], blockedBy: null }];
     const review = { ...candidate.review, requirementDigest: requirementDigest(issues, pullRequest) };
     expect(evaluatePrReviewGate({ ...candidate, pullRequest, issues, review }, policy).outcome).toBe("merge_candidate");
@@ -1452,6 +1589,40 @@ describe("PR review gate", () => {
 
     expect(paused.outcome).toBe("human_decision");
     expect(labelConflict.outcome).toBe("awaiting_verification");
+  });
+
+  it("blocks a paused PR on the automatic route, even with no linked Issue", () => {
+    const pausedRaw = input({
+      issues: [],
+      pullRequest: {
+        linkedIssueNumbers: [],
+        closingIssueNumbers: [],
+        pause: { active: true, source: "maintainer" },
+      },
+    });
+    const paused = evaluatePrReviewGate(
+      {
+        ...pausedRaw,
+        review: {
+          ...pausedRaw.review,
+          requirementDigest: requirementDigest(pausedRaw.issues, pausedRaw.pullRequest),
+        },
+      },
+      policy,
+    );
+    const untrusted = evaluatePrReviewGate(
+      input({
+        pullRequest: { pause: { active: false, source: "unknown" } },
+      }),
+      policy,
+    );
+    const unpaused = evaluatePrReviewGate(input(), policy);
+
+    expect(paused.outcome).toBe("human_decision");
+    expect(paused.reasons[0]?.message).toBe("The PR is paused or its pause state cannot be trusted.");
+    expect(untrusted.outcome).toBe("human_decision");
+    expect(untrusted.reasons[0]?.message).toBe("The PR is paused or its pause state cannot be trusted.");
+    expect(unpaused.outcome).toBe("merge_candidate");
   });
 
   it("waits for the dedicated App and trusted workflow identity", () => {
@@ -1577,15 +1748,26 @@ describe("PR review gate", () => {
     "requires trusted old-schema compatibility evidence for %s",
     (directory) => {
       const candidate = migrationInput();
+      const changedPath = `packages/data/${directory}/0099_add_column.sql`;
+      const reboundScope = {
+        ...candidate.review.behaviorScope!,
+        evidence: [{
+          file: changedPath,
+          line: 1,
+          before: null,
+          after: `evidence for ${changedPath}`,
+        }],
+      };
       const report = evaluatePrReviewGate({
         ...candidate,
         pullRequest: {
           ...candidate.pullRequest,
           changedFiles: [{
-            path: `packages/data/${directory}/0099_add_column.sql`,
+            path: changedPath,
             status: "added",
           }],
         },
+        review: { ...candidate.review, behaviorScope: reboundScope },
         evidence: candidate.evidence.filter(
           (entry) => entry.checkId !== migrationCheckId,
         ),
@@ -1686,8 +1868,8 @@ describe("PR review gate", () => {
       review: { policyVersion: `sayhear-pr-review-gate:${version}` },
     }), policy);
 
-    expect(PR_REVIEW_GATE_POLICY_VERSION).toBe("sayhear-pr-review-gate:v11");
-    expect(PR_REVIEW_REPORT_VERSION).toBe("sayhear-pr-review-report:v4");
+    expect(PR_REVIEW_GATE_POLICY_VERSION).toBe("sayhear-pr-review-gate:v12");
+    expect(PR_REVIEW_REPORT_VERSION).toBe("sayhear-pr-review-report:v5");
     expect(report.reasons[0]?.code).toBe("policy_version_mismatch");
   });
   const DEFERRABLE_CHECK_IDS = [
@@ -1817,6 +1999,32 @@ describe("PR review gate", () => {
     const parsed = parsePrReviewGateInput({ ...input(), pullRequest });
 
     expect(parsed.pullRequest.closingIssueNumbers).toBeNull();
+  });
+
+  it("ignores foreign-repo closing references with the same number", () => {
+    expect(
+      closingKeywordIssueNumbers("See #42 for context. Fixes other/repo#42."),
+    ).toEqual([]);
+    expect(
+      closingKeywordIssueNumbers("Fixes other/repo#42 Fixes OTHER/REPO#43"),
+    ).toEqual([]);
+    expect(
+      closingKeywordIssueNumbers(
+        "Fixes https://github.com/other/repo/issues/42",
+      ),
+    ).toEqual([]);
+  });
+
+  it("accepts local qualified closing references case-insensitively", () => {
+    expect(
+      closingKeywordIssueNumbers("Fixes LUKEMyself-hub/SayHear#42"),
+    ).toEqual([42]);
+    expect(
+      closingKeywordIssueNumbers(
+        "Fixes https://github.com/LukeMyself-Hub/SayHear/issues/43",
+      ),
+    ).toEqual([43]);
+    expect(closingKeywordIssueNumbers("Fixes #44")).toEqual([44]);
   });
 
   it("finds every GitHub closing keyword form, including negated text", () => {
@@ -1978,6 +2186,9 @@ describe("PR review gate", () => {
     ["sayhear-pr-review-report:v4", "sayhear-pr-review-gate:v8"],
     ["sayhear-pr-review-report:v3", "sayhear-pr-review-gate:v10"],
     ["sayhear-pr-review-report:v4", "sayhear-pr-review-gate:v10"],
+    ["sayhear-pr-review-report:v4", "sayhear-pr-review-gate:v11"],
+    ["sayhear-pr-review-report:v4", "sayhear-pr-review-gate:v12"],
+    ["sayhear-pr-review-report:v5", "sayhear-pr-review-gate:v11"],
   ])("rejects a new report with incompatible identity %s / %s", (version, policyVersion) => {
     const report = evaluatePrReviewGate(
       input({
@@ -1986,8 +2197,8 @@ describe("PR review gate", () => {
       policy,
     );
 
-    expect(PR_REVIEW_GATE_POLICY_VERSION).toBe("sayhear-pr-review-gate:v11");
-    expect(PR_REVIEW_REPORT_VERSION).toBe("sayhear-pr-review-report:v4");
+    expect(PR_REVIEW_GATE_POLICY_VERSION).toBe("sayhear-pr-review-gate:v12");
+    expect(PR_REVIEW_REPORT_VERSION).toBe("sayhear-pr-review-report:v5");
     expect(report.outcome).toBe("awaiting_verification");
     expect(report.reasons[0]?.code).toBe("policy_version_mismatch");
   });
@@ -2060,5 +2271,716 @@ describe("PR review gate", () => {
     expect(() => parsePrReviewGateInput(malformed)).toThrow(
       "review.decision is invalid",
     );
+  });
+
+  function manualSetup(overrides: InputOverrides = {}) {
+    const raw = input(overrides);
+    const digest = requirementDigest(raw.issues, raw.pullRequest);
+    const candidate: PrReviewGateInput = {
+      ...raw,
+      review: { ...raw.review, requirementDigest: digest },
+    };
+    const bound: TrustedPrReviewPolicy = {
+      ...policy,
+      humanApprovalChannel: "browser",
+      humanFinalDecision: {
+        version: HUMAN_FINAL_DECISION_VERSION,
+        repositoryId: SAYHEAR_REPOSITORY_ID,
+        pullRequestNumber: candidate.pullRequest.number,
+        headSha: candidate.pullRequest.headSha,
+        requirementDigest: digest,
+        validateWorkflowBlobSha: WORKFLOW_BLOB_SHA,
+        reviewerActorId: HUMAN_FINAL_DECISION_REVIEWER_ID,
+        reviewerLogin: HUMAN_FINAL_DECISION_REVIEWER_LOGIN,
+        reviewId: 999,
+      },
+    };
+    return { candidate, bound };
+  };
+
+  it("activates the complete human route only with a valid binding and fixed evidence", () => {
+    const { candidate, bound } = manualSetup({
+      issues: [],
+      pullRequest: {
+        linkedIssueNumbers: [],
+        closingIssueNumbers: [],
+        keepOpenIssueNumbers: [],
+      },
+      review: {
+        declaredImpacts: [],
+        decision: "request_changes",
+        findings: [{
+          severity: "P2",
+          file: "packages/application/src/server/fix.ts",
+          line: 12,
+          trigger: "retry with an expired record",
+          userImpact: "the request returns stale data",
+          evidence: "the retry path skips the version check",
+        }],
+        riskFlags: { productDefinitionChanged: true },
+        capability: { newCapabilityEnabled: true },
+      },
+      evidence: FIXED_PR_CI_BASELINE.map((id) => makeEvidence(id)),
+    });
+
+    const approved = evaluatePrReviewGate(candidate, bound);
+    expect(approved.outcome).toBe("merge_candidate");
+    expect(approved.requiredEvidenceIds).toEqual([...FIXED_PR_CI_BASELINE]);
+    expect(approved.acceptedEvidenceIds).toEqual([...FIXED_PR_CI_BASELINE]);
+    expect(approved.deferredEvidence).toEqual([]);
+
+    // Missing or forged binding keeps the exact automatic outcome.
+    expect(evaluatePrReviewGate(candidate, policy).outcome).not.toBe("merge_candidate");
+    expect(evaluatePrReviewGate(candidate, {
+      ...bound,
+      humanApprovalChannel: "unknown",
+    }).outcome).toBe(evaluatePrReviewGate(candidate, policy).outcome);
+    expect(evaluatePrReviewGate(candidate, {
+      ...bound,
+      humanFinalDecision: { ...bound.humanFinalDecision!, headSha: "f".repeat(40) },
+    }).outcome).toBe(evaluatePrReviewGate(candidate, policy).outcome);
+
+    // Fixed baseline provenance still blocks the manual route.
+    const failedFixed = {
+      ...candidate,
+      evidence: candidate.evidence.map((entry, index) =>
+        index === 0 && entry.kind !== "deferred-before-merge"
+          ? { ...entry, result: "failed" as const }
+          : entry),
+    };
+    expect(evaluatePrReviewGate(failedFixed, bound).outcome).toBe("awaiting_verification");
+    const untrustedFixed = {
+      ...candidate,
+      evidence: candidate.evidence.map((entry, index) =>
+        index === 0 && entry.kind !== "deferred-before-merge"
+          ? { ...entry, source: { ...entry.source, appId: 77 } }
+          : entry),
+    };
+    expect(evaluatePrReviewGate(untrustedFixed, bound).reasons[0]?.code).toBe("required_evidence_missing");
+    expect(evaluatePrReviewGate({ ...candidate, evidence: [] }, bound).outcome).toBe("awaiting_verification");
+
+    // Binding, state, integration, and trust holds still block.
+    expect(evaluatePrReviewGate(
+      { ...candidate, pullRequest: { ...candidate.pullRequest, headSha: "f".repeat(40) } },
+      bound,
+    ).reasons[0]?.code).toBe("stale_review");
+    expect(evaluatePrReviewGate(
+      { ...candidate, repository: { ...candidate.repository, id: 1 } },
+      bound,
+    ).outcome).toBe("human_decision");
+    expect(evaluatePrReviewGate(
+      { ...candidate, pullRequest: { ...candidate.pullRequest, body: "Changed requirement" } },
+      bound,
+    ).reasons[0]?.code).toBe("requirements_changed");
+    expect(evaluatePrReviewGate(
+      { ...candidate, pullRequest: { ...candidate.pullRequest, draft: true } },
+      bound,
+    ).reasons[0]?.code).toBe("pr_not_ready");
+    expect(evaluatePrReviewGate(
+      { ...candidate, pullRequest: { ...candidate.pullRequest, headRepositoryId: 999 } },
+      bound,
+    ).reasons[0]?.code).toBe("pr_not_ready");
+    expect(evaluatePrReviewGate(
+      { ...candidate, pullRequest: { ...candidate.pullRequest, state: "closed" as const } },
+      bound,
+    ).outcome).toBe("human_decision");
+    expect(evaluatePrReviewGate(
+      { ...candidate, repository: { ...candidate.repository, defaultBranchSha: "f".repeat(40) } },
+      bound,
+    ).reasons[0]?.code).toBe("base_or_merge_ref_changed");
+
+    const pausedSetup = manualSetup({
+      review: {
+        declaredImpacts: [],
+        decision: "request_changes",
+        findings: [{
+          severity: "P2",
+          file: "packages/application/src/server/fix.ts",
+          line: 12,
+          trigger: "retry",
+          userImpact: "stale",
+          evidence: "skip",
+        }],
+        riskFlags: { productDefinitionChanged: true },
+      },
+      evidence: FIXED_PR_CI_BASELINE.map((id) => makeEvidence(id)),
+    });
+    expect(evaluatePrReviewGate({
+      ...pausedSetup.candidate,
+      issues: [{ ...pausedSetup.candidate.issues[0]!, pause: { active: true, source: "maintainer" as const } }],
+    }, pausedSetup.bound).outcome).toBe("human_decision");
+    expect(evaluatePrReviewGate({
+      ...pausedSetup.candidate,
+      issues: [{ ...pausedSetup.candidate.issues[0]!, pause: { active: false, source: "unknown" as const } }],
+    }, pausedSetup.bound).outcome).toBe("human_decision");
+    expect(evaluatePrReviewGate({
+      ...pausedSetup.candidate,
+      pullRequest: { ...pausedSetup.candidate.pullRequest, pause: { active: true, source: "maintainer" as const } },
+    }, pausedSetup.bound)).toMatchObject({ outcome: "human_decision",
+      reasons: [{ code: "human_review_required", message: "The PR is paused or its pause state cannot be trusted." }] });
+    expect(evaluatePrReviewGate({
+      ...pausedSetup.candidate,
+      pullRequest: { ...pausedSetup.candidate.pullRequest, pause: { active: false, source: "unknown" as const } },
+    }, pausedSetup.bound).outcome).toBe("human_decision");
+
+    // Content edits re-bind the final decision so only the hold itself decides.
+    const rebound = (changed: PrReviewGateInput) => {
+      const digest = requirementDigest(changed.issues, changed.pullRequest);
+      return [{ ...changed, review: { ...changed.review, requirementDigest: digest } },
+        { ...pausedSetup.bound, humanFinalDecision: { ...pausedSetup.bound.humanFinalDecision!, requirementDigest: digest } }] as const;
+    };
+    expect(evaluatePrReviewGate(...rebound(pausedSetup.candidate)).outcome).toBe("merge_candidate");
+    expect(evaluatePrReviewGate(...rebound({
+      ...pausedSetup.candidate,
+      issues: [{ ...pausedSetup.candidate.issues[0]!, title: "暂停自动审批: fix the server path" }],
+    })).reasons[0]?.message).toContain("explicitly pauses");
+    expect(evaluatePrReviewGate(...rebound({
+      ...pausedSetup.candidate,
+      pullRequest: { ...pausedSetup.candidate.pullRequest, issueClosureAmbiguous: true },
+    })).reasons[0]?.message).toContain("keep-open");
+
+    expect(evaluatePrReviewGate(candidate, { ...bound, reviewAppId: null }).outcome)
+      .toBe("awaiting_verification");
+    expect(evaluatePrReviewGate(
+      { ...candidate, branchProtection: null },
+      bound,
+    ).reasons[0]?.code).toBe("branch_protection_unreadable");
+    expect(evaluatePrReviewGate(
+      { ...candidate, runtime: { ...candidate.runtime, ordinaryMergeTriggersProduction: null } },
+      bound,
+    ).reasons[0]?.code).toBe("production_deploy_behavior_unknown");
+    expect(evaluatePrReviewGate(
+      {
+        ...candidate,
+        runtime: {
+          ...candidate.runtime,
+          ordinaryMergeTriggersProduction: true,
+          productionMergeAuthorized: false,
+        },
+      },
+      bound,
+    ).outcome).toBe("human_decision");
+    expect(evaluatePrReviewGate(
+      { ...candidate, pullRequest: { ...candidate.pullRequest, externalReviewState: "unavailable" as const } },
+      bound,
+    ).outcome).toBe("awaiting_verification");
+  });
+
+  it("ignores the plan targeted deferrals on the human route", () => {
+    // The automatic plan defers prompt-budget:effective-config-diff before the
+    // merge; on the human route only the fixed baseline is required, so the
+    // deferral creates no obligation and delivery Issues close normally.
+    const deferredId = "prompt-budget:effective-config-diff";
+    const { candidate, bound } = manualSetup({
+      review: { declaredImpacts: ["prompt-budget"] },
+      evidence: [...FIXED_PR_CI_BASELINE.map((id) => makeEvidence(id)),
+        makeEvidence("server:deterministic-behavior", { artifactSha256: "e".repeat(64),
+          coveredCheckIds: ["server:deterministic-behavior"] }),
+        makeEvidence("prompt-budget:synthetic-samples", { artifactSha256: "e".repeat(64),
+          coveredCheckIds: ["prompt-budget:synthetic-samples"] }),
+        makeDeferral(deferredId)],
+    });
+    expect(preMergeDeferralFor(deferredId)).not.toBeNull();
+    const approved = evaluatePrReviewGate(candidate, bound);
+    expect(approved.outcome).toBe("merge_candidate");
+    expect(approved.deferredEvidence).toEqual([]);
+    // The same evidence on the automatic route is a deferred merge with closing
+    // keywords, which stays with a human instead of arming auto-merge.
+    // The same evidence on the automatic route is a deferred merge with closing
+    // keywords, which stays with a human instead of arming auto-merge.
+    expect(evaluatePrReviewGate(candidate, policy).outcome).toBe("human_decision");
+  });
+
+  it("validates the trusted human final decision binding only", () => {
+    const candidate = input();
+    const digest = requirementDigest(candidate.issues, candidate.pullRequest);
+    const bound: TrustedPrReviewPolicy = {
+      ...policy,
+      humanApprovalChannel: "browser",
+      humanFinalDecision: {
+        version: HUMAN_FINAL_DECISION_VERSION,
+        repositoryId: SAYHEAR_REPOSITORY_ID,
+        pullRequestNumber: 321,
+        headSha: HEAD_SHA,
+        requirementDigest: digest,
+        validateWorkflowBlobSha: WORKFLOW_BLOB_SHA,
+        reviewerActorId: HUMAN_FINAL_DECISION_REVIEWER_ID,
+        reviewerLogin: HUMAN_FINAL_DECISION_REVIEWER_LOGIN,
+        reviewId: 999,
+      },
+    };
+
+    expect(hasHumanFinalDecision(candidate, bound)).toBe(true);
+    expect(hasHumanFinalDecision(candidate, policy)).toBe(false);
+    expect(
+      hasHumanFinalDecision(candidate, {
+        ...policy,
+        humanApprovalChannel: "browser",
+      }),
+    ).toBe(false);
+    expect(
+      hasHumanFinalDecision(candidate, { ...bound, humanApprovalChannel: "legacy-root" }),
+    ).toBe(false);
+    expect(
+      hasHumanFinalDecision(candidate, { ...bound, humanApprovalChannel: "unknown" }),
+    ).toBe(false);
+    const binding = bound.humanFinalDecision!;
+    const cases: TrustedPrReviewPolicy[] = [
+      { ...bound, humanFinalDecision: { ...binding, headSha: "b".repeat(40) } },
+      { ...bound, humanFinalDecision: { ...binding, requirementDigest: "0".repeat(64) } },
+      { ...bound, humanFinalDecision: { ...binding, repositoryId: 1 } },
+      { ...bound, humanFinalDecision: { ...binding, pullRequestNumber: 322 } },
+      { ...bound, humanFinalDecision: { ...binding, reviewerActorId: 303 } },
+      { ...bound, humanFinalDecision: { ...binding, reviewerLogin: "someone-else" } },
+      { ...bound, humanFinalDecision: { ...binding, reviewId: 0 } },
+      {
+        ...bound,
+        humanFinalDecision: {
+          ...binding,
+          version: "legacy" as typeof HUMAN_FINAL_DECISION_VERSION,
+        },
+      },
+      { ...bound, validateWorkflowBlobSha: null },
+      { ...bound, humanFinalDecision: { ...binding, validateWorkflowBlobSha: "e".repeat(40) } },
+    ];
+    for (const mismatch of cases) {
+      expect(hasHumanFinalDecision(candidate, mismatch)).toBe(false);
+    }
+    expect(
+      hasHumanFinalDecision(
+        input({ review: { reviewerActorId: HUMAN_FINAL_DECISION_REVIEWER_ID } }),
+        policy,
+      ),
+    ).toBe(false);
+  });
+
+  it("selects no Provider checks from a bare declaration without bound affected evidence", () => {
+    // A provider-named file plus a bare provider-migration declaration is
+    // advisory only: without a bound affected assessment the planner must not
+    // select Provider checks.
+    const candidate = input({
+      pullRequest: {
+        changedFiles: [{ path: "packages/ai/src/provider.ts", status: "modified" }],
+      },
+      review: { declaredImpacts: ["provider-migration"] },
+    });
+    const declaredOnly = {
+      ...candidate,
+      review: {
+        ...candidate.review,
+        providerBehavior: {
+          ...candidate.review.providerBehavior!,
+          verdict: "unaffected" as const,
+          rationale: "Only surrounding wiring changed; no provider behavior changed.",
+        },
+      },
+    };
+    const report = evaluatePrReviewGate(declaredOnly, policy);
+    expect(report.outcome).not.toBe("merge_candidate_with_deferrals");
+    expect(report.requiredEvidenceIds).not.toContain("provider:effective-config-diff");
+    expect(report.requiredEvidenceIds).not.toContain("provider:affected-role-calls");
+    expect(report.requiredEvidenceIds).not.toContain("provider:privacy-checks");
+  });
+
+  it("routes an ordinary-path permission expansion to a human", () => {
+    const changedFiles = [{ path: "packages/application/src/server/fix.ts", status: "modified" as const }];
+    const candidate = input({ pullRequest: { changedFiles } });
+    const expansion = {
+      ...candidate.review.behaviorScope!,
+      verdict: "needs-human" as const,
+      runtimeImpact: "changed" as const,
+      rationale: "Reviewer confirms a permission expansion beyond the existing contract.",
+    };
+    const report = evaluatePrReviewGate({
+      ...candidate,
+      review: { ...candidate.review, behaviorScope: expansion },
+    }, policy);
+
+    expect(report.outcome).toBe("human_decision");
+    expect(report.reasons[0]?.code).toBe("behavior_scope_needs_human");
+  });
+
+  it("allows a protected controller repair covered by positive scope evidence", () => {
+    const path = "scripts/pr-approval-controller.ts";
+    const approvedPathsBefore = [...(policy.humanApprovedPaths ?? [])];
+    const candidate = input({
+      pullRequest: { changedFiles: [{ path, status: "modified" }] },
+      review: { declaredImpacts: [] },
+    });
+    const report = evaluatePrReviewGate(candidate, policy);
+
+    expect(report.outcome).toBe("merge_candidate");
+    expect(policy.humanApprovedPaths ?? []).toEqual(approvedPathsBefore);
+  });
+
+  it("routes policy and risk changes to a human", () => {
+    const changedFiles = [{ path: "packages/application/src/server/fix.ts", status: "modified" as const }];
+    expect(evaluatePrReviewGate(input({
+      pullRequest: { changedFiles },
+      review: { capability: { newCapabilityEnabled: true } },
+    }), policy).outcome).toBe("human_decision");
+    expect(evaluatePrReviewGate(input({
+      pullRequest: { changedFiles },
+      review: { riskFlags: { authorizationBoundaryChanged: true } },
+    }), policy).outcome).toBe("human_decision");
+  });
+
+  it("fails closed on missing, stale, and incomplete behavior evidence", () => {
+    const changedFiles = [{ path: "packages/application/src/server/fix.ts", status: "modified" as const }];
+    const candidate = input({ pullRequest: { changedFiles } });
+    const { behaviorScope: _dropped, ...reviewWithoutScope } = candidate.review;
+    const { providerContext: _droppedContext, ...candidateWithoutContext } = candidate;
+    expect(evaluatePrReviewGate({
+      ...candidateWithoutContext,
+      review: reviewWithoutScope,
+    }, policy).outcome).toBe("awaiting_verification");
+
+    const stale = {
+      ...candidate.review.behaviorScope!,
+      headSha: "f".repeat(40),
+    };
+    expect(evaluatePrReviewGate({
+      ...candidate,
+      review: { ...candidate.review, behaviorScope: stale },
+    }, policy).reasons[0]?.code).toBe("behavior_scope_stale");
+
+    const incomplete = {
+      ...candidate.review.behaviorScope!,
+      verdict: "insufficient-info" as const,
+      runtimeImpact: "unknown" as const,
+      evidence: [],
+      contractRefs: [],
+      missingEvidence: ["remaining-hunks"],
+    };
+    const incompleteReport = evaluatePrReviewGate({
+      ...candidate,
+      review: { ...candidate.review, behaviorScope: incomplete },
+    }, policy);
+    expect(incompleteReport.outcome).toBe("human_decision");
+    expect(incompleteReport.reasons[0]?.code).toBe("behavior_scope_needs_human");
+
+    const { providerBehavior: _droppedProvider, ...reviewWithoutProvider } = candidate.review;
+    expect(evaluatePrReviewGate({
+      ...candidate,
+      review: reviewWithoutProvider,
+    }, policy).reasons[0]?.code).toBe("provider_behavior_unknown");
+  });
+
+  it("does not let owner tooling bypass an unknown Provider judgment", () => {
+    const changedFiles = [
+      ...PR_332_OFFLINE_PATHS.map((path) => ({ path, status: "modified" as const })),
+      ...PR_332_APPROVED_TOOLING_PATHS.map((path) => ({ path, status: "modified" as const })),
+    ];
+    const candidate = input({
+      pullRequest: { changedFiles },
+      review: { declaredImpacts: [] },
+      evidence: FIXED_PR_CI_BASELINE.map((id) => makeEvidence(id)),
+    });
+    const { providerBehavior: _dropped, ...reviewWithoutProvider } = candidate.review;
+    const report = evaluatePrReviewGate({
+      ...candidate,
+      review: reviewWithoutProvider,
+    }, {
+      ...policy,
+      humanApprovedPaths: [...PR_332_APPROVED_TOOLING_PATHS],
+      humanApprovedNoRuntimeImpact: true,
+    });
+
+    expect(report.outcome).toBe("awaiting_verification");
+    expect(report.reasons[0]?.code).toBe("provider_behavior_unknown");
+  });
+
+  it("keeps a revoked automatic route revoked despite fresh positive scope", () => {
+    const report = evaluatePrReviewGate(input(), {
+      ...policy,
+      humanDecisionRequired: true,
+    });
+
+    expect(report.outcome).toBe("human_decision");
+    expect(report.reasons[0]?.code).toBe("human_decision_required");
+  });
+
+  it("does not treat a COMMENTED review as this gate's human decision", () => {
+    // COMMENTED reviews carry no final decision; the gate must not mint one
+    // from them. The controller resolves COMMENTED ordering later.
+    const candidate = input({
+      pullRequest: { externalReviewState: "needs-human" },
+    });
+    const report = evaluatePrReviewGate(candidate, policy);
+
+    expect(report.outcome).toBe("human_decision");
+    expect(report.reasons[0]?.code).toBe("human_review_required");
+  });
+
+  it("allows a valid manual unknown assessment but keeps hard CI blocking", () => {
+    const { candidate, bound } = manualSetup({
+      review: {
+        providerBehavior: {
+          headSha: HEAD_SHA,
+          baseSha: BASE_SHA,
+          diffDigest: SYNTHETIC_DIFF_DIGEST,
+          verdict: "unknown",
+          rationale: "The reviewer could not rule out a provider effect from the visible hunks.",
+          evidence: [],
+          missingEvidence: ["remaining-hunks"],
+        },
+      },
+    });
+    expect(evaluatePrReviewGate(candidate, bound).outcome).toBe("merge_candidate");
+    const failedFixed = {
+      ...candidate,
+      evidence: candidate.evidence.map((entry, index) =>
+        index === 0 && entry.kind !== "deferred-before-merge"
+          ? { ...entry, result: "failed" as const }
+          : entry),
+    };
+    expect(evaluatePrReviewGate(failedFixed, bound).outcome).toBe("awaiting_verification");
+  });
+
+  it("fails closed when an identity override leaves stale bound evidence", () => {
+    const candidate = input();
+    const staleHead = {
+      ...candidate,
+      pullRequest: { ...candidate.pullRequest, headSha: "f".repeat(40) },
+    };
+    expect(evaluatePrReviewGate(staleHead, policy).reasons[0]?.code).toBe("stale_review");
+
+    const reboundDigest = "8".repeat(64);
+    const rebound = {
+      ...candidate,
+      providerContext: { ...candidate.providerContext!, diffDigest: reboundDigest },
+      review: {
+        ...candidate.review,
+        providerBehavior: { ...candidate.review.providerBehavior!, diffDigest: reboundDigest },
+        behaviorScope: { ...candidate.review.behaviorScope!, diffDigest: reboundDigest },
+      },
+    };
+    expect(evaluatePrReviewGate(rebound, policy).outcome).toBe("merge_candidate");
+  });
+
+  it("never lets an unbound provider assessment satisfy the provider judgment", () => {
+    // The controller-owned context is current and the scope judgment still
+    // passes on it, so nothing earlier can mask the provider judgment. An
+    // assessment that disagrees with that context must resolve unknown rather
+    // than contribute a real verdict.
+    const candidate = input();
+    const drifted = {
+      ...candidate,
+      review: {
+        ...candidate.review,
+        providerBehavior: { ...candidate.review.providerBehavior!, diffDigest: "8".repeat(64) },
+      },
+    };
+    expect(evaluatePrReviewGate(drifted, policy).reasons.map((reason) => reason.code))
+      .toEqual(["provider_behavior_unknown"]);
+
+    // Reached through the provider stage itself: an assessment bound to this
+    // exact context that declares provider impact, so the plan derived from that
+    // same pair demands targeted provider evidence the snapshot does not carry.
+    const affected = input({ review: { declaredImpacts: ["provider-migration"] } });
+    const staged = evaluatePrReviewGate(affected, policy);
+    expect(staged.reasons.map((reason) => reason.code)).toEqual(["required_evidence_missing"]);
+    expect(staged.deferredEvidence).toEqual([]);
+    expect(staged.reasons[0]?.message).toContain("provider");
+
+    // A context that no longer names the live head drops out of both judgments
+    // at once, so it fails closed instead of binding to itself. The reported
+    // reason is the scope judgment's, because the dropped context is what the
+    // scope resolution reads first.
+    const staleContext = {
+      ...candidate,
+      providerContext: { ...candidate.providerContext!, headSha: "7".repeat(40) },
+      review: {
+        ...candidate.review,
+        providerBehavior: { ...candidate.review.providerBehavior!, headSha: "7".repeat(40) },
+        behaviorScope: { ...candidate.review.behaviorScope!, headSha: "7".repeat(40) },
+      },
+    };
+    const staleReport = evaluatePrReviewGate(staleContext, policy);
+    expect(staleReport.outcome).toBe("awaiting_verification");
+    expect(staleReport.reasons.map((reason) => reason.code)).toEqual(["behavior_scope_incomplete"]);
+  });
+
+  it("drops a stale provider context from the plan on the manual route", () => {
+    // The manual route never runs the scope judgment, so the checked binding
+    // context is refused here for the first time on this route. The context and
+    // the assessment are self-consistent with each other but describe an older
+    // head, so neither may add work to a plan that is about this diff.
+    const staleHead = "7".repeat(40);
+    const { candidate, bound } = manualSetup({
+      issues: [],
+      pullRequest: {
+        linkedIssueNumbers: [],
+        closingIssueNumbers: [],
+        keepOpenIssueNumbers: [],
+      },
+      providerContext: {
+        headSha: staleHead,
+        baseSha: BASE_SHA,
+        diffDigest: SYNTHETIC_DIFF_DIGEST,
+        diffComplete: true,
+      },
+      review: {
+        declaredImpacts: ["provider-migration"],
+        providerBehavior: {
+          headSha: staleHead,
+          baseSha: BASE_SHA,
+          diffDigest: SYNTHETIC_DIFF_DIGEST,
+          verdict: "affected" as const,
+          rationale: "The stale assessment declares a provider change on the changed path.",
+          evidence: [{
+            file: "packages/application/src/server/fix.ts",
+            line: 12,
+            before: "before",
+            after: "after",
+          }],
+          missingEvidence: [],
+        },
+        behaviorScope: {
+          headSha: staleHead,
+          baseSha: BASE_SHA,
+          diffDigest: SYNTHETIC_DIFF_DIGEST,
+          verdict: "in-scope" as const,
+          runtimeImpact: "none" as const,
+          rationale: "The stale assessment claims full coverage of the changed path.",
+          evidence: [{
+            file: "packages/application/src/server/fix.ts",
+            line: 12,
+            before: "before",
+            after: "after",
+          }],
+          contractRefs: [SYNTHETIC_SCOPE_CONTRACT],
+          missingEvidence: [],
+        },
+      },
+      evidence: FIXED_PR_CI_BASELINE.map((id) => makeEvidence(id)),
+    });
+    const report = evaluatePrReviewGate(candidate, bound);
+    expect(report.outcome).toBe("merge_candidate");
+    // No provider check is planned from a context that no longer names this
+    // head, and the manual route requires exactly the fixed baseline.
+    expect(report.requiredEvidenceIds).toEqual([...FIXED_PR_CI_BASELINE]);
+    expect(report.acceptedEvidenceIds).toEqual([...FIXED_PR_CI_BASELINE]);
+    expect(report.deferredEvidence).toEqual([]);
+  });
+
+  it("keeps provider evidence bound to the PR base while main moves under a serialized merge", () => {
+    // The reviewed diff is always head against the PR base. A merge that lands
+    // on a main that moved since the review does not invalidate that evidence.
+    const candidate = input({
+      repository: { defaultBranchSha: "5".repeat(40) },
+      runtime: {
+        integrationMode: "serialized-merge",
+        mainWriterGuard: APP_ONLY_MAIN_WRITER_GUARD,
+      },
+      pullRequest: { mergeable: true, mergeableState: "behind" },
+      branchProtection: { requiresUpToDate: false },
+    });
+    expect(evaluatePrReviewGate(candidate, policy).outcome).toBe("merge_candidate");
+  });
+
+  it("keeps an intentional main-forward passing on the manual route", () => {
+    const { candidate, bound } = manualSetup({
+      repository: { defaultBranchSha: "f".repeat(40) },
+      pullRequest: { mergeable: true, mergeableState: "behind" },
+      branchProtection: { requiresUpToDate: false },
+      runtime: {
+        integrationMode: "serialized-merge",
+        mainWriterGuard: APP_ONLY_MAIN_WRITER_GUARD,
+      },
+    });
+    expect(evaluatePrReviewGate(candidate, bound).outcome).toBe("merge_candidate");
+  });
+
+  it("parses legacy snapshots without the new evidence fields", () => {
+    const candidate = input();
+    const { providerBehavior: _legacyProvider, ...reviewWithoutNew } = candidate.review;
+    const { behaviorScope: _legacyScope, ...legacyReview } = reviewWithoutNew;
+    const { providerContext: _legacyContext, ...candidateWithoutNew } = candidate;
+    const legacy = JSON.parse(JSON.stringify({
+      ...candidateWithoutNew,
+      review: legacyReview,
+    })) as unknown;
+    const parsed = parsePrReviewGateInput(legacy);
+
+    expect(parsed.providerContext).toBeUndefined();
+    expect(parsed.review.providerBehavior).toBeUndefined();
+    expect(parsed.review.behaviorScope).toBeUndefined();
+    // Legacy absence fails closed at the first missing judgment (scope), and
+    // the provider judgment blocks right after once scope is bound.
+    expect(evaluatePrReviewGate(parsed, policy).reasons[0]?.code).toBe("behavior_scope_incomplete");
+    expect(evaluatePrReviewGate({
+      ...parsed,
+      review: { ...parsed.review, behaviorScope: candidate.review.behaviorScope! },
+      providerContext: candidate.providerContext!,
+    }, policy).reasons[0]?.code).toBe("provider_behavior_unknown");
+  });
+});
+
+describe("immediate closing-set guard (both routes)", () => {
+  // A changed body moves the requirement digest: rebind the saved report so
+  // the run reaches the closing-set guard instead of requirements_changed.
+  const rebound = (overrides: InputOverrides): PrReviewGateInput => {
+    const candidate = input(overrides);
+    return {
+      ...candidate,
+      review: {
+        ...candidate.review,
+        requirementDigest: requirementDigest(candidate.issues, candidate.pullRequest),
+      },
+    };
+  };
+  it("stops when GitHub would close a keep-open Issue", () => {
+    const report = evaluatePrReviewGate(
+      rebound({
+        pullRequest: {
+          body: "Fixes #42\n\n#42 保持开放",
+          closingIssueNumbers: [42],
+          keepOpenIssueNumbers: [42],
+        },
+      }),
+      policy,
+    );
+    expect(report.outcome).toBe("human_decision");
+    expect(
+      report.reasons.some((reason) => reason.message.includes("closing_set_outside_delivery")),
+    ).toBe(true);
+  });
+
+  it("stops when GitHub would close an Issue outside delivery", () => {
+    const report = evaluatePrReviewGate(
+      rebound({ pullRequest: { closingIssueNumbers: [42, 77] } }),
+      policy,
+    );
+    expect(report.outcome).toBe("human_decision");
+    expect(
+      report.reasons.some((reason) => reason.message.includes("closing_set_outside_delivery")),
+    ).toBe(true);
+  });
+
+  it("fails closed when the closing set is unreadable", () => {
+    const report = evaluatePrReviewGate(
+      rebound({ pullRequest: { closingIssueNumbers: null } }),
+      policy,
+    );
+    expect(report.outcome).toBe("human_decision");
+    expect(
+      report.reasons.some((reason) => reason.message.includes("closing_set_unverified")),
+    ).toBe(true);
+  });
+
+  it("still merges when the closing set equals delivery or is empty", () => {
+    const delivered = evaluatePrReviewGate(input({ pullRequest: { closingIssueNumbers: [42] } }), policy);
+    expect(delivered.outcome).toBe("merge_candidate");
+    const quiet = evaluatePrReviewGate(
+      rebound({
+        pullRequest: { title: "Routine cleanup", body: "Routine cleanup", closingIssueNumbers: [] },
+        // No linked or delivered Issues: nothing for GitHub to close.
+      }),
+      policy,
+    );
+    expect(
+      quiet.reasons.some((reason) => reason.message.includes("closing_set")),
+    ).toBe(false);
   });
 });

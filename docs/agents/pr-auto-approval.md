@@ -1,8 +1,87 @@
 # PR 自动审批 gate
 
+## SPEC362 已确认目标契约（候选实现中，未安装）
+
+Luke 于 2026-10-15 确认 SPEC #362（开发票 #363），属 Internal Core 工程交付工具链，
+不新增产品 Core Flow。GitHub Issue 正文、评论和标签是执行唯一真源。
+本节是已批准的目标契约，不是安装、生效或部署声明。
+
+当前已安装运行控制器不变：`sayhear-pr-review-gate:v11` /
+`sayhear-pr-review-report:v4`，`serialized-merge`。候选实现在 SPEC #362 集成分支上，
+策略为 `sayhear-pr-review-gate:v12`、报告为 `sayhear-pr-review-report:v5`；
+v11 保留在已签发收据的恢复允许列表中。候选不等于安装，安装与切换由 #369 负责。
+实施前须核验实时 main、安装版本、保护设置、worker 有效配置及既有未提交改动。
+本文件其余章节保留既有安装与恢复细节，不代表已符合新契约。
+
+v12 迁移 howto 见 [pr-approval-v12-migration.md](pr-approval-v12-migration.md)（候选未安装）。
+下文“已安装 v11”是历史运行基线快照，不是 v12 目标；是否生效以固定 `status` 为准。
+
+- 两条通路：自动通路只加速现有契约内普通修复与改进；未知授权范围、证据争议与新
+  决定走人工通路。人工是完整正常通路，不是例外或降级。
+- 人工语义接管：Luke 可随时主动接管，不必先耗尽自动整改；可纠正影响分类、判断专项
+  证据不适用、接受缺口或承担剩余不确定性。Agent P2 标记不是硬约束。
+  接管后仍执行共同检查：批准身份真实且有权限、批准对应被审版本及需求范围、固定
+  可信 CI 真实通过（失败、缺失、跳过不记为通过）、分支保护满足且无未解决冲突、
+  执行前核验 PR 版本与最新 main 组合。控制器通过现有可信 App 表达人工通路 gate
+  结果并执行受保护合入，不保留要求自动分类器同意的隐藏条件，不关闭保护或用
+  管理员 bypass。
+- 评论与实质范围：新提交或实质需求变化需重新确认；普通评论、CI 更新、标签清理
+  不撤销批准；main 无冲突前进时不改写 PR head，仅重新验证组合并沿用批准。
+- 无 Issue 要求与明确交付：PR 可以没有关联 Issue；无 Issue 或仅背景/已关闭上下文
+  的普通 PR 不因缺少开放交付 Issue 被拒，证据齐备时走自动通路合入。交付是显式
+  opt-in：只有 PR 标题/正文中的 closing keyword（`Fixes #N`、`Closes #N`）或
+  Development 关联命中的引用才是交付 Issue，再减去 keep-open 声明。其他引用是
+  背景：参与需求摘要，但不认领、不写交接评论、不改标签、不关闭，也不决定自动
+  资格。写实现 PR 时，被完成的 Issue 必须用 closing keyword 明确写出（仅写
+  `Issue: #N` 或 `See #N` 不算交付）。任何非 keep-open 引用的暂停仍阻止自动合入。
+- 最新 main 组合证明：实际合入绑定通过验证的 PR 与 main 组合；main 再变化时重新
+  验证，不沿用旧组合成功；旧 CI 成功不用于新结果。每次发出合入前，完成记录写入
+  已测 merge ref 的 tree（`testedTreeSha`）；确认合入后实际合入提交的 tree 必须相同。
+  不一致记为 `merged_tree_mismatch`；已合入但完成记录缺少 `testedTreeSha`、无法证明
+  合入树时记为 `merged_tree_unproven`，这包括旧构建在该字段引入前写入的意图，不只
+  是从未发出的合入。两者都进入 `needs_attention`，不关闭 Issue，并阻断仓库内
+  后续自动合入，等待人工处理。旧策略签名的意图按原语义恢复。
+- 人工通路刷新组合 CI：final-decision 回执覆盖实时需求范围时，`ongoing`、分诊标签
+  和依赖不再挡住集成刷新；范围未经重新确认时仍按自动通路检查，显式暂停、Issue
+  暂停与关闭声明歧义仍会挡住。
+- 有界 OpenCode 修复：Codex 协调 OpenCode V2 implementation / code-review worker，
+  同一 PR 单一写入者，独立工作树与明确范围，修复者不自批；implementation 完成声明
+  须经实际 diff 与验证结果核验；review 每轮独立新会话；最多三轮自动整改，轮次跨
+  会话保留；有争议项继续调查或转人工，不盲目改代码或发 request changes。
+- 部署适用性：Approve 覆盖已披露并同意的直接部署效果，不推断范围外追加操作；
+  无需部署的 PR 合入后结束；已合入但部署失败报告真实结果，不重复合入或擅自回滚。
+- 暂停与撤回：实际合入前 Luke 可撤销批准或要求暂停；暂停后停止新派发并通知在途
+  worker 保留已有改动；解除暂停不恢复已撤销批准；已合入后修复或回滚另行决定。
+  PR 对话中的暂停对无 Issue PR 同样生效，自动与人工两条通路都阻断。
+- 第一版沿用现有 Codex 每小时任务；不新增常驻服务、webhook、事件桥接或统一验收
+  台账。范围新鲜度不新增命令，复用固定 `prepare` / `submit` 入口。
+
+### 候选实现：人工最终决定（#363）
+
+- 新浏览器 challenge 带 `liveness: final-decision-v1`。Luke 在该 challenge 冻结后对
+  当前 head 的最新决定性 review（忽略其后的 COMMENTED）为 Approve 时，控制器从
+  签名回执构造 `humanFinalDecision`，gate 只再核验共同硬检查与显式暂停。
+  CHANGES_REQUESTED、DISMISSED、新提交、diff、路径或 workflow 变化仍撤销批准。
+- 升级前已冻结、不带 liveness 的 challenge 保持原语义：最后一条 review 决定撤销，
+  需求摘要变化即漂移，不获得人工通路。
+- 普通评论使需求摘要变化时不撤销批准，只暂缓人工通路。`prepare` 包的
+  `browserApproval` 给出 `approvedRequirementDigest` 与 `coveredRequirementDigest`；
+  两者不同时，协调者核对批准后新增的讨论，在 v5 报告中填写
+  `scopeReconciliation: { epoch, approvedRequirementDigest, verdict }` 后经 `submit`
+  提交。报告的 `requirementDigest` 必须等于实时摘要才生效。
+  `unchanged` 把覆盖范围推进到实时摘要；`material` 撤销回执，需要 Luke 重新
+  Approve；`unknown` 保持暂缓，等待人工。旧 epoch 的结论在重放时无效。
+- 零 Issue 的人工 PR 走完收集、scan、gate、App review、合入与 v2 签名收尾，不写入
+  任何 Issue。零 Issue 或仅背景引用的普通 PR 在证据齐备时也可走自动通路合入
+  （#367 已交付该资格），同样不做任何 Issue 写入。
+
+原因与取舍见 [ADR-0154](../adr/0154-human-review-is-a-complete-pr-approval-path.md)。
+旧契约中“人工只解锁局部门禁”“所有讨论变化撤销批准”“必须有开放交付 Issue”
+“main 前进即强制同步分支”等条款已被本 SPEC 修订，实施时同步文档和检查。
+
 ## 状态
 
-### 审批工具链路径的枚举与安装顺序
+### 审批工具链路径的枚举与安装顺序（历史运行收据，非当前指令）
 
 #352 在浏览器通道与合入前延后检查之上收窄了 gate 的「影响未定位」判定：release
 planner 用 `NON_RUNTIME_TOOL_PATHS` 枚举了不配置部署运行时的路径，包括离线评估
@@ -22,7 +101,7 @@ tsconfig.json` 与 `tsc -p tsconfig.g1-tools.json` 均无错误。用同一源�
 同样的 7 个文件；安装本版本不会作废 Luke 在 head `b028f7df` 上已提交的浏览器
 批准。安装后的固定 `status` 回读仍是判断是否生效的唯一依据。
 
-### 迁移专项证据候选
+### 迁移专项证据候选（历史：v7 候选，非当前目标）
 
 #350 的独立候选将策略标识更新为 `sayhear-pr-review-gate:v7`，报告结构保持
 `sayhear-pr-review-report:v3`。该候选从 main 构建，尚未完成受控安装。
@@ -76,11 +155,17 @@ Luke 于 2026-10-12 确认：PR 可以引用多个 Issue；合入后自动关闭
   列出编号或无法确定范围时进入 `human_decision`，先让维护者改写为明确编号列表。
 - 排除项是需求上下文：完整读取并绑定需求摘要，但不认领、不写交接评论、不改标签、
   不关闭。#333 的“不关闭也不修改 #301”声明必须保留。
-- 其余开放 Issue 均须认领、无暂停或互斥标签。交付集合内的开放依赖允许随本 PR 一起
-  交付；集合外依赖，包括被声明保持开放的 Issue，仍须先解除。已关闭 Issue 只作
-  需求上下文，不重新打开；合入后可清理未排除的已关闭 Issue 遗留状态标签。
+- 交付集合内的开放 Issue 须认领、无互斥标签、无集合外依赖；集合内的开放依赖允许
+  随本 PR 一起交付。背景引用不认领、不查标签、不查依赖，但显式暂停与不可信暂停
+  状态仍阻止自动合入。集合外依赖，包括被声明保持开放的 Issue，仍须先解除。已关闭
+  Issue 只作需求上下文，不重新打开；合入后可清理已关闭交付 Issue 的遗留状态标签。
 - 每个交付 Issue 都须满足需求，不能用一个 Issue 的实现替代其他 Issue 的验收。
   任一正文、标题、非 App 评论或引用集合改变都会使需求摘要失效。
+- 延期语义迁移：旧 deferral（`merge_candidate_with_deferrals` 请求自动合入并让
+  Issue 保持开放、跳过 completion）在新语义下只属于自动通路；串行合入不支持延期
+  自动合入，含延期的自动通路转人工。人工通路只要求固定基线证据，计划中的
+  targeted 延期不产生义务，合入后交付 Issue 正常关闭。旧分支在新人工决定后不再
+  生成留开义务；需要后续跟进时保留原 Issue，独立新任务才建票。
 - 多 Issue 版本安装时审批策略为 `sayhear-pr-review-gate:v8`，报告结构为
   `sayhear-pr-review-report:v4`。旧报告与人工绑定保留各自原版本，不能用于新审批，
   也不能改标成当前版本号。
@@ -109,15 +194,23 @@ Luke 于 2026-10-14 选择轻量串行集成模式：独立 PR 并行开发和�
 
 - `serialized-merge` 的代码审查绑定 head、完整 diff/change digest、全部需求摘要、
   受保护路径、被审 workflow blob 与策略版本。历史 base 保存在报告中，不改写成
-  当前 main。main 前进时，controller 完整读取认证的 base 变化，确认没有触及
-  PR 文件或安全、依赖、迁移、策略等实质风险路径，才复用已有审查；截断、读取失败
-  或风险不明都要求重新审查。head、需求或完整 diff 改变也使旧审查失效。
+  当前 main。v12 候选起，main 无冲突前进本身不撤销审查或人工批准，路径重叠与
+  配置类变化也不再单独撤销（Luke 2026-10-15 决定）；main 侧风险由当前 merge ref
+  上的可信组合 Validate 承担，组合失败即停止，真实冲突交回修复。只有新提交、
+  需求实质变化、真实冲突、组合 CI 失败，或 Luke 自己提交 `CHANGES_REQUESTED` /
+  `DISMISSED`（见本文件上方人工通路规则）使批准失效。
 - 审核报告的 `baseSha` 从包内 `reviewContext.baseSha` 取得。严格模式下它仍是
   PR base；v10 轻量模式下它是本次审查针对的 main SHA。`pullRequest.baseSha`
   始终保留 GitHub 原值。这样实质 main 风险可以通过重新审查当前集成解除，无须
   为了改变报告身份而强制提交一次 rebase。
-- 浏览器新挑战用 `reviewBinding=head-v2` 标识可复用的授权。只有 controller 已证明
-  main 变化安全时，才允许比较忽略 base；作者、审核者、head、完整 diff、需求、
+- `providerContext` 是模型判断唯一的绑定身份：controller 从采集 diff 的同一快照
+  写出，`headSha`、`baseSha`、`diffDigest` 在所有集成模式下都对应 PR base。轻量模式
+  下它可以与 `reviewContext.baseSha`（合并基线）不同。`providerBehavior` 与
+  `behaviorScope` 必须逐字复制 `providerContext` 的四个字段；gate 用自己重新导出的
+  同一上下文比较，任一字段不符即按 unknown 失败关闭。包内 `reviewerInstructions`
+  重述了这条规则。
+- 浏览器新挑战用 `reviewBinding=head-v2` 标识可复用的授权，比较时忽略 base，
+  main 前进不重置挑战；作者、审核者、head、完整 diff、需求、
   路径与 workflow blob 仍精确绑定。旧 exact-base 挑战不能升级为 head-v2 收据。
 - 轻量模式的 legacy root 授权额外绑定 `approvedBaseSha` 与精确
   `approvedHeadSha`。缺少被审 main 基线的旧记录不能获得新模式权限；main 引入
@@ -350,8 +443,8 @@ Luke 已确认接受以 `ui:portal-smoke` 取代设计稿所述的桌面与移�
 `sayhear-pr-review-report:v4`。v9 是本次修复前的在位版本，v4、v5、v6、v8 是更早的已签发版本；
 已签发收据的恢复允许列表为 v4、v5、v6、v8、v9、v10。`status`、构建身份与审核包保留能力标识
 `browserApprovalVersion=sayhear-pr-browser-approval:v1`。构建身份另记录
-`sourceDiffSha256`：源码包含 main 之上的未提交改动，只有 `sourceCommit` 不能
-证明安装版包含这些变更。
+`sourceDiffSha256`：构建在脏树上直接拒绝，所以该值只是空 diff 的哈希，用来证明
+安装版对应干净提交，不记录 main 之上的未提交改动。
 
 #### 人工授权的两个通道
 
@@ -438,7 +531,7 @@ main classic protection rule `84625756` 已保存并由 App API 回读：1 个�
 
 #325 已由 App 于 `2026-10-11T07:37:40Z` 合入，merge SHA `bea67d2739de7cc1c64191d35a9964dd14336f2a`。#258 自动关闭，遗留 ongoing 已清理并回读。对应 Vercel deployment `dpl_GtX8f5k7kP1KScYRMsNy177Nzbom` 为 Production READY，git SHA 一致，生产域名已绑定；登录页和 auth providers 的 HTTP smoke 均为 200。未读取生产私人对话，smoke 不代表聊天功能验收。
 
-每小时本线程 heartbeat `sayhear-pr` 已 ACTIVE，无变化不通知。首次定时执行待核验；已手动在默认会话执行 status/prepare，成功认证，合入后扫描没有候选，未写入其他七个 PR。运行证据存于 `artifacts/pr-approval/operations/2026-10-11-pilot.json`。修改三轮暂停与失败恢复由测试场景验证，实际试运行完成了待补证回写和成功合入，没有人为制造代码缺陷。
+每小时本线程 heartbeat `sayhear-pr` 在 2026-10-11 曾 ACTIVE；当前快照（2026-10-16）为 PAUSED，无变化不通知。首次定时执行待核验；已手动在默认会话执行 status/prepare，成功认证，合入后扫描没有候选，未写入其他七个 PR。运行证据存于 `artifacts/pr-approval/operations/2026-10-11-pilot.json`。修改三轮暂停与失败恢复由测试场景验证，实际试运行完成了待补证回写和成功合入，没有人为制造代码缺陷。
 
 #309 已由 App 合入：分支同步最新 main 后 `validate` run `38128541215` 成功，独立审查结论为 approve（无 P0-P2）。merge SHA `328662a7a3746b83fd905cd96c67105c113bc23e`，Vercel Production deployment `dpl_91MNFTC2Y7day8pgrUnar2Pb7PAy` 为 READY 且 git SHA 一致，生产域名登录页与 providers 均返回 200；Issue #233 自动关闭，遗留 `ongoing` 已清理。非阻断备注：受版本控制的 `eval/continuation-acceptance-1a3b/run/validator-ledger.json` 指纹会因此变旧，需在下次 validator 采集时刷新；没有 CI 读取该文件。
 
@@ -473,7 +566,7 @@ pnpm pr:review-gate:dry-run -- --input <snapshot.json>
 
 - 报告绑定仓库、PR、head SHA、base SHA、策略版本，以及全部引用 Issue 的标题、正文和非 App 评论摘要。只改标签或 App 自身回写不改变需求摘要。
 - 仅接受完整 diff、非 Draft PR、指向当前 `main` 的同仓库 PR，以及完整的关联 Issue 集合。交付集合的开放 Issue 须已认领，集合外依赖须解除。`merge-queue` 暂不可激活；`serialized-merge` 换成“无真实冲突且 main 已关闭 `requiresUpToDate`，由 controller 串行合入”。
-- 每个未排除的开放 Issue 必须处于 `ongoing`，不能同时带 `ready-for-agent`、人工处理、待补充或暂停状态。
+- 只有 PR 实际交付（closing keyword 或 Development 关联）且未排除的开放 Issue 必须处于 `ongoing`，不能同时带 `ready-for-agent`、人工处理、待补充或暂停状态；背景引用和明确保持开放的 Issue 不查这条。
 - PR Validate 的证据必须对应当前 head、base 和 merge SHA，并匹配可信 workflow 文件摘要、GitHub Actions App、仓库和 `pull_request` 事件。
 - 每项必要证据都必须显式为 `passed`。`skipped`、`cancelled`、`neutral`、`planned` 和 `out-of-scope` 均阻断。
 - `scripts/daily-release-validation.ts` 决定行为专项；gate 不使用它的退出码代替验收结果。
@@ -507,7 +600,7 @@ pnpm pr:review-gate:dry-run -- --input <snapshot.json>
 
 App ID、installation ID、slug 和生产授权标记存于 root-owned 本机配置，不是密钥。可信策略同时固定 Actions App 与 `pr-validate.yml` blob SHA。GitHub App 私钥只存于 macOS Keychain，不得传入模型进程、PR checkout 或普通 CI。controller 使用 `service=SayHear PR Approval GitHub App`、`account=lukemyself-hub/SayHear` 查找当前用户 Keychain；macOS CLI 可能以十六进制文本返回条目数据，controller 会先解码并校验 PEM。当前已有密钥已通过 API 认证。曾下载的第 7 把 PEM 已删除；最近提供的路径目前不存在，不要为了它再次生成密钥。
 
-## 定时运行规则
+## 定时运行规则（历史运行记录，当前 PAUSED）
 
 - 每次先读取 status 和 prepare；认证、保护、部署核验失败则停止写入。
 - 合入后确认实际 merged、merge SHA，并清理已关闭关联 Issue 的 ongoing。
