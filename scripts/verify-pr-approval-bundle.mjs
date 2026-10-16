@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFile, writeFile, mkdir, stat } from "node:fs/promises";
+import { readFile, writeFile, mkdir, stat, lstat } from "node:fs/promises";
 import { promisify } from "node:util";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL, fileURLToPath } from "node:url";
@@ -74,6 +74,48 @@ for (const input of manifest.inputs) {
   const inputDigest = createHash("sha256").update(await readFile(resolve(root, input.path))).digest("hex");
   if (inputDigest !== input.sha256) throw new Error(`A manifest input changed after the build: ${input.path}`);
 }
+// Pinned artifact runtime proof: the exact copied node and launcher bytes.
+const EXPECTED_NODE_VERSION = "v24.18.0";
+const EXPECTED_LAUNCHERS = ["pr-approval-status", "pr-approval-prepare", "pr-approval-submit", "pr-approval-configure", "pr-approval-scan"];
+const pinnedNodeVersion = (await readFile(resolve(root, ".node-version"), "utf8")).trim();
+if (pinnedNodeVersion !== EXPECTED_NODE_VERSION.slice(1)) throw new Error("The runtime pin does not match the expected Node version.");
+if (manifest.nodeVersion !== EXPECTED_NODE_VERSION || identity.nodeVersion !== EXPECTED_NODE_VERSION) {
+  throw new Error("The bundle runtime version does not match the expected Node version.");
+}
+if (typeof manifest.nodeSha256 !== "string" || !/^[a-f0-9]{64}$/.test(manifest.nodeSha256)) {
+  throw new Error("The manifest Node digest is missing.");
+}
+if (!Array.isArray(manifest.launchers) || manifest.launchers.length !== EXPECTED_LAUNCHERS.length) {
+  throw new Error("The manifest launcher set is incomplete.");
+}
+const seenLaunchers = new Set();
+for (const entry of manifest.launchers) {
+  if (typeof entry?.name !== "string" || !EXPECTED_LAUNCHERS.includes(entry.name) || seenLaunchers.has(entry.name) ||
+      typeof entry?.sha256 !== "string" || !/^[a-f0-9]{64}$/.test(entry.sha256)) {
+    throw new Error("The manifest launcher set is invalid.");
+  }
+  seenLaunchers.add(entry.name);
+}
+for (const expectedLauncher of EXPECTED_LAUNCHERS) {
+  if (!seenLaunchers.has(expectedLauncher)) throw new Error(`The manifest launcher set is incomplete: ${expectedLauncher}`);
+}
+const digestBuildArtifact = async (name) => {
+  const artifactPath = resolve(buildDirectory, name);
+  if (artifactPath !== `${buildDirectory}/${name}`) throw new Error(`A bundled artifact escapes the build directory: ${name}`);
+  const artifactInfo = await lstat(artifactPath).catch(() => null);
+  if (!artifactInfo || artifactInfo.isSymbolicLink() || !artifactInfo.isFile()) {
+    throw new Error(`A bundled artifact is not a regular file: ${name}`);
+  }
+  return { artifactPath, sha256: createHash("sha256").update(await readFile(artifactPath)).digest("hex") };
+};
+const copiedNode = await digestBuildArtifact("node");
+if (copiedNode.sha256 !== manifest.nodeSha256) throw new Error("The copied Node runtime does not match its manifest.");
+const copiedNodeVersion = (await promisify(execFile)(copiedNode.artifactPath, ["--version"])).stdout.trim();
+if (copiedNodeVersion !== EXPECTED_NODE_VERSION) throw new Error("The copied Node runtime version does not match.");
+for (const entry of manifest.launchers) {
+  const launcher = await digestBuildArtifact(entry.name);
+  if (launcher.sha256 !== entry.sha256) throw new Error(`A bundled launcher does not match its manifest: ${entry.name}`);
+}
 const configPath = resolve(buildDirectory, "bundle-vitest.config.mjs");
 await writeFile(configPath, `export default ${JSON.stringify({
   root,
@@ -88,7 +130,7 @@ await writeFile(configPath, `export default ${JSON.stringify({
   } },
   test: { include: ["tests/pr-approval-controller.test.ts", "tests/pr-approval-completion.test.ts", "tests/pr-approval-diff.test.ts", "tests/pr-approval-browser-approval.test.ts", "tests/pr-review-gate.test.ts"] },
 })};\n`);
-const run = await promisify(execFile)(process.execPath, [resolve(root, "node_modules/vitest/vitest.mjs"), "run", "--config", configPath], { cwd: root, maxBuffer: 4_000_000, env: { ...process.env, SAYHEAR_COMPLETION_BUNDLE_TEST: "1" } });
+const run = await promisify(execFile)(copiedNode.artifactPath, [resolve(root, "node_modules/vitest/vitest.mjs"), "run", "--config", configPath], { cwd: root, maxBuffer: 4_000_000, env: { ...process.env, SAYHEAR_COMPLETION_BUNDLE_TEST: "1" } });
 process.stdout.write(run.stdout);
 process.stderr.write(run.stderr);
 await mkdir(resolve(root, ".audit/pr-approval-v5-tests"), { recursive: true });
