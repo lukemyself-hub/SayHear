@@ -281,6 +281,11 @@ export type DeferredEvidence = Readonly<{
   followUp: PreMergeDeferralPolicy["followUp"];
 }>;
 
+export type PrPauseState = Readonly<{
+  active: boolean;
+  source: "none" | "maintainer" | "review-app" | "unknown";
+}>;
+
 export type PrReviewIssue = Readonly<{
   number: number;
   state: "open" | "closed";
@@ -290,10 +295,7 @@ export type PrReviewIssue = Readonly<{
   discussionDigest: string;
   labels: readonly string[];
   blockedBy: readonly number[] | null;
-  pause: Readonly<{
-    active: boolean;
-    source: "none" | "maintainer" | "review-app" | "unknown";
-  }>;
+  pause: PrPauseState;
 }>;
 
 export type PrReviewGateInput = Readonly<{
@@ -334,6 +336,7 @@ export type PrReviewGateInput = Readonly<{
      * `null` means the controller could not establish the set.
      */
     closingIssueNumbers: readonly number[] | null;
+    pause: PrPauseState;
     changedFiles: readonly Readonly<{
       path: string;
       status: "added" | "modified" | "removed" | "renamed" | "copied";
@@ -769,18 +772,25 @@ export function parseIssueClosureExclusions(title: string, body: string): Readon
   return { keepOpenIssueNumbers: [...keepOpen].sort((left, right) => left - right), ambiguous };
 }
 
+function parsePrPauseState(value: unknown, path: string): PrPauseState {
+  if (!isRecord(value)) throw new Error(`${path}.pause must be an object.`);
+  const source = (value as Record<string, unknown>).source;
+  if (source !== "none" && source !== "maintainer" && source !== "review-app" && source !== "unknown") {
+    throw new Error(`${path}.pause.source is invalid.`);
+  }
+  return {
+    active: requiredBoolean((value as Record<string, unknown>).active, `${path}.pause.active`),
+    source,
+  };
+}
+
 function parsePrReviewIssue(value: unknown, index: number): PrReviewIssue {
   const path = `issues[${index}]`;
   if (!isRecord(value)) throw new Error(`${path} must be an object.`);
   if (value.state !== "open" && value.state !== "closed") {
     throw new Error(`${path}.state must be open or closed.`);
   }
-  const pause = value.pause;
-  if (!isRecord(pause)) throw new Error(`${path}.pause must be an object.`);
-  const source = pause.source;
-  if (source !== "none" && source !== "maintainer" && source !== "review-app" && source !== "unknown") {
-    throw new Error(`${path}.pause.source is invalid.`);
-  }
+  const pause = parsePrPauseState(value.pause, path);
   return {
     number: requiredPositiveInteger(value.number, `${path}.number`),
     state: value.state,
@@ -790,7 +800,7 @@ function parsePrReviewIssue(value: unknown, index: number): PrReviewIssue {
     discussionDigest: requiredString(value.discussionDigest, `${path}.discussionDigest`),
     labels: parseStringArrayOrEmpty(value.labels, `${path}.labels`),
     blockedBy: value.blockedBy === null ? null : parseNumberArrayOrEmpty(value.blockedBy, `${path}.blockedBy`),
-    pause: { active: requiredBoolean(pause.active, `${path}.pause.active`), source },
+    pause,
   };
 }
 
@@ -1042,6 +1052,7 @@ export function parsePrReviewGateInput(value: unknown): PrReviewGateInput {
               pullRequest.closingIssueNumbers,
               "pullRequest.closingIssueNumbers",
             ),
+      pause: parsePrPauseState((pullRequest as Record<string, unknown>).pause, "pullRequest"),
       changedFiles,
     },
     issues: issues.map(parsePrReviewIssue),
@@ -1532,6 +1543,9 @@ function requiresHumanReview(
   if (delivery.length === 0 && input.pullRequest.body.trim().length === 0) {
     return { code: "human_review_required", message: "The PR names no delivered Issue and states no requirement." };
   }
+  if (input.pullRequest.pause.active || input.pullRequest.pause.source === "unknown") {
+    return { code: "human_review_required", message: "The PR is paused or its pause state cannot be trusted." };
+  }
   for (const issue of input.issues) {
     if (input.pullRequest.keepOpenIssueNumbers.includes(issue.number)) continue;
     // Pauses are holds, so they apply to background references too.
@@ -1891,6 +1905,12 @@ export function evaluatePrReviewGate(
     }
     const closure = closureDeclarationReason(input);
     if (closure) return outcome(input, "human_decision", closure);
+    if (input.pullRequest.pause.active || input.pullRequest.pause.source === "unknown") {
+      return outcome(input, "human_decision", {
+        code: "human_review_required",
+        message: "The PR is paused or its pause state cannot be trusted.",
+      });
+    }
     for (const issue of input.issues) {
       if (input.pullRequest.keepOpenIssueNumbers.includes(issue.number)) continue;
       if (issue.pause.active || issue.pause.source === "unknown") {
