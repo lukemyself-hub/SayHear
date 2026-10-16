@@ -52,8 +52,17 @@ const NON_RUNTIME_PREFIXES = [
   ".codex/",
 ] as const;
 
+/**
+ * `scripts/` is normally tooling, but the Vercel production build for
+ * `apps/web` runs these files as part of `apps/web`'s build script, so a
+ * change to one of them can change the deployed runtime. Keep this list in
+ * sync with the `build` script in `apps/web/package.json`.
+ */
+const RUNTIME_SCRIPTS = ["scripts/check-browser-bundle.mjs"] as const;
+
 function isNonRuntimePath(path: string): boolean {
   if (path === "GLOSSARY.md") return true;
+  if ((RUNTIME_SCRIPTS as readonly string[]).includes(path)) return false;
   const basename = path.slice(path.lastIndexOf("/") + 1);
   if (basename === "README.md") return true;
   if (!path.includes("/") && path.endsWith(".md")) return true;

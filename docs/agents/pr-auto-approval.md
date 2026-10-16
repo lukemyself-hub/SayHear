@@ -197,7 +197,8 @@ Luke 于 2026-10-14 选择轻量串行集成模式：独立 PR 并行开发和�
   当前 main。v12 候选起，main 无冲突前进本身不撤销审查或人工批准，路径重叠与
   配置类变化也不再单独撤销（Luke 2026-10-15 决定）；main 侧风险由当前 merge ref
   上的可信组合 Validate 承担，组合失败即停止，真实冲突交回修复。只有新提交、
-  需求实质变化、真实冲突或组合 CI 失败使批准失效。
+  需求实质变化、真实冲突、组合 CI 失败，或 Luke 自己提交 `CHANGES_REQUESTED` /
+  `DISMISSED`（见本文件上方人工通路规则）使批准失效。
 - 审核报告的 `baseSha` 从包内 `reviewContext.baseSha` 取得。严格模式下它仍是
   PR base；v10 轻量模式下它是本次审查针对的 main SHA。`pullRequest.baseSha`
   始终保留 GitHub 原值。这样实质 main 风险可以通过重新审查当前集成解除，无须
@@ -442,8 +443,8 @@ Luke 已确认接受以 `ui:portal-smoke` 取代设计稿所述的桌面与移�
 `sayhear-pr-review-report:v4`。v9 是本次修复前的在位版本，v4、v5、v6、v8 是更早的已签发版本；
 已签发收据的恢复允许列表为 v4、v5、v6、v8、v9、v10。`status`、构建身份与审核包保留能力标识
 `browserApprovalVersion=sayhear-pr-browser-approval:v1`。构建身份另记录
-`sourceDiffSha256`：源码包含 main 之上的未提交改动，只有 `sourceCommit` 不能
-证明安装版包含这些变更。
+`sourceDiffSha256`：构建在脏树上直接拒绝，所以该值只是空 diff 的哈希，用来证明
+安装版对应干净提交，不记录 main 之上的未提交改动。
 
 #### 人工授权的两个通道
 
@@ -565,7 +566,7 @@ pnpm pr:review-gate:dry-run -- --input <snapshot.json>
 
 - 报告绑定仓库、PR、head SHA、base SHA、策略版本，以及全部引用 Issue 的标题、正文和非 App 评论摘要。只改标签或 App 自身回写不改变需求摘要。
 - 仅接受完整 diff、非 Draft PR、指向当前 `main` 的同仓库 PR，以及完整的关联 Issue 集合。交付集合的开放 Issue 须已认领，集合外依赖须解除。`merge-queue` 暂不可激活；`serialized-merge` 换成“无真实冲突且 main 已关闭 `requiresUpToDate`，由 controller 串行合入”。
-- 每个未排除的开放 Issue 必须处于 `ongoing`，不能同时带 `ready-for-agent`、人工处理、待补充或暂停状态。
+- 只有 PR 实际交付（closing keyword 或 Development 关联）且未排除的开放 Issue 必须处于 `ongoing`，不能同时带 `ready-for-agent`、人工处理、待补充或暂停状态；背景引用和明确保持开放的 Issue 不查这条。
 - PR Validate 的证据必须对应当前 head、base 和 merge SHA，并匹配可信 workflow 文件摘要、GitHub Actions App、仓库和 `pull_request` 事件。
 - 每项必要证据都必须显式为 `passed`。`skipped`、`cancelled`、`neutral`、`planned` 和 `out-of-scope` 均阻断。
 - `scripts/daily-release-validation.ts` 决定行为专项；gate 不使用它的退出码代替验收结果。
