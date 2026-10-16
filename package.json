@@ -23,6 +23,7 @@
     "release:closure:report": "tsx scripts/release-closure-report.ts",
     "pr:review-gate:dry-run": "tsx scripts/pr-review-gate.ts",
     "pr:approval": "tsx scripts/pr-approval-controller.ts",
+    "pr:deploy-closeout": "tsx scripts/pr-approval/deployment-closeout.ts",
     "pr:approval:build": "node scripts/build-pr-approval-controller.mjs",
     "check:runtime": "node scripts/check-runtime.mjs",
     "db:migrate": "tsx packages/data/src/cli/migrate.ts",
