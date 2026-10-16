@@ -2916,3 +2916,71 @@ describe("PR review gate", () => {
     }, policy).reasons[0]?.code).toBe("provider_behavior_unknown");
   });
 });
+
+describe("immediate closing-set guard (both routes)", () => {
+  // A changed body moves the requirement digest: rebind the saved report so
+  // the run reaches the closing-set guard instead of requirements_changed.
+  const rebound = (overrides: InputOverrides): PrReviewGateInput => {
+    const candidate = input(overrides);
+    return {
+      ...candidate,
+      review: {
+        ...candidate.review,
+        requirementDigest: requirementDigest(candidate.issues, candidate.pullRequest),
+      },
+    };
+  };
+  it("stops when GitHub would close a keep-open Issue", () => {
+    const report = evaluatePrReviewGate(
+      rebound({
+        pullRequest: {
+          body: "Fixes #42\n\n#42 保持开放",
+          closingIssueNumbers: [42],
+          keepOpenIssueNumbers: [42],
+        },
+      }),
+      policy,
+    );
+    expect(report.outcome).toBe("human_decision");
+    expect(
+      report.reasons.some((reason) => reason.message.includes("closing_set_outside_delivery")),
+    ).toBe(true);
+  });
+
+  it("stops when GitHub would close an Issue outside delivery", () => {
+    const report = evaluatePrReviewGate(
+      rebound({ pullRequest: { closingIssueNumbers: [42, 77] } }),
+      policy,
+    );
+    expect(report.outcome).toBe("human_decision");
+    expect(
+      report.reasons.some((reason) => reason.message.includes("closing_set_outside_delivery")),
+    ).toBe(true);
+  });
+
+  it("fails closed when the closing set is unreadable", () => {
+    const report = evaluatePrReviewGate(
+      rebound({ pullRequest: { closingIssueNumbers: null } }),
+      policy,
+    );
+    expect(report.outcome).toBe("human_decision");
+    expect(
+      report.reasons.some((reason) => reason.message.includes("closing_set_unverified")),
+    ).toBe(true);
+  });
+
+  it("still merges when the closing set equals delivery or is empty", () => {
+    const delivered = evaluatePrReviewGate(input({ pullRequest: { closingIssueNumbers: [42] } }), policy);
+    expect(delivered.outcome).toBe("merge_candidate");
+    const quiet = evaluatePrReviewGate(
+      rebound({
+        pullRequest: { title: "Routine cleanup", body: "Routine cleanup", closingIssueNumbers: [] },
+        // No linked or delivered Issues: nothing for GitHub to close.
+      }),
+      policy,
+    );
+    expect(
+      quiet.reasons.some((reason) => reason.message.includes("closing_set")),
+    ).toBe(false);
+  });
+});
