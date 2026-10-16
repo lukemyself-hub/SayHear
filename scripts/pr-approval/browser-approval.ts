@@ -210,8 +210,10 @@ export async function readBrowserAuthorization(
 // Applies the authorized coordinator's reconciliation of a requirement change
 // after Luke's final decision. Called from report submission, including the
 // saved-report replay during scans.
-// Unchanged extends coverage to the live digest, material revokes the receipt
-// so a new Approve is needed, and unknown leaves the human route withheld.
+// Unchanged extends coverage to the live digest; material or unknown revokes the
+// receipt so a fresh challenge on the live digest plus a new Approve is needed.
+// Unknown still routes to the human (no coverage without Luke), but revoking
+// like material keeps it resolvable instead of withheld forever.
 export async function reconcileBrowserScope(
   store: BrowserApprovalStore,
   number: number,
@@ -227,8 +229,7 @@ export async function reconcileBrowserScope(
       receipt.challenge.context.requirementDigest !== reconciliation.approvedRequirementDigest) {
     throw new Error("browser_scope_reconciliation_mismatch");
   }
-  if (reconciliation.verdict === "unknown") return;
-  if (reconciliation.verdict === "material") {
+  if (reconciliation.verdict === "material" || reconciliation.verdict === "unknown") {
     await store.save({ version: 1, pullRequestNumber: number, epoch: randomUUID(), challenge: null, receipt: null });
     return;
   }

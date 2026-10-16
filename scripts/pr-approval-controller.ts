@@ -2697,6 +2697,17 @@ export async function readHumanBinding(
       scope.reviewedHeadSha.toLowerCase() === input.headSha.toLowerCase()) {
     await reconcileBrowserScope(store, input.number, scope.reconciliation, input.requirement);
     authorization = await read();
+    // Material or unknown scope revokes the old receipt above. Freeze a fresh
+    // challenge on the live digest (the existing material path) so Luke's next
+    // browser Approve on the current head covers the live requirement instead
+    // of leaving the human route withheld forever. The Approve is still
+    // validated against the challenge it answers, so it can never cover a
+    // digest that challenge did not freeze.
+    if (!authorization.receipt && (scope.reconciliation.verdict === "material" || scope.reconciliation.verdict === "unknown")) {
+      authorization = await readBrowserAuthorization(
+        store, input.number, context, input.reviews, true, input.now ?? Date.now(),
+      );
+    }
   }
   // Luke's own decisive history is trusted controller input, not model
   // evidence. Once a decisive review that the current approval does not answer
@@ -5238,7 +5249,7 @@ export async function reportReviewResult(
     // agent push a new head and void the challenge this PR is waiting on.
     return {
       outcome: "awaiting_verification",
-      message: `PR #${report.pullRequestNumber} is agent-authored and touches a protected path; no approval or merge candidate check run was published because a live browser approval on the current head is still required.`,
+      message: `PR #${report.pullRequestNumber} is agent-authored and touches a protected path; no approval or merge candidate check run was published because re-Approval of the current head in the browser from @lukemyself-hub is still required.`,
       remediation: snapshot.remediation,
     };
   }
@@ -5294,7 +5305,7 @@ export async function reportReviewResult(
     return {
       outcome: "awaiting_verification",
       message:
-        `PR #${report.pullRequestNumber} is agent-authored and touches a protected path; a live browser approval from @lukemyself-hub on the current head is required before any merge. The Issue handoff was left unchanged.`,
+        `PR #${report.pullRequestNumber} is agent-authored and touches a protected path; re-Approve the current head in the browser from @lukemyself-hub before any merge. The Issue handoff was left unchanged.`,
       remediation: snapshot.remediation,
     };
   }
@@ -5400,7 +5411,7 @@ export async function reportReviewResult(
     // the rest of the scan.
     return {
       outcome: "awaiting_verification",
-      message: `PR #${report.pullRequestNumber} is agent-authored; a live browser approval on the current head is required before any merge.`,
+      message: `PR #${report.pullRequestNumber} is agent-authored; re-Approve the current head in the browser from @lukemyself-hub before any merge.`,
     };
   }
   const mergeAction = mergeActionFor(
