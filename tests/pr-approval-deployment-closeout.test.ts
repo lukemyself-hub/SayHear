@@ -205,7 +205,23 @@ describe("deploymentRequired", () => {
 
   it("treats only top-level markdown as non-runtime", () => {
     expect(deploymentRequired(["README.md", "CHANGELOG.md"])).toBe(false);
-    expect(deploymentRequired(["apps/web/README.md"])).toBe(true);
+    expect(deploymentRequired(["apps/web/README.md"])).toBe(false);
+    expect(deploymentRequired(["packages/domain/README.md"])).toBe(false);
+  });
+
+  it("still requires deployment for other nested markdown and configs", () => {
+    expect(deploymentRequired(["apps/web/CHANGELOG.md"])).toBe(true);
+    expect(deploymentRequired(["apps/web/notes.md"])).toBe(true);
+    expect(deploymentRequired(["package.json"])).toBe(true);
+  });
+
+  it("considers both sides of a rename when checking docs-only", () => {
+    expect(
+      deploymentRequired(["docs/old.md", "apps/web/README.md"]),
+    ).toBe(false);
+    expect(
+      deploymentRequired(["docs/old.md", "apps/web/app/page.tsx"]),
+    ).toBe(true);
   });
 });
 
@@ -315,6 +331,47 @@ describe("decideDeploymentCloseout", () => {
     expect(closeout.deploymentId).toBe(7);
   });
 
+  it("reports failure when a newer failure is later marked inactive", () => {
+    for (const failed of ["failure", "error"]) {
+      const closeout = decideDeploymentCloseout({
+        pullRequestNumber: 1,
+        mergeSha: MERGE_SHA,
+        changedPaths: ["apps/web/app/page.tsx"],
+        deployments: [
+          deployment(7, MERGE_SHA, "production", [
+            status("inactive", "2026-10-16T00:00:03Z"),
+            status(failed, "2026-10-16T00:00:02Z"),
+            status("success", "2026-10-16T00:00:01Z"),
+          ]),
+        ],
+      });
+      expect(closeout.status).toBe("failed");
+      expect(closeout.deploymentId).toBe(7);
+      expect(closeout.reason).toBe(
+        `Production deployment 7 for merge ${MERGE_SHA} reported ${failed}.`,
+      );
+    }
+  });
+
+  it("stays pending when a newer active attempt follows an older success", () => {
+    for (const active of ["queued", "in_progress", "pending"]) {
+      const closeout = decideDeploymentCloseout({
+        pullRequestNumber: 1,
+        mergeSha: MERGE_SHA,
+        changedPaths: ["apps/web/app/page.tsx"],
+        deployments: [
+          deployment(7, MERGE_SHA, "production", [
+            status("inactive", "2026-10-16T00:00:03Z"),
+            status(active, "2026-10-16T00:00:02Z"),
+            status("success", "2026-10-16T00:00:01Z"),
+          ]),
+        ],
+      });
+      expect(closeout.status).toBe("pending");
+      expect(closeout.deploymentId).toBe(7);
+    }
+  });
+
   it("reports failure as fact without retrying", () => {
     const closeout = decideDeploymentCloseout({
       pullRequestNumber: 1,
@@ -365,6 +422,60 @@ describe("decideDeploymentCloseout", () => {
     });
     expect(closeout.status).toBe("succeeded");
     expect(closeout.deploymentId).toBe(9);
+  });
+
+  it("reports failure when a newer deployment failed after an older success", () => {
+    const closeout = decideDeploymentCloseout({
+      pullRequestNumber: 1,
+      mergeSha: MERGE_SHA,
+      changedPaths: ["apps/web/app/page.tsx"],
+      deployments: [
+        deployment(7, MERGE_SHA, "production", [
+          status("success", "2026-10-16T00:00:01Z"),
+        ]),
+        deployment(8, MERGE_SHA, "production", [
+          status("failure", "2026-10-16T00:00:02Z"),
+        ]),
+      ],
+    });
+    expect(closeout.status).toBe("failed");
+    expect(closeout.deploymentId).toBe(8);
+  });
+
+  it("stays pending when a newer deployment is queued after an older success", () => {
+    const closeout = decideDeploymentCloseout({
+      pullRequestNumber: 1,
+      mergeSha: MERGE_SHA,
+      changedPaths: ["apps/web/app/page.tsx"],
+      deployments: [
+        deployment(7, MERGE_SHA, "production", [
+          status("success", "2026-10-16T00:00:01Z"),
+        ]),
+        deployment(8, MERGE_SHA, "production", [
+          status("queued", "2026-10-16T00:00:02Z"),
+        ]),
+      ],
+    });
+    expect(closeout.status).toBe("pending");
+    expect(closeout.deploymentId).toBe(8);
+  });
+
+  it("allows a later success after an older failure", () => {
+    const closeout = decideDeploymentCloseout({
+      pullRequestNumber: 1,
+      mergeSha: MERGE_SHA,
+      changedPaths: ["apps/web/app/page.tsx"],
+      deployments: [
+        deployment(7, MERGE_SHA, "production", [
+          status("failure", "2026-10-16T00:00:01Z"),
+        ]),
+        deployment(8, MERGE_SHA, "production", [
+          status("success", "2026-10-16T00:00:02Z"),
+        ]),
+      ],
+    });
+    expect(closeout.status).toBe("succeeded");
+    expect(closeout.deploymentId).toBe(8);
   });
 
   it("stays pending for queued and in_progress statuses", () => {
@@ -476,6 +587,194 @@ describe("collectDeploymentCloseout", () => {
     );
     expect(closeout.status).toBe("not_required");
     expect(closeout.deploymentRequired).toBe(false);
+  });
+
+  it("reads the merge SHA from the merged timeline event when it is valid", async () => {
+    const timelineSha = "c".repeat(40);
+    const seen: string[] = [];
+    const runner = fakeRunner((endpoint) => {
+      if (endpoint === "repos/lukemyself-hub/SayHear/pulls/42/files") {
+        return {
+          code: 0,
+          stdout: JSON.stringify([{ filename: "docs/guide.md" }]),
+          stderr: "",
+        };
+      }
+      if (endpoint === "repos/lukemyself-hub/SayHear/pulls/42") {
+        return {
+          code: 0,
+          stdout: JSON.stringify({ merged: true, merge_commit_sha: null }),
+          stderr: "",
+        };
+      }
+      if (
+        endpoint === "repos/lukemyself-hub/SayHear/issues/42/timeline"
+      ) {
+        return {
+          code: 0,
+          stdout: JSON.stringify([
+            [{ event: "merged", commit_id: "not-a-sha" }],
+            [{ event: "merged", commit_id: timelineSha }],
+          ]),
+          stderr: "",
+        };
+      }
+      throw new Error(`unexpected endpoint ${endpoint}`);
+    }, seen);
+    const closeout = await collectDeploymentCloseout(42, runner);
+    expect(closeout.mergeSha).toBe(timelineSha);
+    expect(closeout.status).toBe("not_required");
+    expect(
+      seen.some(
+        (line) =>
+          line.includes("--paginate") &&
+          line.includes("--slurp") &&
+          line.includes("/issues/42/timeline"),
+      ),
+    ).toBe(true);
+  });
+
+  it("throws when neither merge_commit_sha nor timeline provides a valid SHA", async () => {
+    for (const timeline of [
+      [{ event: "merged", commit_id: "not-a-sha" }],
+      [{ event: "commented", commit_id: "c".repeat(40) }],
+      [],
+    ]) {
+      const seen: string[] = [];
+      const runner = fakeRunner((endpoint) => {
+        if (endpoint === "repos/lukemyself-hub/SayHear/pulls/42") {
+          return {
+            code: 0,
+            stdout: JSON.stringify({ merged: true, merge_commit_sha: null }),
+            stderr: "",
+          };
+        }
+        if (endpoint === "repos/lukemyself-hub/SayHear/issues/42/timeline") {
+          return { code: 0, stdout: JSON.stringify([timeline]), stderr: "" };
+        }
+        if (endpoint === "repos/lukemyself-hub/SayHear/pulls/42/files") {
+          return {
+            code: 0,
+            stdout: JSON.stringify([{ filename: "docs/guide.md" }]),
+            stderr: "",
+          };
+        }
+        throw new Error(`unexpected endpoint ${endpoint}`);
+      }, seen);
+      await expect(collectDeploymentCloseout(42, runner)).rejects.toThrow(
+        "merge_commit_sha_unavailable",
+      );
+    }
+  });
+
+  it("never falls back to the pull request head SHA", async () => {
+    const seen: string[] = [];
+    const runner = fakeRunner((endpoint) => {
+      if (endpoint === "repos/lukemyself-hub/SayHear/pulls/42") {
+        return {
+          code: 0,
+          stdout: JSON.stringify({
+            merged: true,
+            merge_commit_sha: null,
+            head: { sha: "d".repeat(40) },
+          }),
+          stderr: "",
+        };
+      }
+      if (endpoint === "repos/lukemyself-hub/SayHear/issues/42/timeline") {
+        return { code: 0, stdout: JSON.stringify([[]]), stderr: "" };
+      }
+      if (endpoint === "repos/lukemyself-hub/SayHear/pulls/42/files") {
+        return {
+          code: 0,
+          stdout: JSON.stringify([{ filename: "docs/guide.md" }]),
+          stderr: "",
+        };
+      }
+      throw new Error(`unexpected endpoint ${endpoint}`);
+    }, seen);
+    await expect(collectDeploymentCloseout(42, runner)).rejects.toThrow(
+      "merge_commit_sha_unavailable",
+    );
+  });
+
+  it("flattens slurped files pages instead of parsing them as one list", async () => {
+    const seen: string[] = [];
+    const closeout = await collectDeploymentCloseout(
+      42,
+      endToEndRunner(seen, {
+        files: [
+          [{ filename: "docs/guide.md" }],
+          [{ filename: "apps/web/app/page.tsx" }],
+        ],
+      }),
+    );
+    expect(closeout.deploymentRequired).toBe(true);
+    expect(
+      seen.some(
+        (line) =>
+          line.includes("--paginate") &&
+          line.includes("--slurp") &&
+          line.includes("/pulls/42/files"),
+      ),
+    ).toBe(true);
+  });
+
+  it("stays unverified when slurped files pages are malformed", async () => {
+    const seen: string[] = [];
+    const closeout = await collectDeploymentCloseout(
+      42,
+      endToEndRunner(seen, { files: [[{ filename: 7 }]] }),
+    );
+    expect(closeout.deploymentRequired).toBe(true);
+  });
+
+  it("cannot claim not_required when changed_files exceeds the file list", async () => {
+    const seen: string[] = [];
+    const runner = fakeRunner((endpoint) => {
+      if (endpoint === "repos/lukemyself-hub/SayHear/pulls/42/files") {
+        return {
+          code: 0,
+          stdout: JSON.stringify([[{ filename: "docs/guide.md" }]]),
+          stderr: "",
+        };
+      }
+      if (endpoint === "repos/lukemyself-hub/SayHear/pulls/42") {
+        return {
+          code: 0,
+          stdout: JSON.stringify({
+            merged: true,
+            merge_commit_sha: MERGE_SHA,
+            changed_files: 2,
+          }),
+          stderr: "",
+        };
+      }
+      if (
+        endpoint ===
+        `repos/lukemyself-hub/SayHear/deployments?sha=${MERGE_SHA}&per_page=100`
+      ) {
+        return {
+          code: 0,
+          stdout: JSON.stringify([[]]),
+          stderr: "",
+        };
+      }
+      if (
+        endpoint ===
+        "repos/lukemyself-hub/SayHear/deployments/7/statuses?per_page=100"
+      ) {
+        return {
+          code: 0,
+          stdout: JSON.stringify([[]]),
+          stderr: "",
+        };
+      }
+      throw new Error(`unexpected endpoint ${endpoint}`);
+    }, seen);
+    const closeout = await collectDeploymentCloseout(42, runner);
+    expect(closeout.deploymentRequired).toBe(true);
+    expect(closeout.status).toBe("unverified");
   });
 });
 
