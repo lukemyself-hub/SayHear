@@ -13,6 +13,9 @@ v11 保留在已签发收据的恢复允许列表中。候选不等于安装，�
 实施前须核验实时 main、安装版本、保护设置、worker 有效配置及既有未提交改动。
 本文件其余章节保留既有安装与恢复细节，不代表已符合新契约。
 
+v12 迁移 howto 见 [pr-approval-v12-migration.md](pr-approval-v12-migration.md)（候选未安装）。
+下文“已安装 v11”是历史运行基线快照，不是 v12 目标；是否生效以固定 `status` 为准。
+
 - 两条通路：自动通路只加速现有契约内普通修复与改进；未知授权范围、证据争议与新
   决定走人工通路。人工是完整正常通路，不是例外或降级。
 - 人工语义接管：Luke 可随时主动接管，不必先耗尽自动整改；可纠正影响分类、判断专项
@@ -78,7 +81,7 @@ v11 保留在已签发收据的恢复允许列表中。候选不等于安装，�
 
 ## 状态
 
-### 审批工具链路径的枚举与安装顺序
+### 审批工具链路径的枚举与安装顺序（历史运行收据，非当前指令）
 
 #352 在浏览器通道与合入前延后检查之上收窄了 gate 的「影响未定位」判定：release
 planner 用 `NON_RUNTIME_TOOL_PATHS` 枚举了不配置部署运行时的路径，包括离线评估
@@ -98,7 +101,7 @@ tsconfig.json` 与 `tsc -p tsconfig.g1-tools.json` 均无错误。用同一源�
 同样的 7 个文件；安装本版本不会作废 Luke 在 head `b028f7df` 上已提交的浏览器
 批准。安装后的固定 `status` 回读仍是判断是否生效的唯一依据。
 
-### 迁移专项证据候选
+### 迁移专项证据候选（历史：v7 候选，非当前目标）
 
 #350 的独立候选将策略标识更新为 `sayhear-pr-review-gate:v7`，报告结构保持
 `sayhear-pr-review-report:v3`。该候选从 main 构建，尚未完成受控安装。
@@ -527,7 +530,7 @@ main classic protection rule `84625756` 已保存并由 App API 回读：1 个�
 
 #325 已由 App 于 `2026-10-11T07:37:40Z` 合入，merge SHA `bea67d2739de7cc1c64191d35a9964dd14336f2a`。#258 自动关闭，遗留 ongoing 已清理并回读。对应 Vercel deployment `dpl_GtX8f5k7kP1KScYRMsNy177Nzbom` 为 Production READY，git SHA 一致，生产域名已绑定；登录页和 auth providers 的 HTTP smoke 均为 200。未读取生产私人对话，smoke 不代表聊天功能验收。
 
-每小时本线程 heartbeat `sayhear-pr` 已 ACTIVE，无变化不通知。首次定时执行待核验；已手动在默认会话执行 status/prepare，成功认证，合入后扫描没有候选，未写入其他七个 PR。运行证据存于 `artifacts/pr-approval/operations/2026-10-11-pilot.json`。修改三轮暂停与失败恢复由测试场景验证，实际试运行完成了待补证回写和成功合入，没有人为制造代码缺陷。
+每小时本线程 heartbeat `sayhear-pr` 在 2026-10-11 曾 ACTIVE；当前快照（2026-10-16）为 PAUSED，无变化不通知。首次定时执行待核验；已手动在默认会话执行 status/prepare，成功认证，合入后扫描没有候选，未写入其他七个 PR。运行证据存于 `artifacts/pr-approval/operations/2026-10-11-pilot.json`。修改三轮暂停与失败恢复由测试场景验证，实际试运行完成了待补证回写和成功合入，没有人为制造代码缺陷。
 
 #309 已由 App 合入：分支同步最新 main 后 `validate` run `38128541215` 成功，独立审查结论为 approve（无 P0-P2）。merge SHA `328662a7a3746b83fd905cd96c67105c113bc23e`，Vercel Production deployment `dpl_91MNFTC2Y7day8pgrUnar2Pb7PAy` 为 READY 且 git SHA 一致，生产域名登录页与 providers 均返回 200；Issue #233 自动关闭，遗留 `ongoing` 已清理。非阻断备注：受版本控制的 `eval/continuation-acceptance-1a3b/run/validator-ledger.json` 指纹会因此变旧，需在下次 validator 采集时刷新；没有 CI 读取该文件。
 
@@ -596,7 +599,7 @@ pnpm pr:review-gate:dry-run -- --input <snapshot.json>
 
 App ID、installation ID、slug 和生产授权标记存于 root-owned 本机配置，不是密钥。可信策略同时固定 Actions App 与 `pr-validate.yml` blob SHA。GitHub App 私钥只存于 macOS Keychain，不得传入模型进程、PR checkout 或普通 CI。controller 使用 `service=SayHear PR Approval GitHub App`、`account=lukemyself-hub/SayHear` 查找当前用户 Keychain；macOS CLI 可能以十六进制文本返回条目数据，controller 会先解码并校验 PEM。当前已有密钥已通过 API 认证。曾下载的第 7 把 PEM 已删除；最近提供的路径目前不存在，不要为了它再次生成密钥。
 
-## 定时运行规则
+## 定时运行规则（历史运行记录，当前 PAUSED）
 
 - 每次先读取 status 和 prepare；认证、保护、部署核验失败则停止写入。
 - 合入后确认实际 merged、merge SHA，并清理已关闭关联 Issue 的 ongoing。
