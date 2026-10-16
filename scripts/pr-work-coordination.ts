@@ -105,6 +105,8 @@ export interface WorkFinding {
 export interface SeenSession {
   id: string;
   role: WorkRole;
+  /** Worker model bound when the session attached (receipt model + variant), or null if unrecorded. */
+  model: string | null;
 }
 
 export interface WorkRecord extends WorkIdentity {
@@ -119,12 +121,16 @@ export interface WorkRecord extends WorkIdentity {
 /**
  * Caller-read snapshot of the controller's trusted round/pause ledger. This
  * leaf never persists it as authority; it only refuses new reservations while
- * the ledger says the PR may not take another writer.
+ * the ledger says the PR may not take another writer. `latestReviewedHead`
+ * binds an implementation round to the controller's latest request-changes
+ * marker: null when no request-changes round is recorded yet, otherwise the
+ * exact 40-char head that round reviewed.
  */
 export interface TrustedLedger {
   roundsConsumed: number;
   paused: boolean;
   historyConsistent: boolean;
+  latestReviewedHead: string | null;
 }
 
 export interface ReserveInput extends WorkIdentity {
@@ -146,6 +152,7 @@ export interface AttachInput extends WorkIdentity {
   role: WorkRole;
   sessionId: string;
   workerStateDir?: string | null;
+  model?: string | null;
 }
 
 export interface ReleaseInput extends WorkIdentity {
@@ -180,6 +187,8 @@ export type ReserveResult =
         | "paused"
         | "history_inconsistent"
         | "rounds_exhausted"
+        | "review_not_recorded"
+        | "repeated_finding"
         | "occupied"
         | "too_large"
         | CorruptReason;
@@ -198,6 +207,7 @@ export type AttachResult =
         | "role_mismatch"
         | "state_mismatch"
         | "session_conflict"
+        | "model_changed"
         | "stale_review_session"
         | "history_full"
         | "too_large"
@@ -419,10 +429,21 @@ function checkLedger(value: unknown): TrustedLedger {
     );
   }
   const ledger = value as Record<string, unknown>;
+  const latestReviewedHead = ledger.latestReviewedHead;
+  if (latestReviewedHead === undefined) {
+    throw new PrWorkCoordinationError(
+      "input_invalid",
+      "ledger.latestReviewedHead is required.",
+    );
+  }
   return {
     roundsConsumed: nonNegativeInteger(ledger.roundsConsumed, "ledger.roundsConsumed"),
     paused: flag(ledger.paused, "ledger.paused"),
     historyConsistent: flag(ledger.historyConsistent, "ledger.historyConsistent"),
+    latestReviewedHead:
+      latestReviewedHead === null
+        ? null
+        : hex(latestReviewedHead, 40, "ledger.latestReviewedHead"),
   };
 }
 
@@ -668,23 +689,33 @@ function parseWorkRecord(value: unknown, identity: WorkIdentity): WorkRecord {
   const parsedSessions: SeenSession[] = [];
   for (const session of seenSessions) {
     if (!isRecord(session)) throw corrupt("record seenSessions are malformed.");
-    const allowedSession = new Set(["id", "role"]);
+    const allowedSession = new Set(["id", "role", "model"]);
     for (const field of Object.keys(session)) {
       if (!allowedSession.has(field)) throw corrupt("record seenSessions are malformed.");
     }
     const id = session.id;
     const sessionRole = session.role;
+    const sessionModel = session.model;
     if (
       typeof id !== "string" ||
       id.length === 0 ||
       id.length > SESSION_MAX ||
       (sessionRole !== "implementation" && sessionRole !== "code-review") ||
-      sessionSet.has(id)
+      sessionSet.has(id) ||
+      (sessionModel !== undefined &&
+        sessionModel !== null &&
+        (typeof sessionModel !== "string" ||
+          sessionModel.length === 0 ||
+          sessionModel.length > MODEL_MAX))
     ) {
       throw corrupt("record seenSessions are malformed.");
     }
     sessionSet.add(id);
-    parsedSessions.push({ id, role: sessionRole });
+    parsedSessions.push({
+      id,
+      role: sessionRole,
+      model: (sessionModel ?? null) as string | null,
+    });
   }
   return {
     version: RECORD_VERSION,
@@ -1121,11 +1152,23 @@ export async function reserveWork(
   try {
     return await withTooLarge<ReserveResult>(null, () =>
       withRecord<ReserveResult>(store, ids, async (current) => {
-      const refuse = (reason: "paused" | "history_inconsistent" | "rounds_exhausted" | "occupied" | CorruptReason): { write: null; result: ReserveResult } =>
+      const refuse = (reason: "paused" | "history_inconsistent" | "rounds_exhausted" | "review_not_recorded" | "repeated_finding" | "occupied" | CorruptReason): { write: null; result: ReserveResult } =>
         ({ write: null, result: { ok: false, reason, record: current } });
       if (ledger.paused) return refuse("paused");
       if (!ledger.historyConsistent) return refuse("history_inconsistent");
       if (ledger.roundsConsumed >= MAX_ROUNDS) return refuse("rounds_exhausted");
+      // An implementation fix is bound to the controller's latest
+      // request-changes marker: the review must cover exactly the head being
+      // fixed, otherwise a stale caller ledger could run extra fixes without
+      // any controller review in between. Code-review reservations bypass.
+      if (role === "implementation" && ledger.latestReviewedHead !== startHead) {
+        return refuse("review_not_recorded");
+      }
+      // A recurring confirmed finding after an accepted fix escalates to
+      // human: the next automatic implementation reservation is refused.
+      if (role === "implementation" && (current?.findings.some((finding) => finding.repeatedAfterFix) ?? false)) {
+        return refuse("repeated_finding");
+      }
       if (current?.owner !== null && current?.owner !== undefined) {
         return refuse("occupied");
       }
@@ -1185,10 +1228,11 @@ export async function attachSession(
   const scopeDigest = hex(input.scopeDigest, 64, "scopeDigest");
   const sessionId = text(input.sessionId, "sessionId", SESSION_MAX);
   const workerStateDir = optionalAbsolutePath(input.workerStateDir, "workerStateDir");
+  const model = optionalText(input.model, "model", MODEL_MAX);
   try {
     return await withTooLarge<AttachResult>(null, () =>
       withRecord<AttachResult>(store, ids, async (current) => {
-      const refuse = (reason: "not_found" | "token_mismatch" | "head_mismatch" | "scope_mismatch" | "role_mismatch" | "state_mismatch" | "session_conflict" | "stale_review_session" | "history_full" | "too_large" | CorruptReason): { write: null; result: AttachResult } =>
+      const refuse = (reason: "not_found" | "token_mismatch" | "head_mismatch" | "scope_mismatch" | "role_mismatch" | "state_mismatch" | "session_conflict" | "model_changed" | "stale_review_session" | "history_full" | "too_large" | CorruptReason): { write: null; result: AttachResult } =>
         ({ write: null, result: { ok: false, reason, record: current } });
       if (current === null || current.owner === null) return refuse("not_found");
       const owner = current.owner;
@@ -1208,11 +1252,28 @@ export async function attachSession(
         // another caller's snapshot and probe still invalidates the stale
         // stopped proof under the lock.
         if (current.phase === "verifying") return refuse("stale_review_session");
+        // A resume attach pins the worker model: the receipt model must match
+        // the model stored for the session's prior attempt (seen entry first,
+        // else the prior owner record). A changed model refuses with the
+        // record intact.
+        const priorModel = seen?.model ?? owner.model ?? null;
+        if (priorModel !== null && model !== null && model !== priorModel) {
+          return refuse("model_changed");
+        }
         const resumedGeneration = nextGeneration(owner.generation);
         if (resumedGeneration === null) return refuse("too_large");
+        const resumedSeen =
+          seen === undefined
+            ? [...current.seenSessions, { id: sessionId, role, model }]
+            : model === null || (seen.model ?? null) !== null
+              ? current.seenSessions
+              : current.seenSessions.map((entry) =>
+                  entry.id === sessionId ? { ...entry, model } : entry,
+                );
         const resumedRecord: WorkRecord = {
           ...current,
-          owner: { ...owner, generation: resumedGeneration },
+          owner: { ...owner, generation: resumedGeneration, model: model ?? owner.model },
+          seenSessions: resumedSeen,
         };
         return { write: resumedRecord, result: { ok: true as const, record: resumedRecord, resumed: true } };
       }
@@ -1225,13 +1286,29 @@ export async function attachSession(
       if (current.seenSessions.length >= MAX_SESSION_IDS && !mayReuse) {
         return refuse("history_full");
       }
+      // Rebinding a previously seen implementation session is also a resume:
+      // pin the worker model the same way before recording it.
+      if (mayReuse) {
+        const priorModel = seen?.model ?? null;
+        if (priorModel !== null && model !== null && model !== priorModel) {
+          return refuse("model_changed");
+        }
+      }
       const attachedGeneration = nextGeneration(owner.generation);
       if (attachedGeneration === null) return refuse("too_large");
+      const attachedSeen =
+        seen === undefined
+          ? [...current.seenSessions, { id: sessionId, role, model }]
+          : model === null || (seen.model ?? null) !== null
+            ? current.seenSessions
+            : current.seenSessions.map((entry) =>
+                entry.id === sessionId ? { ...entry, model } : entry,
+              );
       const record: WorkRecord = {
         ...current,
-        owner: { ...owner, sessionId, generation: attachedGeneration },
+        owner: { ...owner, sessionId, generation: attachedGeneration, model: model ?? owner.model },
         phase: "running",
-        seenSessions: mayReuse ? current.seenSessions : [...current.seenSessions, { id: sessionId, role }],
+        seenSessions: attachedSeen,
       };
       return { write: record, result: { ok: true as const, record, resumed: false } };
       }),

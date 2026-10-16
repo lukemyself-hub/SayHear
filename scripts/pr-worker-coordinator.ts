@@ -37,7 +37,7 @@ export interface CoordinatorRequest {
   pullRequestNumber: number;
   head: string;
   changeDigest: string;
-  ledger: { roundsConsumed: number; paused: boolean; historyConsistent: boolean };
+  ledger: { roundsConsumed: number; paused: boolean; historyConsistent: boolean; latestReviewedHead: string | null };
   role: WorkRole;
   worktree: string;
   allowedPaths: string[];
@@ -76,6 +76,11 @@ export function parseCoordinatorRequest(raw: unknown): CoordinatorRequest {
   const ledger = asRecord(v.ledger);
   if (typeof ledger.roundsConsumed !== "number" || !Number.isSafeInteger(ledger.roundsConsumed) || (ledger.roundsConsumed as number) < 0) fail("ledger.roundsConsumed must be a non-negative integer.");
   if (typeof ledger.paused !== "boolean" || typeof ledger.historyConsistent !== "boolean") fail("ledger must carry paused/historyConsistent.");
+  if (!("latestReviewedHead" in ledger)) fail("ledger.latestReviewedHead is required.");
+  const latestReviewedHead = ledger.latestReviewedHead as unknown;
+  if (latestReviewedHead !== null && (typeof latestReviewedHead !== "string" || !HEX40.test(latestReviewedHead.toLowerCase()) || latestReviewedHead.toLowerCase() !== latestReviewedHead)) {
+    fail("ledger.latestReviewedHead must be null or a 40-char lowercase hex head.");
+  }
   if (v.role !== "implementation" && v.role !== "code-review") fail('role must be "implementation" or "code-review".');
   for (const field of ["worktree", "taskFile", "workerStateDir"] as const) {
     if (typeof v[field] !== "string" || !isAbsolute(v[field] as string)) fail(`${field} must be an absolute path.`);
@@ -117,7 +122,7 @@ export function parseCoordinatorRequest(raw: unknown): CoordinatorRequest {
   }
   return {
     repositoryId, pullRequestNumber, head: (v.head as string).toLowerCase(), changeDigest: (v.changeDigest as string).toLowerCase(),
-    ledger: { roundsConsumed: ledger.roundsConsumed as number, paused: ledger.paused as boolean, historyConsistent: ledger.historyConsistent as boolean },
+    ledger: { roundsConsumed: ledger.roundsConsumed as number, paused: ledger.paused as boolean, historyConsistent: ledger.historyConsistent as boolean, latestReviewedHead: latestReviewedHead as string | null },
     role: v.role as WorkRole, worktree: v.worktree as string, allowedPaths, taskFile: v.taskFile as string,
     taskSha256: (v.taskSha256 as string).toLowerCase(),
     workerStateDir: v.workerStateDir as string, expectedAttempt,
@@ -187,7 +192,7 @@ function ownerTokenOf(options: RunOptions): string {
   return token;
 }
 function heldExit(reason: string): number {
-  return ["occupied", "worker_running", "worker_unknown", "session_unknown", "paused", "rounds_exhausted", "history_inconsistent", "not_completed", "still_running", "awaiting_release"].includes(reason) ? 2 : 1;
+  return ["occupied", "worker_running", "worker_unknown", "session_unknown", "paused", "rounds_exhausted", "history_inconsistent", "review_not_recorded", "repeated_finding", "not_completed", "still_running", "awaiting_release"].includes(reason) ? 2 : 1;
 }
 async function git(worktree: string, argv: string[]): Promise<string> {
   const { stdout } = await runExec("git", argv, { cwd: worktree, timeout: 10_000, maxBuffer: 10 * 1024 * 1024 });
@@ -476,12 +481,17 @@ export async function runAttach(request: CoordinatorRequest, options: RunOptions
 }
 export async function runStatus(request: CoordinatorRequest, options: RunOptions): Promise<CliOutcome> {
   const record = await readWork(storeFor(options.stateDir), { repositoryId: request.repositoryId, pullRequestNumber: request.pullRequestNumber });
-  if (record?.owner === null || record?.owner === undefined) return { exitCode: 2, output: { ok: false, reason: "no_owner", probe: "unknown" } };
+  // Findings ride along so a restarted coordinator sees the repeat latch
+  // without another command.
+  const findings = (record?.findings ?? []).map((finding) => ({
+    key: finding.key, status: finding.status, repeatedAfterFix: finding.repeatedAfterFix,
+  }));
+  if (record?.owner === null || record?.owner === undefined) return { exitCode: 2, output: { ok: false, reason: "no_owner", probe: "unknown", findings } };
   if (record.owner.scopeDigest !== computeScopeDigest(request)) return { exitCode: 1, output: { ok: false, reason: "scope_mismatch" } };
-  if (record.owner.sessionId === null) return { exitCode: 2, output: { ok: false, reason: "session_unknown", probe: "unknown" } };
+  if (record.owner.sessionId === null) return { exitCode: 2, output: { ok: false, reason: "session_unknown", probe: "unknown", findings } };
   const probe = await probePrWorkerSession(serviceConfig(options.serviceConfig), { expectedService: request.expectedService, sessionId: record.owner.sessionId });
-  if (probe.state === "unknown") return { exitCode: 2, output: { ok: true, probe: "unknown", reason: probe.reason } };
-  return { exitCode: 0, output: { ok: true, probe: probe.state, sessionId: record.owner.sessionId } };
+  if (probe.state === "unknown") return { exitCode: 2, output: { ok: true, probe: "unknown", reason: probe.reason, findings } };
+  return { exitCode: 0, output: { ok: true, probe: probe.state, sessionId: record.owner.sessionId, findings } };
 }
 export async function runAccept(request: CoordinatorRequest, options: RunOptions): Promise<CliOutcome> {
   const token = ownerTokenOf(options);
