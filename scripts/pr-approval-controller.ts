@@ -118,6 +118,7 @@ export function controllerBuildIdentity(): Readonly<Record<string, unknown>> {
       ? { sourceCommit: "unbundled", sourceDiffSha256: null }
       : __PR_APPROVAL_BUILD_INFO__),
     completionVersion: "sayhear-pr-completion:v1", policyVersion: PR_REVIEW_GATE_POLICY_VERSION,
+    reportVersion: PR_REVIEW_REPORT_VERSION, humanFinalDecisionVersion: HUMAN_FINAL_DECISION_VERSION,
     diffCollectionVersion: "sayhear-pr-diff:v2", baseSyncHandoffVersion: "sayhear-pr-base-sync:v1",
     browserApprovalVersion: BROWSER_APPROVAL_VERSION,
   };
