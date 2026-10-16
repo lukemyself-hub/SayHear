@@ -2642,6 +2642,7 @@ async function serializedControllerFixture(channel: "browser" | "legacy-root") {
       approvedBaseSha: BASE_SHA, requirementDigest: digest, baseRepositoryId: SAYHEAR_REPOSITORY_ID, baseRef: "main", botActorId: REVIEW_BOT_ACTOR_ID,
       reviewId: 20, appId: 98765, policyVersion: PR_REVIEW_GATE_POLICY_VERSION, issueNumbers: [42], integrationMode: "serialized-merge",
       humanChannel: channel === "browser" ? "browser" : "app", humanReviewId: channel === "browser" ? 10 : 20,
+      ...(bound.humanBinding.receipt?.challenge.context.liveness ? { humanLiveness: bound.humanBinding.receipt.challenge.context.liveness } : {}),
       epoch: bound.humanBinding.receipt?.challenge.epoch ?? null, mergeAction: "merge-now",
       reviewIdentity: { diffDigest: frozen.diff.digest, changeDigest: frozen.diff.changeDigest, workflowBlobSha: workflow } } };
   const clock = { now: () => 1_000_000, sleep: async () => {}, random: () => 0 };
@@ -3147,6 +3148,76 @@ describe("guarded serialized controller completion", () => {
     expect(snapshot.evidence.find((entry) => entry.checkId === "baseline:test")).toMatchObject({ result: "planned", source: { runId: 556 } });
     await expect(guardImmediateMerge(f.config, f.receipt.identity)).rejects.toThrow("fresh_merge_gate_blocked");
     expect(f.writes.some((write) => write.includes("/pulls/321/merge") || write.includes("/labels"))).toBe(false);
+  });
+
+  function withSavedReport(f: Awaited<ReturnType<typeof serializedControllerFixture>>, change: (report: ModelReviewReport) => ModelReviewReport) {
+    const check = f.reviewChecks.find((entry) => entry.id === 9002) as { output: { summary: string } };
+    check.output.summary = check.output.summary.replace(/report=([A-Za-z0-9_-]+)/, (_, encoded: string) =>
+      `report=${Buffer.from(JSON.stringify(change(JSON.parse(Buffer.from(encoded, "base64url").toString("utf8"))))).toString("base64url")}`);
+  }
+
+  function asLegacyBrowserApproval(f: Awaited<ReturnType<typeof serializedControllerFixture>>) {
+    const state = f.browserApprovalStore.value;
+    if (!state?.challenge || !state.receipt) throw new Error("Expected a bound browser approval");
+    const { liveness: _liveness, ...context } = state.challenge.context;
+    const challenge = { ...state.challenge, context };
+    f.browserApprovalStore.value = { ...state, challenge, receipt: { ...state.receipt, challenge } };
+    const { humanLiveness: _humanLiveness, ...identity } = f.receipt.identity;
+    return identity;
+  }
+
+  it("binds Luke's later Approve through a new final-decision challenge", async () => {
+    const f = await serializedControllerFixture("browser");
+    expect(f.browserApprovalStore.value?.challenge?.context.liveness).toBe("final-decision-v1");
+    expect(f.receipt.identity.humanLiveness).toBe("final-decision-v1");
+    const after = Date.parse(String(f.reviews.find((review) => review.id === 10)?.submitted_at)) + 1_000;
+    f.reviews.push({ id: 30, state: "COMMENTED", body: "Note", commit_id: HEAD_SHA, user: LUKE_IDENTITY, submitted_at: new Date(after).toISOString() });
+    const snapshot = await readSnapshot(f.config, 321);
+    expect(snapshot.humanBinding.receipt?.reviewId).toBe(10);
+    await expect(guardImmediateMerge(f.config, f.receipt.identity)).resolves.toBeDefined();
+  });
+
+  it("lets a live final decision route past automatic human-review reasons", async () => {
+    const f = await serializedControllerFixture("browser");
+    withSavedReport(f, (report) => ({ ...report, riskFlags: { ...report.riskFlags, productDefinitionChanged: true } }));
+    await expect(guardImmediateMerge(f.config, f.receipt.identity)).resolves.toBeDefined();
+  });
+
+  it("keeps the automatic gate for a stored legacy browser approval", async () => {
+    const f = await serializedControllerFixture("browser");
+    const identity = asLegacyBrowserApproval(f);
+    const epoch = f.browserApprovalStore.value?.epoch;
+    const snapshot = await readSnapshot(f.config, 321);
+    // The upgrade alone neither drifts nor re-interprets the stored challenge.
+    expect(snapshot.humanBinding.receipt?.challenge.context.liveness).toBeUndefined();
+    expect(f.browserApprovalStore.value?.epoch).toBe(epoch);
+    withSavedReport(f, (report) => ({ ...report, riskFlags: { ...report.riskFlags, productDefinitionChanged: true } }));
+    await expect(guardImmediateMerge(f.config, identity)).rejects.toThrow("fresh_merge_gate_blocked");
+  });
+
+  it("keeps last-review revocation for a stored legacy browser approval", async () => {
+    const f = await serializedControllerFixture("browser");
+    asLegacyBrowserApproval(f);
+    const after = Date.parse(String(f.reviews.find((review) => review.id === 10)?.submitted_at)) + 1_000;
+    f.reviews.push({ id: 30, state: "COMMENTED", body: "Note", commit_id: HEAD_SHA, user: LUKE_IDENTITY, submitted_at: new Date(after).toISOString() });
+    const snapshot = await readSnapshot(f.config, 321);
+    expect(snapshot.humanBinding.receipt).toBeNull();
+    expect(f.browserApprovalStore.value?.challenge).toBeNull();
+  });
+
+  it("rejects a completion identity whose liveness differs from the live receipt", async () => {
+    const f = await serializedControllerFixture("browser");
+    const { humanLiveness: _humanLiveness, ...identity } = f.receipt.identity;
+    await expect(guardImmediateMerge(f.config, identity)).rejects.toThrow("human_review_binding_changed");
+  });
+
+  it("never routes a revoked final decision past the gate", async () => {
+    const f = await serializedControllerFixture("browser");
+    withSavedReport(f, (report) => ({ ...report, riskFlags: { ...report.riskFlags, productDefinitionChanged: true } }));
+    const after = Date.parse(String(f.reviews.find((review) => review.id === 10)?.submitted_at)) + 1_000;
+    f.reviews.push({ id: 30, state: "CHANGES_REQUESTED", body: "Stop", commit_id: HEAD_SHA, user: LUKE_IDENTITY, submitted_at: new Date(after).toISOString() });
+    await expect(guardImmediateMerge(f.config, f.receipt.identity)).rejects.toThrow("fresh_merge_gate_blocked");
+    expect(f.writes.some((write) => write.includes("/pulls/321/merge"))).toBe(false);
   });
 
   it("rejects a dismissed human review during guarded recovery", async () => {

@@ -22,6 +22,8 @@ import {
   BROWSER_APPROVAL_VERSION,
   LUKE_IDENTITY,
   authorizationChannel,
+  browserContextDigest,
+  decisiveLukeReview,
   latestLukeReview,
   readBrowserAuthorization,
   SignedBrowserApprovalStore,
@@ -37,6 +39,8 @@ import { pathToFileURL } from "node:url";
 
 import {
   evaluatePrReviewGate,
+  HUMAN_FINAL_DECISION_VERSION,
+  type HumanFinalDecisionBinding,
   integrationModeOf,
   PR_REVIEW_GATE_CHECK_NAME,
   PR_REVIEW_GATE_LEGACY_POLICY_VERSION as V4_POLICY_VERSION,
@@ -2492,7 +2496,7 @@ export async function readHumanBinding(
       previous.challenge.context.baseSha, currentMain, input.changedPaths ?? input.changedFiles.map((file) => file.path))) {
     await readBrowserAuthorization(config.browserApprovalStore, input.number, null, input.reviews, false, input.now);
   }
-  const context = {
+  const legacyContext = {
     ...(serialized ? { reviewBinding: "head-v2" as const } : {}),
     repositoryId: SAYHEAR_REPOSITORY_ID, repositoryNodeId: input.repositoryNodeId,
     pullRequestNumber: input.number, pullRequestNodeId: recordString(input.pullRequest, "node_id"),
@@ -2503,6 +2507,13 @@ export async function readHumanBinding(
     protectedPaths: [...protectedReviewPaths(input.changedFiles)],
     validateWorkflowBlobSha: await readHeadWorkflowBlob(config.api, input.headSha),
   };
+  // New challenges opt into final-decision liveness. A stored challenge that
+  // predates it keeps its exact context, so the upgrade alone never drifts or
+  // re-interprets an existing approval.
+  const stored = (await config.browserApprovalStore.read(input.number))?.challenge ?? null;
+  const context = stored && stored.context.liveness === undefined &&
+    browserContextDigest(stored.context) === browserContextDigest(legacyContext)
+    ? legacyContext : { ...legacyContext, liveness: "final-decision-v1" as const };
   const authorization = await readBrowserAuthorization(
     config.browserApprovalStore, input.number, context, input.reviews, input.freeze, input.now ?? Date.now(),
   );
@@ -2847,12 +2858,28 @@ function evaluateSnapshot(
   const input = parsePrReviewGateInput(
     createModelReviewInput(config, snapshot, report),
   );
+  // Only a live verified final-decision receipt binds the human route; the
+  // gate re-checks every field against live input and trusted policy.
+  const receipt = snapshot.humanBinding.channel === "browser" ? snapshot.humanBinding.receipt : null;
+  const finalContext = receipt?.challenge.context.liveness === "final-decision-v1" ? receipt.challenge.context : null;
+  const humanFinalDecision: HumanFinalDecisionBinding | null = receipt && finalContext ? {
+    version: HUMAN_FINAL_DECISION_VERSION,
+    repositoryId: finalContext.repositoryId,
+    pullRequestNumber: finalContext.pullRequestNumber,
+    headSha: finalContext.headSha,
+    requirementDigest: finalContext.requirementDigest,
+    validateWorkflowBlobSha: finalContext.validateWorkflowBlobSha,
+    reviewerActorId: finalContext.reviewer.id,
+    reviewerLogin: finalContext.reviewer.login,
+    reviewId: receipt.reviewId,
+  } : null;
   const policy = {
     ...config.policy,
     validateWorkflowBlobSha: snapshot.trustedWorkflowBlobSha,
     humanApprovedPaths: snapshot.humanBinding.paths,
     humanApprovedNoRuntimeImpact: snapshot.humanBinding.noRuntimeImpact,
     humanApprovalChannel: snapshot.humanBinding.channel,
+    ...(humanFinalDecision ? { humanFinalDecision } : {}),
   };
   return { input, gate: evaluatePrReviewGate(input, policy) };
 }
@@ -4289,7 +4316,9 @@ async function readMergedEventCommitSha(api: GitHubApi, pullRequestNumber: numbe
 // human approval so a revocation is never carried into a later action.
 function assertLiveBrowserApproval(reviews: readonly GitHubReview[], identity: CompletionIdentity): void {
   let latest;
-  try { latest = latestLukeReview(reviews); }
+  // Final-decision receipts ignore trailing COMMENTED reviews; legacy
+  // receipts keep exact last-review revocation.
+  try { latest = identity.humanLiveness === "final-decision-v1" ? decisiveLukeReview(reviews) : latestLukeReview(reviews); }
   catch { throw new CompletionMismatch("human_review_metadata_invalid"); }
   if (!latest || latest.id !== identity.humanReviewId || latest.state !== "APPROVED" || latest.headSha !== identity.headSha) {
     throw new CompletionMismatch("human_review_revoked");
@@ -4393,10 +4422,12 @@ export async function guardImmediateMerge(config: ControllerConfig, identity: Co
   if (browserAuthorizationRequired(snapshot.humanBinding, snapshot.gateInput.pullRequest.changedFiles)) {
     const human = snapshot.humanBinding.receipt;
     if (identity.humanChannel !== "browser" || !human || human.reviewId !== identity.humanReviewId || human.challenge.epoch !== identity.epoch ||
+        human.challenge.context.liveness !== identity.humanLiveness ||
         (identity.integrationMode === "serialized-merge" && human.challenge.context.reviewBinding !== "head-v2")) throw new CompletionMismatch("human_review_binding_changed");
   } else if (identity.humanChannel === "browser") {
     const human = snapshot.humanBinding.receipt;
-    if (!human || human.reviewId !== identity.humanReviewId || human.challenge.epoch !== identity.epoch) throw new CompletionMismatch("human_review_binding_changed");
+    if (!human || human.reviewId !== identity.humanReviewId || human.challenge.epoch !== identity.epoch ||
+        human.challenge.context.liveness !== identity.humanLiveness) throw new CompletionMismatch("human_review_binding_changed");
   }
   const approval = await findExistingAppReview(config, report);
   if (!approval || approval.id !== identity.reviewId || approval.state !== "APPROVED" || appReviewOutcomeForIdentity(approval.body, report) !== "approve") throw new CompletionMismatch("reviewer_mismatch");
@@ -4899,6 +4930,7 @@ async function reportReviewResult(
       issueNumbers: freshSnapshot.gateInput.issues.filter((issue) => !freshSnapshot.gateInput.pullRequest.keepOpenIssueNumbers.includes(issue.number)).map((issue) => issue.number),
       humanChannel: browserReceipt === null ? "app" : "browser",
       humanReviewId: browserReceipt?.reviewId ?? approval.id,
+      ...(browserReceipt?.challenge.context.liveness === "final-decision-v1" ? { humanLiveness: "final-decision-v1" as const } : {}),
       epoch: browserReceipt?.challenge.epoch ?? null,
       integrationMode: integrationModeOf(freshSnapshot.gateInput),
       ...(mergeAction === "merge-now" ? { mergeAction: "merge-now" as const, reviewIdentity: {

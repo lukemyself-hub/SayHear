@@ -131,6 +131,14 @@ export function latestLukeReview(reviews: readonly unknown[]): SubmittedLukeRevi
   const relevant = sortedLukeReviews(reviews);
   return relevant.at(-1) ?? null;
 }
+function lastDecisive(ordered: readonly SubmittedLukeReview[]): SubmittedLukeReview | null {
+  for (let i = ordered.length - 1; i >= 0; i--) if (ordered[i]!.state !== "COMMENTED") return ordered[i]!;
+  return null;
+}
+// Latest non-COMMENTED review; identity/time/order still cover every review.
+export function decisiveLukeReview(reviews: readonly unknown[]): SubmittedLukeReview | null {
+  return lastDecisive(sortedLukeReviews(reviews));
+}
 
 // Every read re-derives the current context and invalidates observed drift.
 // Only the prepare path freezes a new epoch; scan and submit reuse it.
@@ -150,10 +158,7 @@ export async function readBrowserAuthorization(
     throw error;
   }
   const latest = ordered.at(-1) ?? null;
-  let decisive: SubmittedLukeReview | null = null;
-  for (let i = ordered.length - 1; i >= 0; i--) {
-    if (ordered[i]!.state !== "COMMENTED") { decisive = ordered[i]!; break; }
-  }
+  const decisive = lastDecisive(ordered);
   const drift = current?.challenge && (!context || browserContextDigest(current.challenge.context) !== browserContextDigest(context));
   // Old signed receipts keep old exact semantics: only a stored
   // final-decision-v1 challenge ignores trailing COMMENTED reviews, and only

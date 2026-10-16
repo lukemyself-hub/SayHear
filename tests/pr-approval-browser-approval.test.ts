@@ -496,6 +496,47 @@ describe("browser approval channel", () => {
     expect(closes).toBe(0);
   });
 
+  it.each([
+    ["final-decision-v1", "COMMENTED", true],
+    [undefined, "COMMENTED", false],
+    ["final-decision-v1", "CHANGES_REQUESTED", false],
+    ["final-decision-v1", "DISMISSED", false],
+  ] as const)("confirms a merged %s browser approval after a trailing %s review: %s", async (liveness, trailing, accepted) => {
+    const identity: CompletionRecord["identity"] = {
+      repositoryId: 1312399710, pullRequestNumber: 400, pullRequestNodeId: "PR_node", headSha: HEAD, approvedBaseSha: BASE,
+      requirementDigest: REQUIREMENT, baseRepositoryId: 1312399710, baseRef: "main", botActorId: 999, reviewId: 9, appId: 123,
+      policyVersion: PR_REVIEW_GATE_POLICY_VERSION, issueNumbers: [1], humanChannel: "browser", humanReviewId: 10, epoch: "epoch-1",
+      ...(liveness ? { humanLiveness: liveness } : {}),
+    };
+    const merged = { number: 400, node_id: "PR_node", state: "closed", merged: true, merge_commit_sha: "9".repeat(40),
+      head: { sha: HEAD, repo: { id: 1312399710 } }, base: { ref: "main", sha: BASE, repo: { id: 1312399710 } } };
+    const appApproval = { id: 9, state: "APPROVED", commit_id: HEAD, user: { id: 999, login: "sayhear[bot]" },
+      body: `<!-- sayhear-pr-auto-approval-review:v2 pr=400 head=${HEAD} base=${BASE} requirement=${REQUIREMENT} outcome=approve -->` };
+    const reviews = [appApproval, lukeReview({ id: 10, submitted_at: "2026-10-14T00:00:10Z" }),
+      lukeReview({ id: 11, state: trailing, submitted_at: "2026-10-14T00:00:20Z" })];
+    const api: GitHubApi = {
+      request: async <T>() => structuredClone(merged) as T,
+      pages: async <T>() => structuredClone(reviews) as unknown as T[],
+      bytes: async () => new Uint8Array(),
+    };
+    if (accepted) await expect(confirmCompletionMerge(api, identity)).resolves.toBe("9".repeat(40));
+    else await expect(confirmCompletionMerge(api, identity)).rejects.toThrow("human_review_revoked");
+  });
+
+  it("rejects final-decision liveness on a non-browser completion identity", () => {
+    const record = {
+      version: 2, phase: "merge_unconfirmed", attempts: 0, nextRetryAt: 0, reason: null, mergeSha: null,
+      identity: {
+        repositoryId: 1312399710, pullRequestNumber: 400, pullRequestNodeId: "PR_node", headSha: HEAD, approvedBaseSha: BASE,
+        requirementDigest: REQUIREMENT, baseRepositoryId: 1312399710, baseRef: "main", botActorId: 999, reviewId: 9, appId: 123,
+        policyVersion: PR_REVIEW_GATE_POLICY_VERSION, issueNumbers: [1], humanChannel: "app", humanLiveness: "final-decision-v1",
+      },
+    };
+    expect(() => parseCompletionRecord(record)).toThrow("completion_schema_invalid");
+    expect(() => parseCompletionRecord({ ...record, identity: { ...record.identity, humanChannel: "browser", humanLiveness: "v2" } })).toThrow("completion_schema_invalid");
+    expect(parseCompletionRecord({ ...record, identity: { ...record.identity, humanChannel: "browser" } }).identity.humanLiveness).toBe("final-decision-v1");
+  });
+
   it("includes inline comment changes and excludes every top-level review record from v5 requirements", () => {
     const comments: GitHubComment[] = [{ id: 1, body: "inline", user: { id: 5, login: "someone" }, created_at: "t1", updated_at: "t1" }];
     const approval: BindingReview = { id: 7, body: "approve", state: "APPROVED", commit_id: HEAD, user: { id: LUKE_IDENTITY.id, login: LUKE_IDENTITY.login } };

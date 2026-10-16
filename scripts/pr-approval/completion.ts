@@ -18,6 +18,8 @@ export type CompletionIdentity = Readonly<{
   // Absent on v4 receipts, which always used the App review channel.
   humanChannel?: "app" | "browser";
   humanReviewId?: number;
+  // Absent means the browser receipt used last-review revocation semantics.
+  humanLiveness?: "final-decision-v1";
   epoch?: string | null;
   integrationMode?: IntegrationMode;
   reviewIdentity?: Readonly<{
@@ -81,6 +83,7 @@ export function parseCompletionRecord(value: unknown): CompletionRecord {
   const reviewIdentity = identity.reviewIdentity;
   if (reviewIdentity !== undefined && !record(reviewIdentity)) throw new Error("completion_schema_invalid");
   if (identity.mergeAction !== undefined && identity.mergeAction !== "merge-now") throw new Error("completion_schema_invalid");
+  if (identity.humanLiveness !== undefined && (identity.humanLiveness !== "final-decision-v1" || identity.humanChannel !== "browser")) throw new Error("completion_schema_invalid");
   if (value.mergeWriteState !== undefined &&
       !["not-sent", "uncertain", "rejected", "accepted"].includes(string(value.mergeWriteState))) throw new Error("completion_schema_invalid");
   if (!Array.isArray(identity.issueNumbers) || identity.issueNumbers.length > 100 || (version === 1 && identity.issueNumbers.length === 0)) throw new Error("completion_schema_invalid");
@@ -98,6 +101,7 @@ export function parseCompletionRecord(value: unknown): CompletionRecord {
       issueNumbers: identity.issueNumbers.map(positive),
       humanChannel: identity.humanChannel === "browser" ? "browser" : "app",
       humanReviewId: identity.humanReviewId === undefined ? positive(identity.reviewId) : positive(identity.humanReviewId),
+      ...(identity.humanLiveness === "final-decision-v1" ? { humanLiveness: "final-decision-v1" as const } : {}),
       epoch: identity.epoch === undefined || identity.epoch === null ? null : string(identity.epoch),
       integrationMode: completionIntegrationMode(identity.integrationMode),
       ...(record(reviewIdentity) ? { reviewIdentity: {
