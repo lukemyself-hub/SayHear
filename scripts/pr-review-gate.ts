@@ -1840,11 +1840,15 @@ export function evaluatePrReviewGate(
 
     // A revoked automatic route stays revoked: a dismissed or old-head human
     // approval cannot fall back to auto, and a fresh positive scope cannot
-    // excuse the trusted controller's explicit human requirement.
+    // excuse the trusted controller's explicit human requirement. The reason
+    // names the action Luke has to take, because this fires precisely when he
+    // cannot approve yet: his earlier approval is stale or dismissed, and no
+    // current decision exists to satisfy it.
     if (policy.humanDecisionRequired === true) {
       return outcome(input, "human_decision", {
         code: "human_decision_required",
-        message: "The trusted controller requires a current human final decision for this PR.",
+        message:
+          "Luke already decided on this PR with an approval on an older head, requested changes, or a dismissed review. Approve again on the current head once the PR's review challenge has been prepared.",
       });
     }
 
@@ -2145,11 +2149,17 @@ export function evaluatePrReviewGate(
       message: "Ordinary merges trigger production deployment, but that effect is not authorized.",
     });
   }
-  // Same checked context the scope judgment used. A context that no longer names
-  // the live head and base is dropped here too, so a self-consistent but stale
-  // pair of context and assessment can never reach the provider judgment. The
-  // scope check above already returns on that input; dropping it here as well
-  // keeps one rule instead of two that could drift.
+  // Same checked context the scope judgment used, and for the same reason: a
+  // context that no longer names the live head and base is not evidence about
+  // this diff, so it is dropped rather than paired with a self-consistent but
+  // stale assessment. On the automatic route the scope check above has already
+  // returned on that input, because the scope judgment reads the same dropped
+  // context first. The manual route never reaches that check, so this is the
+  // only place the stale context is refused there. That refusal costs nothing on
+  // this route: every consumer of `plan` below is `!manual`-gated and the manual route
+  // requires the fixed baseline, so the drop is here to keep one binding rule
+  // for the plan rather than because the plan would otherwise act on a stale
+  // context.
   const boundContext = gateBindingContext(input);
   const providerInput: ProviderReviewInput | undefined =
     boundContext === undefined && input.review.providerBehavior === undefined
