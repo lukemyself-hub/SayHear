@@ -66,6 +66,7 @@ import {
 import type { IntegrationRefreshRecord } from "../scripts/pr-approval/integration-refresh.ts";
 import type { MergeRefRebuildRecord } from "../scripts/pr-approval/merge-ref-rebuild.ts";
 import type { CompletionRecord } from "../scripts/pr-approval/completion.ts";
+import { parseCompletionRecord } from "../scripts/pr-approval/completion.ts";
 import type { BrowserApprovalStore, BrowserState } from "../scripts/pr-approval/browser-approval.ts";
 import { preMergeDeferralFor } from "../scripts/daily-release-validation.ts";
 
@@ -865,7 +866,24 @@ describe("PR approval controller", () => {
     expect(requested).toHaveLength(3);
     await expect(resolveLinkedIssues(new StubApi(() => ({ number: 44, pull_request: {} })), {
       title: "PR #44", body: "",
-    } as Parameters<typeof resolveLinkedIssues>[1])).rejects.toThrow("at least one Issue");
+    } as Parameters<typeof resolveLinkedIssues>[1])).resolves.toEqual([]);
+  });
+
+  it("resolves no references to an empty collection without an Issue lookup", async () => {
+    const api = new StubApi(() => { throw new Error("No Issue lookup is allowed without references"); });
+    await expect(resolveLinkedIssues(api, {
+      title: "Controller safety repair", body: "No links here.",
+    } as Parameters<typeof resolveLinkedIssues>[1])).resolves.toEqual([]);
+  });
+
+  it("propagates API failures for referenced Issues instead of returning empty", async () => {
+    const api = new StubApi((path) => {
+      if (path.endsWith("/issues/42")) throw new GitHubApiError(404, "GET", path);
+      throw new Error(`Unexpected lookup: ${path}`);
+    });
+    await expect(resolveLinkedIssues(api, {
+      title: "Fix #42", body: "",
+    } as Parameters<typeof resolveLinkedIssues>[1])).rejects.toMatchObject({ status: 404 });
   });
 
   it("waits for merge without closing any Issue when auto-merge is only enabled", async () => {

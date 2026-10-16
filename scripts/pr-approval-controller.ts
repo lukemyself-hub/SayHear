@@ -1891,11 +1891,8 @@ export async function resolveLinkedIssues(
     );
     if (!("pull_request" in item)) issues.push(item as GitHubIssue);
   }
-  if (issues.length === 0) {
-    throw new Error(
-      "The PR must reference at least one Issue in SayHear.",
-    );
-  }
+  // An empty collection is not authorization to merge: automatic
+  // eligibility, scan, and manual paths decide that separately.
   return issues.sort((left, right) => left.number - right.number);
 }
 
