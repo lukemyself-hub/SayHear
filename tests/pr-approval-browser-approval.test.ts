@@ -15,6 +15,7 @@ import {
   parseBrowserReceipt,
   parseBrowserState,
   readBrowserAuthorization,
+  reconcileBrowserScope,
   SignedBrowserApprovalStore,
   type BrowserApprovalStore,
   type BrowserContext,
@@ -308,13 +309,12 @@ describe("browser approval channel", () => {
     expect(drifted.challenge).toBeNull();
   });
 
-  it("still revokes a final-decision approval after head, diff, scope or workflow drift", async () => {
+  it("still revokes a final-decision approval after head, diff, path or workflow drift", async () => {
     const finalContext = context({ liveness: "final-decision-v1" });
     for (const next of [
       null,
       context({ liveness: "final-decision-v1", headSha: NEXT_HEAD }),
       context({ liveness: "final-decision-v1", diffDigest: "2".repeat(64) }),
-      context({ liveness: "final-decision-v1", requirementDigest: NEXT_REQUIREMENT }),
       context({ liveness: "final-decision-v1", validateWorkflowBlobSha: "3".repeat(40) }),
       context({ liveness: "final-decision-v1", protectedPaths: ["scripts/another.ts"] }),
     ]) {
@@ -327,6 +327,50 @@ describe("browser approval channel", () => {
       expect(invalid.challenge).toBeNull();
       expect((await readBrowserAuthorization(store, 400, finalContext, [lukeReview()], false, Date.parse("2026-10-14T00:00:13Z"))).receipt).toBeNull();
     }
+  });
+
+  it("withholds rather than revokes a final decision when the requirement changes", async () => {
+    const store = new MemoryBrowserStore();
+    const finalContext = context({ liveness: "final-decision-v1" });
+    const changed = context({ liveness: "final-decision-v1", requirementDigest: NEXT_REQUIREMENT });
+    await readBrowserAuthorization(store, 400, finalContext, [], true, Date.parse("2026-10-14T00:00:05Z"));
+    const bound = await readBrowserAuthorization(store, 400, finalContext, [lukeReview()], false, Date.parse("2026-10-14T00:00:11Z"));
+    expect(bound.coveredRequirementDigest).toBe(REQUIREMENT);
+    const withheld = await readBrowserAuthorization(store, 400, changed, [lukeReview()], false, Date.parse("2026-10-14T00:00:12Z"));
+    expect(withheld.receipt?.reviewId).toBe(10);
+    expect(withheld.coveredRequirementDigest).toBe(REQUIREMENT);
+    const epoch = withheld.challenge!.epoch;
+
+    await reconcileBrowserScope(store, 400, { epoch, approvedRequirementDigest: REQUIREMENT, verdict: "unknown" }, NEXT_REQUIREMENT);
+    expect((await readBrowserAuthorization(store, 400, changed, [lukeReview()], false)).coveredRequirementDigest).toBe(REQUIREMENT);
+    // A replayed verdict for another epoch is inert.
+    await reconcileBrowserScope(store, 400, { epoch: "other", approvedRequirementDigest: REQUIREMENT, verdict: "material" }, NEXT_REQUIREMENT);
+    expect((await readBrowserAuthorization(store, 400, changed, [lukeReview()], false)).receipt?.reviewId).toBe(10);
+    await expect(reconcileBrowserScope(store, 400, { epoch, approvedRequirementDigest: NEXT_REQUIREMENT, verdict: "unchanged" }, NEXT_REQUIREMENT))
+      .rejects.toThrow("browser_scope_reconciliation_mismatch");
+    await reconcileBrowserScope(store, 400, { epoch, approvedRequirementDigest: REQUIREMENT, verdict: "unchanged" }, NEXT_REQUIREMENT);
+    expect((await readBrowserAuthorization(store, 400, changed, [lukeReview()], false)).coveredRequirementDigest).toBe(NEXT_REQUIREMENT);
+
+    await reconcileBrowserScope(store, 400, { epoch, approvedRequirementDigest: REQUIREMENT, verdict: "material" }, NEXT_REQUIREMENT);
+    const revoked = await readBrowserAuthorization(store, 400, changed, [lukeReview()], false);
+    expect(revoked.receipt).toBeNull();
+    expect(revoked.challenge).toBeNull();
+  });
+
+  it("keeps requirement drift revoking legacy browser approvals and refuses legacy reconciliation", async () => {
+    const store = new MemoryBrowserStore();
+    await readBrowserAuthorization(store, 400, context(), [], true, Date.parse("2026-10-14T00:00:05Z"));
+    const bound = await readBrowserAuthorization(store, 400, context(), [lukeReview()], false, Date.parse("2026-10-14T00:00:11Z"));
+    await expect(reconcileBrowserScope(store, 400, { epoch: bound.challenge!.epoch, approvedRequirementDigest: REQUIREMENT, verdict: "unchanged" }, NEXT_REQUIREMENT))
+      .rejects.toThrow("browser_scope_reconciliation_mismatch");
+    const drifted = await readBrowserAuthorization(store, 400, context({ requirementDigest: NEXT_REQUIREMENT }), [lukeReview()], false);
+    expect(drifted.receipt).toBeNull();
+    expect(drifted.challenge).toBeNull();
+  });
+
+  it("rejects a stored scope attestation without a final-decision receipt", () => {
+    expect(() => parseBrowserState({ version: 1, pullRequestNumber: 400, epoch: "e", challenge: null, receipt: null,
+      scopeRequirementDigest: NEXT_REQUIREMENT })).toThrow("browser_scope_invalid");
   });
 
   it("keeps final-decision liveness orthogonal to head-v2 base advancement", async () => {

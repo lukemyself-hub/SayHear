@@ -26,8 +26,10 @@ import {
   decisiveLukeReview,
   latestLukeReview,
   readBrowserAuthorization,
+  reconcileBrowserScope,
   SignedBrowserApprovalStore,
   type BrowserApprovalStore,
+  type ScopeReconciliation,
   type BrowserChallenge,
   type BrowserReceipt,
 } from "./pr-approval/browser-approval.ts";
@@ -306,6 +308,8 @@ export type ModelReviewReport = Readonly<{
   capability: PrReviewGateInput["review"]["capability"];
   riskFlags: PrReviewGateInput["review"]["riskFlags"];
   findings: PrReviewGateInput["review"]["findings"];
+  // Coordinator verdict on requirement changes after Luke's final decision.
+  scopeReconciliation?: ScopeReconciliation;
 }>;
 
 type ReviewPacket = Readonly<{
@@ -336,6 +340,10 @@ type ReviewPacket = Readonly<{
     frozenAt: number | null;
     epoch: string | null;
     reviewId: number | null;
+    liveness: "final-decision-v1" | null;
+    // A differing covered digest needs the coordinator's scopeReconciliation.
+    approvedRequirementDigest: string | null;
+    coveredRequirementDigest: string | null;
   }>;
 }>;
 
@@ -348,6 +356,8 @@ export type HumanReviewBinding = Readonly<{
   validateWorkflowBlobSha: string | null;
   receipt: BrowserReceipt | null;
   challenge: BrowserChallenge | null;
+  // Requirement digest Luke's browser decision currently covers.
+  coveredRequirementDigest?: string;
 }>;
 const NO_HUMAN_BINDING: HumanReviewBinding = Object.freeze({
   channel: "unknown", paths: [], noRuntimeImpact: false, validateWorkflowBlobSha: null, receipt: null, challenge: null,
@@ -2455,6 +2465,8 @@ async function readHeadWorkflowBlob(api: GitHubApi, headSha: string): Promise<st
   return file.sha.toLowerCase();
 }
 
+type SubmittedScopeReconciliation = Readonly<{ reconciliation: ScopeReconciliation; reviewedRequirementDigest: string }>;
+
 export async function readHumanBinding(
   config: ControllerConfig,
   input: Readonly<{
@@ -2471,6 +2483,7 @@ export async function readHumanBinding(
     now?: number;
     currentMainSha?: string;
     changedPaths?: readonly string[];
+    scopeReconciliation?: SubmittedScopeReconciliation;
   }>,
 ): Promise<HumanReviewBinding> {
   const channel = authorizationChannel(input.pullRequest.user);
@@ -2514,9 +2527,17 @@ export async function readHumanBinding(
   const context = stored && stored.context.liveness === undefined &&
     browserContextDigest(stored.context) === browserContextDigest(legacyContext)
     ? legacyContext : { ...legacyContext, liveness: "final-decision-v1" as const };
-  const authorization = await readBrowserAuthorization(
-    config.browserApprovalStore, input.number, context, input.reviews, input.freeze, input.now ?? Date.now(),
+  const store = config.browserApprovalStore;
+  const read = () => readBrowserAuthorization(
+    store, input.number, context, input.reviews, input.freeze, input.now ?? Date.now(),
   );
+  let authorization = await read();
+  // A verdict counts only for the exact live requirement the coordinator read.
+  const scope = input.scopeReconciliation;
+  if (authorization.receipt && scope && scope.reviewedRequirementDigest === input.requirement) {
+    await reconcileBrowserScope(store, input.number, scope.reconciliation, input.requirement);
+    authorization = await read();
+  }
   if (!authorization.receipt) return { channel: "browser", paths: [], noRuntimeImpact: false, validateWorkflowBlobSha: null, receipt: null, challenge: authorization.challenge };
   // Browser channel keeps noRuntimeImpact false. The approval binds exact paths
   // and the reviewed workflow blob only; it never classifies product risk.
@@ -2527,6 +2548,7 @@ export async function readHumanBinding(
     validateWorkflowBlobSha: authorization.receipt.challenge.context.validateWorkflowBlobSha,
     receipt: authorization.receipt,
     challenge: authorization.receipt.challenge,
+    ...(authorization.coveredRequirementDigest ? { coveredRequirementDigest: authorization.coveredRequirementDigest } : {}),
   };
 }
 
@@ -2539,7 +2561,7 @@ export async function readSnapshot(
     majorContractChange: false,
     externalMvpRelease: false,
   },
-  options: Readonly<{ freezeBrowserChallenge?: boolean }> = {},
+  options: Readonly<{ freezeBrowserChallenge?: boolean; scopeReconciliation?: SubmittedScopeReconciliation }> = {},
 ): Promise<Snapshot> {
   const integrationMode = parseIntegrationMode(config.app.integrationMode);
   const [
@@ -2768,6 +2790,7 @@ export async function readSnapshot(
     currentMainSha: defaultBranchSha,
     changedPaths: changedFileRecords.flatMap((file) => typeof file.filename === "string" ? [file.filename, ...(typeof file.previous_filename === "string" ? [file.previous_filename] : [])] : []),
     freeze: options.freezeBrowserChallenge === true,
+    ...(options.scopeReconciliation ? { scopeReconciliation: options.scopeReconciliation } : {}),
   });
   const collected = await collectEvidence(
     config,
@@ -2862,12 +2885,13 @@ function evaluateSnapshot(
   // gate re-checks every field against live input and trusted policy.
   const receipt = snapshot.humanBinding.channel === "browser" ? snapshot.humanBinding.receipt : null;
   const finalContext = receipt?.challenge.context.liveness === "final-decision-v1" ? receipt.challenge.context : null;
-  const humanFinalDecision: HumanFinalDecisionBinding | null = receipt && finalContext ? {
+  const covered = snapshot.humanBinding.coveredRequirementDigest;
+  const humanFinalDecision: HumanFinalDecisionBinding | null = receipt && finalContext && covered ? {
     version: HUMAN_FINAL_DECISION_VERSION,
     repositoryId: finalContext.repositoryId,
     pullRequestNumber: finalContext.pullRequestNumber,
     headSha: finalContext.headSha,
-    requirementDigest: finalContext.requirementDigest,
+    requirementDigest: covered,
     validateWorkflowBlobSha: finalContext.validateWorkflowBlobSha,
     reviewerActorId: finalContext.reviewer.id,
     reviewerLogin: finalContext.reviewer.login,
@@ -2919,6 +2943,9 @@ function reviewPacket(
       frozenAt: snapshot.browserChallenge?.frozenAt ?? null,
       epoch: snapshot.browserChallenge?.epoch ?? null,
       reviewId: snapshot.humanBinding.receipt?.reviewId ?? null,
+      liveness: snapshot.humanBinding.receipt?.challenge.context.liveness ?? null,
+      approvedRequirementDigest: snapshot.humanBinding.receipt?.challenge.context.requirementDigest ?? null,
+      coveredRequirementDigest: snapshot.humanBinding.coveredRequirementDigest ?? null,
     },
     reviewContext: {
       baseSha: integrationModeOf(snapshot.gateInput) === "serialized-merge" ? snapshot.gateInput.repository.defaultBranchSha : snapshot.gateInput.pullRequest.baseSha,
@@ -3044,6 +3071,12 @@ export function parseModelReviewReport(value: unknown): ModelReviewReport {
   if (!/^[0-9a-f]{64}$/i.test(requirement)) {
     throw new Error("requirementDigest must be a SHA-256 digest.");
   }
+  const scope = value.scopeReconciliation;
+  if (scope !== undefined && (!isRecord(scope) || typeof scope.epoch !== "string" || scope.epoch.length === 0 ||
+      typeof scope.approvedRequirementDigest !== "string" || !/^[0-9a-f]{64}$/.test(scope.approvedRequirementDigest) ||
+      (scope.verdict !== "unchanged" && scope.verdict !== "material" && scope.verdict !== "unknown"))) {
+    throw new Error("The review report scope reconciliation is invalid.");
+  }
   return {
     version: requiredString(value.version, "version"),
     policyVersion: requiredString(value.policyVersion, "policyVersion"),
@@ -3086,6 +3119,8 @@ export function parseModelReviewReport(value: unknown): ModelReviewReport {
       ),
     },
     findings,
+    ...(scope ? { scopeReconciliation: { epoch: scope.epoch as string, approvedRequirementDigest: scope.approvedRequirementDigest as string,
+      verdict: scope.verdict as ScopeReconciliation["verdict"] } } : {}),
   };
 }
 
@@ -4749,6 +4784,8 @@ async function reportReviewResult(
   }
   const snapshot = await withReviewSafety(config, await readSnapshot(
     config, report.pullRequestNumber, report.declaredImpacts, report.capability,
+    report.scopeReconciliation
+      ? { scopeReconciliation: { reconciliation: report.scopeReconciliation, reviewedRequirementDigest: report.requirementDigest } } : {},
   ), report);
   // In merge-queue mode a stale base is the normal state: the queue builds the
   // merged result against the current main, so main moving must not dispatch an

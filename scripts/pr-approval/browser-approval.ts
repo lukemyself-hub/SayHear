@@ -19,13 +19,20 @@ export type BrowserReceipt = Readonly<{ challenge: BrowserChallenge; reviewId: n
 export type BrowserState = Readonly<{
   version: 1; pullRequestNumber: number; epoch: string;
   challenge: BrowserChallenge | null; receipt: BrowserReceipt | null;
+  // Requirement digest the coordinator attested as unchanged scope relative
+  // to a final-decision receipt. Cleared with the receipt it qualifies.
+  scopeRequirementDigest?: string;
+}>;
+export type ScopeVerdict = "unchanged" | "material" | "unknown";
+export type ScopeReconciliation = Readonly<{
+  epoch: string; approvedRequirementDigest: string; verdict: ScopeVerdict;
 }>;
 export interface BrowserApprovalStore {
   read(number: number): Promise<BrowserState | null>;
   save(value: BrowserState): Promise<void>;
 }
 export type HumanAuthorization =
-  | Readonly<{ channel: "browser"; receipt: BrowserReceipt | null; challenge: BrowserChallenge | null }>
+  | Readonly<{ channel: "browser"; receipt: BrowserReceipt | null; challenge: BrowserChallenge | null; coveredRequirementDigest: string | null }>
   | Readonly<{ channel: "legacy-root" }>
   | Readonly<{ channel: "unknown" }>;
 function record(value: unknown): value is Record<string, unknown> {
@@ -77,8 +84,13 @@ export function browserContextDigest(context: BrowserContext): string {
   const parsed = parseBrowserContext(context);
   // The controller separately proves that main changes are safe before passing
   // a head-v2 context. Old challenges retain their exact-base interpretation.
-  const identity = parsed.reviewBinding === "head-v2"
-    ? { ...parsed, baseSha: null } : parsed;
+  // Final-decision challenges keep requirement freshness out of drift: a scope
+  // change withholds the human route until reconciled instead of revoking it.
+  const identity = {
+    ...parsed,
+    ...(parsed.reviewBinding === "head-v2" ? { baseSha: null } : {}),
+    ...(parsed.liveness === "final-decision-v1" ? { requirementDigest: null } : {}),
+  };
   return createHash("sha256").update(JSON.stringify(identity)).digest("hex");
 }
 function parseChallenge(value: unknown): BrowserChallenge {
@@ -95,7 +107,9 @@ export function parseBrowserReceipt(value: unknown): BrowserReceipt {
 export function parseBrowserState(value: unknown): BrowserState {
   if (!record(value) || value.version !== 1) throw new Error("browser_state_invalid");
   const result: BrowserState = { version: 1, pullRequestNumber: integer(value.pullRequestNumber), epoch: text(value.epoch),
-    challenge: value.challenge === null ? null : parseChallenge(value.challenge), receipt: value.receipt === null ? null : parseBrowserReceipt(value.receipt) };
+    challenge: value.challenge === null ? null : parseChallenge(value.challenge), receipt: value.receipt === null ? null : parseBrowserReceipt(value.receipt),
+    ...(value.scopeRequirementDigest === undefined ? {} : { scopeRequirementDigest: hex(value.scopeRequirementDigest, 64) }) };
+  if (result.scopeRequirementDigest !== undefined && result.receipt?.challenge.context.liveness !== "final-decision-v1") throw new Error("browser_scope_invalid");
   if (result.challenge && (result.challenge.epoch !== result.epoch || result.challenge.context.pullRequestNumber !== result.pullRequestNumber)) throw new Error("browser_epoch_mismatch");
   if (result.receipt && JSON.stringify(result.receipt.challenge) !== JSON.stringify(result.challenge)) throw new Error("browser_receipt_mismatch");
   return result;
@@ -181,9 +195,40 @@ export async function readBrowserAuthorization(
   const bindingReview = challenge?.context.liveness === "final-decision-v1" ? decisive : latest;
   if (!challenge || !bindingReview || bindingReview.state !== "APPROVED" || bindingReview.headSha !== context?.headSha ||
       bindingReview.id <= challenge.watermark.id || bindingReview.submittedAt <= Math.max(challenge.frozenAt, challenge.watermark.submittedAt)) {
-    return { channel: "browser", challenge, receipt: null };
+    return { channel: "browser", challenge, receipt: null, coveredRequirementDigest: null };
   }
   const receipt: BrowserReceipt = { challenge, reviewId: bindingReview.id, submittedAt: bindingReview.submittedAt };
-  if (JSON.stringify(current?.receipt) !== JSON.stringify(receipt)) await store.save({ version: 1, pullRequestNumber: number, epoch: challenge.epoch, challenge, receipt });
-  return { channel: "browser", challenge, receipt };
+  if (JSON.stringify(current?.receipt) !== JSON.stringify(receipt)) {
+    current = { version: 1, pullRequestNumber: number, epoch: challenge.epoch, challenge, receipt };
+    await store.save(current);
+  }
+  return { channel: "browser", challenge, receipt,
+    coveredRequirementDigest: current?.scopeRequirementDigest ?? challenge.context.requirementDigest };
+}
+
+// Applies the authorized coordinator's reconciliation of a requirement change
+// after Luke's final decision. Only the controller's submit path calls this.
+// Unchanged extends coverage to the live digest, material revokes the receipt
+// so a new Approve is needed, and unknown leaves the human route withheld.
+export async function reconcileBrowserScope(
+  store: BrowserApprovalStore,
+  number: number,
+  reconciliation: ScopeReconciliation,
+  liveRequirementDigest: string,
+): Promise<void> {
+  const current = await store.read(number);
+  const receipt = current?.receipt;
+  // Saved reports are replayed by later scans; a verdict for a superseded
+  // approval epoch simply no longer applies.
+  if (!current || !receipt || current.epoch !== reconciliation.epoch) return;
+  if (receipt.challenge.context.liveness !== "final-decision-v1" ||
+      receipt.challenge.context.requirementDigest !== reconciliation.approvedRequirementDigest) {
+    throw new Error("browser_scope_reconciliation_mismatch");
+  }
+  if (reconciliation.verdict === "unknown") return;
+  if (reconciliation.verdict === "material") {
+    await store.save({ version: 1, pullRequestNumber: number, epoch: randomUUID(), challenge: null, receipt: null });
+    return;
+  }
+  await store.save({ ...current, scopeRequirementDigest: hex(liveRequirementDigest, 64) });
 }

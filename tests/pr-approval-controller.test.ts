@@ -886,6 +886,15 @@ describe("PR approval controller", () => {
     } as Parameters<typeof resolveLinkedIssues>[1])).rejects.toMatchObject({ status: 404 });
   });
 
+  it("parses only well-formed coordinator scope reconciliation", () => {
+    const scope = { epoch: "epoch-1", approvedRequirementDigest: "a".repeat(64), verdict: "unchanged" };
+    expect(parseModelReviewReport({ ...modelReport, scopeReconciliation: scope }).scopeReconciliation).toEqual(scope);
+    expect(parseModelReviewReport(modelReport).scopeReconciliation).toBeUndefined();
+    for (const invalid of [null, { ...scope, verdict: "probably" }, { ...scope, approvedRequirementDigest: "A".repeat(64) }, { ...scope, epoch: "" }]) {
+      expect(() => parseModelReviewReport({ ...modelReport, scopeReconciliation: invalid })).toThrow("scope reconciliation is invalid");
+    }
+  });
+
   it("stores new submit intents as version 2 completion records", async () => {
     const f = await serializedControllerFixture("legacy-root");
     const snapshot = await readSnapshot(f.config, 321);
@@ -3218,6 +3227,72 @@ describe("guarded serialized controller completion", () => {
     f.reviews.push({ id: 30, state: "CHANGES_REQUESTED", body: "Stop", commit_id: HEAD_SHA, user: LUKE_IDENTITY, submitted_at: new Date(after).toISOString() });
     await expect(guardImmediateMerge(f.config, f.receipt.identity)).rejects.toThrow("fresh_merge_gate_blocked");
     expect(f.writes.some((write) => write.includes("/pulls/321/merge"))).toBe(false);
+  });
+
+  async function commentAfterFinalDecision(verdict: "unchanged" | "material" | "unknown") {
+    const f = await serializedControllerFixture("browser");
+    const before = await readSnapshot(f.config, 321);
+    const approved = before.humanBinding.receipt?.challenge.context.requirementDigest;
+    const epoch = before.humanBinding.receipt?.challenge.epoch;
+    if (!approved || !epoch) throw new Error("Expected a bound final decision");
+    const pages = f.api.pages.bind(f.api);
+    f.api.pages = async <T>(path: string): Promise<T[]> => path.endsWith("/issues/321/comments")
+      ? [{ id: 77, body: "Small wording note.", user: { id: 5, login: "someone", type: "User" },
+        created_at: "2026-10-14T01:00:00Z", updated_at: "2026-10-14T01:00:00Z" }] as T[]
+      : pages<T>(path);
+    const after = await readSnapshot(f.config, 321);
+    const live = requirementDigest(after.gateInput.issues, after.gateInput.pullRequest);
+    const request = f.api.request.bind(f.api);
+    f.api.request = async <T>(path: string, options?: StubRequestOptions): Promise<T> => {
+      if (options?.method === "PATCH" && path.endsWith("/check-runs/9002")) return {} as T;
+      if (options?.method === "POST" && path.endsWith("/check-runs")) return { id: 9004 } as T;
+      return request<T>(path, options);
+    };
+    // As if submit stored the coordinator's report for the live requirement.
+    const report: ModelReviewReport = { ...modelReport, baseSha: BASE_SHA, requirementDigest: live, declaredImpacts: [],
+      riskFlags: { ...modelReport.riskFlags, productDefinitionChanged: true },
+      scopeReconciliation: { epoch, approvedRequirementDigest: approved, verdict } };
+    const check = f.reviewChecks.find((entry) => entry.id === 9002) as { external_id: string; output: { summary: string } };
+    check.external_id = check.external_id.replace(approved, live);
+    check.output.summary = check.output.summary.replace(`requirement=${approved}`, `requirement=${live}`)
+      .replace(/report=[A-Za-z0-9_-]+/, `report=${Buffer.from(JSON.stringify(report)).toString("base64url")}`);
+    const appReview = f.reviews.find((review) => review.id === 20) as { body: string };
+    appReview.body = appReview.body.replace(approved, live);
+    return { f, approved, live, withheld: after };
+  }
+
+  it("keeps Luke's final decision through an ordinary comment but withholds it until reconciled", async () => {
+    const { approved, live, withheld } = await commentAfterFinalDecision("unknown");
+    expect(live).not.toBe(approved);
+    expect(withheld.humanBinding.receipt?.reviewId).toBe(10);
+    expect(withheld.humanBinding.coveredRequirementDigest).toBe(approved);
+  });
+
+  it("merges after the coordinator reconciles a comment as unchanged scope", async () => {
+    const { f, live } = await commentAfterFinalDecision("unchanged");
+    const results = await scanPullRequests(f.config, 321);
+    expect(results).toEqual([expect.objectContaining({ pullRequest: 321, outcome: "merge_candidate" })]);
+    expect(f.browserApprovalStore.value?.scopeRequirementDigest).toBe(live);
+    expect(f.stored()?.identity.requirementDigest).toBe(live);
+    expect(f.writes.some((write) => write.includes("/pulls/321/merge"))).toBe(true);
+  });
+
+  it("waits for a human when the coordinator cannot classify the scope change", async () => {
+    const { f } = await commentAfterFinalDecision("unknown");
+    const results = await scanPullRequests(f.config, 321);
+    expect(results[0]?.outcome).not.toBe("merge_candidate");
+    expect(f.writes.some((write) => write.includes("/pulls/321/merge"))).toBe(false);
+    expect(f.stored()).toBeNull();
+    expect(f.browserApprovalStore.value?.receipt?.reviewId).toBe(10);
+  });
+
+  it("requires a new Approve after a material scope change", async () => {
+    const { f } = await commentAfterFinalDecision("material");
+    const results = await scanPullRequests(f.config, 321);
+    expect(results[0]?.outcome).not.toBe("merge_candidate");
+    expect(f.writes.some((write) => write.includes("/pulls/321/merge"))).toBe(false);
+    expect(f.stored()).toBeNull();
+    expect(f.browserApprovalStore.value?.receipt ?? null).toBeNull();
   });
 
   it("rejects a dismissed human review during guarded recovery", async () => {
