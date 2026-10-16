@@ -65,6 +65,7 @@ import {
   type TrustedPrReviewPolicy,
 } from "./pr-review-gate.ts";
 import { SignedIntegrationRefreshStore, requestIntegrationRefresh, type IntegrationRefreshStore } from "./pr-approval/integration-refresh.ts";
+import { SignedMergeRefRebuildStore, requestMergeRefRebuild, resumeMergeRefRebuilds, type MergeRefRebuildStore } from "./pr-approval/merge-ref-rebuild.ts";
 import { collectPullRequestDiff, readPullRequestFileManifest, type CollectedPrDiff } from "./pr-approval/diff.ts";
 import {
   FIXED_PR_CI_BASELINE,
@@ -377,6 +378,7 @@ type ControllerConfig = Readonly<{
   api: GitHubApi;
   completionStore?: CompletionStore;
   integrationRefreshStore?: IntegrationRefreshStore;
+  mergeRefRebuildStore?: MergeRefRebuildStore;
   browserApprovalStore?: BrowserApprovalStore;
   app: GitHubAppConfig;
   /**
@@ -1736,6 +1738,7 @@ async function createRuntimeControllerConfig(): Promise<ControllerConfig> {
   return {
     ...config,
     integrationRefreshStore: new SignedIntegrationRefreshStore(resolve(storeDirectory, "integration-refresh"), privateKey, publicKey),
+    mergeRefRebuildStore: new SignedMergeRefRebuildStore(resolve(storeDirectory, "merge-ref-rebuild"), privateKey, publicKey),
     completionStore: new SignedCompletionStore(resolve(storeDirectory, "completions"), privateKey, publicKey),
     browserApprovalStore: new SignedBrowserApprovalStore(resolve(storeDirectory, "browser-approvals"), privateKey, publicKey),
   };
@@ -1901,6 +1904,17 @@ export async function readCurrentPullRequestMergeSha(
   pullRequest: Pick<GitHubPullRequest, "number" | "base" | "head" | "merge_commit_sha">,
   currentMainSha = pullRequest.base.sha,
 ): Promise<string | null> {
+  return (await readPullRequestMergeRef(api, pullRequest, currentMainSha)).current;
+}
+
+// `stale` is a merge ref of the current head on an older main. GitHub leaves
+// such a ref in place after main advances, so it needs an explicit rebuild.
+export async function readPullRequestMergeRef(
+  api: GitHubApi,
+  pullRequest: Pick<GitHubPullRequest, "number" | "base" | "head" | "merge_commit_sha">,
+  currentMainSha = pullRequest.base.sha,
+): Promise<Readonly<{ current: string | null; stale: string | null }>> {
+  const none = { current: null, stale: null };
   const expectedRef = `refs/pull/${pullRequest.number}/merge`;
   try {
     const reference = await api.request<JsonRecord>(
@@ -1912,21 +1926,21 @@ export async function readCurrentPullRequestMergeSha(
       !object ||
       object.type !== "commit"
     ) {
-      return null;
+      return none;
     }
     const mergeSha = recordString(object, "sha", "PR merge ref SHA").toLowerCase();
     if (
       pullRequest.merge_commit_sha &&
       pullRequest.merge_commit_sha.toLowerCase() !== mergeSha
     ) {
-      return null;
+      return none;
     }
 
     const commit = await api.request<JsonRecord>(
       repositoryPath(`/git/commits/${mergeSha}`),
     );
     if (!Array.isArray(commit.parents) || commit.parents.length !== 2) {
-      return null;
+      return none;
     }
     const baseParent = commit.parents[0];
     const headParent = commit.parents[1];
@@ -1935,14 +1949,15 @@ export async function readCurrentPullRequestMergeSha(
       !isRecord(headParent) ||
       typeof baseParent.sha !== "string" ||
       typeof headParent.sha !== "string" ||
-      baseParent.sha.toLowerCase() !== currentMainSha.toLowerCase() ||
       headParent.sha.toLowerCase() !== pullRequest.head.sha.toLowerCase()
     ) {
-      return null;
+      return none;
     }
-    return mergeSha;
+    return baseParent.sha.toLowerCase() === currentMainSha.toLowerCase()
+      ? { current: mergeSha, stale: null }
+      : { current: null, stale: mergeSha };
   } catch (error) {
-    if (error instanceof GitHubApiError && error.status === 404) return null;
+    if (error instanceof GitHubApiError && error.status === 404) return none;
     throw error;
   }
 }
@@ -2378,6 +2393,7 @@ export async function collectEvidence(
 type Snapshot = Readonly<{
   baseReviewSafe?: boolean;
   staleIntegrationRunId: number | null;
+  staleMergeRefSha?: string | null;
   changedPaths: readonly string[];
   humanBinding: HumanReviewBinding;
   browserChallenge: BrowserChallenge | null;
@@ -2555,10 +2571,11 @@ export async function readSnapshot(
     : null;
   if (!defaultBranchSha) throw new Error("The current main SHA is unavailable.");
 
-  const [issues, mergeSha] = await Promise.all([
+  const [issues, mergeRef] = await Promise.all([
     resolveLinkedIssues(config.api, pullRequest),
-    readCurrentPullRequestMergeSha(config.api, pullRequest, defaultBranchSha),
+    readPullRequestMergeRef(config.api, pullRequest, defaultBranchSha),
   ]);
+  const mergeSha = mergeRef.current;
   const [
     fileManifest,
     commits,
@@ -2757,6 +2774,7 @@ export async function readSnapshot(
   );
   return {
     staleIntegrationRunId: collected.staleIntegrationRunId,
+    staleMergeRefSha: integrationMode === "serialized-merge" ? mergeRef.stale : null,
     changedPaths: changedFileRecords.flatMap((file) => typeof file.filename === "string" ? [file.filename, ...(typeof file.previous_filename === "string" ? [file.previous_filename] : [])] : []),
     humanBinding,
     browserChallenge: humanBinding.challenge,
@@ -4584,14 +4602,55 @@ export async function requestDeferredMerge(
   };
 }
 
-export async function refreshStaleIntegration(config: ControllerConfig, snapshot: Snapshot): Promise<boolean> {
-  if (integrationModeOf(snapshot.gateInput) !== "serialized-merge" || snapshot.staleIntegrationRunId === null) return false;
+// `rebuildMergeRef` is off inside the merge guard: a close there could leave a
+// PR with a pending completion receipt closed, which reads as closed-unmerged.
+export async function refreshStaleIntegration(
+  config: ControllerConfig,
+  snapshot: Snapshot,
+  options: Readonly<{ rebuildMergeRef?: boolean }> = {},
+): Promise<boolean> {
+  if (integrationModeOf(snapshot.gateInput) !== "serialized-merge") return false;
   const pull = snapshot.gateInput.pullRequest;
-  if (!pull.mergeSha || pull.mergeable !== true || containsExplicitMergeHold(snapshot) || pull.issueClosureAmbiguous ||
+  const staleMergeRefSha = pull.mergeSha === null ? snapshot.staleMergeRefSha ?? null : null;
+  if (snapshot.staleIntegrationRunId === null && staleMergeRefSha === null) return false;
+  if (staleMergeRefSha !== null && options.rebuildMergeRef !== true) return true;
+  if (pull.mergeable !== true || containsExplicitMergeHold(snapshot) || pull.issueClosureAmbiguous ||
       snapshot.gateInput.issues.some((issue) => !pull.keepOpenIssueNumbers.includes(issue.number) && issue.state === "open" &&
         (!issue.labels.includes("ongoing") || issue.pause.active || issue.pause.source === "unknown" ||
           issue.labels.some((label) => ["ready-for-human", "needs-info", "needs-triage", "wontfix"].includes(label)) ||
-          (issue.blockedBy === null || issue.blockedBy.some((dependency) => !snapshot.gateInput.issues.some((target) => target.number === dependency && !pull.keepOpenIssueNumbers.includes(target.number))))))) return true;
+          (issue.blockedBy === null || issue.blockedBy.some((dependency) => !snapshot.gateInput.issues.some((target) => target.number === dependency && !pull.keepOpenIssueNumbers.includes(target.number))))))) {
+    // An ineligible stale ref falls through to the normal review and handoff.
+    return staleMergeRefSha === null;
+  }
+  if (staleMergeRefSha !== null) {
+    if (!config.mergeRefRebuildStore) throw new Error("merge_ref_rebuild_store_unavailable");
+    const receipt = await config.completionStore?.read(pull.number);
+    if (receipt && receipt.phase !== "complete") return true;
+    const mainSha = snapshot.gateInput.repository.defaultBranchSha;
+    const reopen = async () => {
+      await config.api.request(repositoryPath(`/pulls/${pull.number}`), { method: "PATCH", body: { state: "open" } });
+    };
+    await requestMergeRefRebuild(config.mergeRefRebuildStore, pull.number,
+      { headSha: pull.headSha, mainSha, staleMergeSha: staleMergeRefSha }, {
+        recheck: async () => {
+          const [freshPull, main] = await Promise.all([
+            config.api.request<GitHubPullRequest>(repositoryPath(`/pulls/${pull.number}`)),
+            config.api.request<JsonRecord>(repositoryPath("/git/ref/heads/main")),
+          ]);
+          return freshPull.state === "open" && !freshPull.draft && freshPull.auto_merge === null &&
+            freshPull.base.ref === "main" && freshPull.head.repo?.id === SAYHEAR_REPOSITORY_ID &&
+            freshPull.head.sha === pull.headSha && freshPull.mergeable === true &&
+            isRecord(main.object) && main.object.sha === mainSha &&
+            (await readPullRequestMergeRef(config.api, freshPull, mainSha)).stale === staleMergeRefSha;
+        },
+        close: async () => {
+          await config.api.request(repositoryPath(`/pulls/${pull.number}`), { method: "PATCH", body: { state: "closed" } });
+        },
+        reopen,
+      });
+    return true;
+  }
+  if (!pull.mergeSha || snapshot.staleIntegrationRunId === null) return true;
   if (!config.integrationRefreshStore) throw new Error("integration_refresh_store_unavailable");
   await requestIntegrationRefresh(config.integrationRefreshStore, pull.number,
     { headSha: pull.headSha, mainSha: snapshot.gateInput.repository.defaultBranchSha, mergeSha: pull.mergeSha },
@@ -4679,7 +4738,7 @@ async function reportReviewResult(
   if (integrationModeOf(snapshot.gateInput) === "serialized-merge" && snapshot.baseReviewSafe !== true) {
     return { outcome: "awaiting_verification", message: "stale_base_review_risk: current main introduces material or unknown review risk; prepare a fresh review anchored to current main." };
   }
-  if (await refreshStaleIntegration(config, snapshot)) {
+  if (await refreshStaleIntegration(config, snapshot, { rebuildMergeRef: true })) {
     return { outcome: "awaiting_verification", message: "Waiting for current-main integration Validate; no Issue handoff was created." };
   }
   const { gate } = evaluateSnapshot(config, snapshot, report);
@@ -4993,7 +5052,29 @@ export async function scanPullRequests(
   onlyPullNumber: number | null,
   prepareOnly = false,
 ): Promise<readonly Readonly<Record<string, unknown>>[]> {
-  const results = await retryPendingIssueCompletions(config, prepareOnly);
+  // Reopen PRs left closed by an interrupted rebuild before reading completion
+  // receipts, which treat a closed unmerged PR as a mismatch.
+  const recoveryResults: Array<Readonly<Record<string, unknown>>> = [];
+  if (!prepareOnly && config.mergeRefRebuildStore) {
+    try {
+      const recovery = await resumeMergeRefRebuilds(config.mergeRefRebuildStore, {
+        read: async (number) => {
+          const pull = await config.api.request<GitHubPullRequest>(repositoryPath(`/pulls/${number}`));
+          return { state: pull.state, merged: pull.merged === true };
+        },
+        reopen: async (number) => {
+          await config.api.request(repositoryPath(`/pulls/${number}`), { method: "PATCH", body: { state: "open" } });
+        },
+        definitiveRejection: (error) => error instanceof GitHubApiError && [404, 410, 422].includes(error.status),
+      });
+      for (const failure of recovery.failures) {
+        recoveryResults.push({ pullRequest: failure.pullRequestNumber, status: "merge_ref_rebuild_recovery_blocked", reason: failure.reason });
+      }
+    } catch (error) {
+      recoveryResults.push({ status: "merge_ref_rebuild_recovery_blocked", reason: error instanceof Error ? error.message : String(error) });
+    }
+  }
+  const results = [...recoveryResults, ...await retryPendingIssueCompletions(config, prepareOnly)];
   if (results.some((result) => result.blocks === "repository")) return results;
   const pullRequests = onlyPullNumber === null
     ? await config.api.pages<GitHubPullRequest>(
@@ -5096,7 +5177,7 @@ export async function scanPullRequests(
 
     if (!prepareOnly) {
       try {
-        if (await refreshStaleIntegration(config, snapshot)) {
+        if (await refreshStaleIntegration(config, snapshot, { rebuildMergeRef: true })) {
           results.push({ pullRequest: pullRequest.number, status: "waiting_for_validation", reason: "Current-main integration validation requested or awaiting reconciliation." });
           continue;
         }
