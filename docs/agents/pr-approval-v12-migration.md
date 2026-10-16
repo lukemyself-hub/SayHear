@@ -1,14 +1,15 @@
-# PR 审批 v12 迁移说明（候选，未安装）
+# PR 审批 v12 迁移说明（预合入候选已安装；最终 main 升级待定）
 
-本文件是 SPEC #362 → #369 的迁移 howto。候选 `v12 / report v5` 未安装，
+本文件是 SPEC #362 → #369 的迁移 howto。`v12 / report v5` 预合入候选已安装（`c5fa984f`，`build.sourceCommit 34ab5815`），
+最终 main `7ee8e89`（PR #379，已含其后修复）尚未安装；现有冻结 installer 仅为合入前候选 artifact，不是最终 main 升级 artifact。
 一切以固定 `status` 回读为准，不以源码存在为准。
 
 ## 现状快照（2026-10-16）
 
-- 已安装运行中：`v11 / report v4`，`serialized-merge` 生效，
-  App-only main 写入见证有效；每小时自动化 `sayhear-pr` 当前 PAUSED。
-- 候选：`v12 / report v5` 未安装。候选已集成：人工最终决定、
-  最新 main 组合、Provider＋行为范围、零 Issue、生命周期、归属、服务观察。
+- 已安装运行中：`v12 / report v5`（`c5fa984f`，`build.sourceCommit 34ab5815`，非最终 main `7ee8e89`），`serialized-merge` 生效，
+  App-only main 写入见证有效；每小时自动化 `sayhear-pr` 当前 PAUSED。最终 main `7ee8e89`（PR #379，已含其后修复）尚未安装。
+- 旧版：`v11 / report v4` 已由 root 备份保留，可经冻结回滚 wizard 恢复。本候选已集成：人工最终决定、
+  最新 main 组合、Provider＋行为范围、零 Issue、生命周期、归属、服务观察（均为预合入候选范围，非最终 main `7ee8e89` 验收结论）。现有冻结 installer 仅为合入前候选 artifact，不是最终 main 升级 artifact。
 - History 与 thin CLI 已集成并通过审查，与其它候选模块同属本候选。
 - #369 实际受控 PR 全部待验证。不新增常驻服务、webhook、事件桥或统一台账。
 
@@ -20,10 +21,10 @@
 - 运行时 App 私钥永不传入 worker，只走本机 Keychain 与 root-owned 配置。
 - 保留已安装备份：旧 bundle、见证、config、Keychain 条目、收据。
 
-## 安装与回滚（当前仍 blocked）
+## 安装与回滚（最终 main 升级仍 blocked；预合入候选已安装）
 
-- 安装的实际命令与操作员决定仍 blocked，需先有已审查 artifact
-  与明确的 bootstrap 决定；不虚构 installer，不声称可从未合入候选直接安装。
+- 预合入候选安装已完成（`c5fa984f`，`build.sourceCommit 34ab5815`）；最终 main `7ee8e89`（PR #379，已含其后修复）升级仍 blocked，需先有针对最终源码的已审查 artifact
+  与明确的 bootstrap 决定；不虚构 installer，不声称现有冻结 installer（仅预合入候选 artifact，可用于最终升级前回溯，不可作为最终升级依据）可用于最终升级，也不声称可从未合入候选直接安装。
 - 安装与回滚的共同前置条件：先读固定 `pr-approval-status`，其
   `completionStates` 不得存在任何未完成（`phase !== "complete"`）且
   `mergeSha === null` 的条目。这种条目在 v11 写入、v12 读取（反之亦然）时

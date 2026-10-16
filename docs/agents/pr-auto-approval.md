@@ -1,20 +1,19 @@
 # PR 自动审批 gate
 
-## SPEC362 已确认目标契约（候选实现中，未安装）
+## SPEC362 已确认目标契约（预合入候选已安装；最终 main 升级待定）
 
 Luke 于 2026-10-15 确认 SPEC #362（开发票 #363），属 Internal Core 工程交付工具链，
 不新增产品 Core Flow。GitHub Issue 正文、评论和标签是执行唯一真源。
-本节是已批准的目标契约，不是安装、生效或部署声明。
+本节是已批准的目标契约，不是最终安装、最终生效或部署声明。
 
-当前已安装运行控制器不变：`sayhear-pr-review-gate:v11` /
-`sayhear-pr-review-report:v4`，`serialized-merge`。候选实现在 SPEC #362 集成分支上，
-策略为 `sayhear-pr-review-gate:v12`、报告为 `sayhear-pr-review-report:v5`；
-v11 保留在已签发收据的恢复允许列表中。候选不等于安装，安装与切换由 #369 负责。
+当前已安装运行控制器：`sayhear-pr-review-gate:v12` /
+`sayhear-pr-review-report:v5`（预合入候选 `c5fa984f`，`build.sourceCommit 34ab5815`，非最终 main `7ee8e89`），`serialized-merge`。最终 main `7ee8e89`（PR #379，已含其后修复）尚未安装；现有冻结 installer 仅为合入前候选 artifact，不是最终 main 升级 artifact，可用于最终升级前回溯。旧版 `v11 / report v4` 已由 root 备份保留，可经冻结回滚 wizard 恢复。每小时自动化 `sayhear-pr` 当前 PAUSED。
+v11 保留在已签发收据的恢复允许列表中。预合入候选安装不等于最终升级，最终升级与切换由 #369 负责。
 实施前须核验实时 main、安装版本、保护设置、worker 有效配置及既有未提交改动。
 本文件其余章节保留既有安装与恢复细节，不代表已符合新契约。
 
-v12 迁移 howto 见 [pr-approval-v12-migration.md](pr-approval-v12-migration.md)（候选未安装）。
-下文“已安装 v11”是历史运行基线快照，不是 v12 目标；是否生效以固定 `status` 为准。
+v12 迁移 howto 见 [pr-approval-v12-migration.md](pr-approval-v12-migration.md)（预合入候选已安装；最终 main 升级待定）。
+下文“已安装 v11”是历史运行基线快照，不是当前运行版本，也不是 v12 目标；是否生效以固定 `status` 为准。
 
 - 两条通路：自动通路只加速现有契约内普通修复与改进；未知授权范围、证据争议与新
   决定走人工通路。人工是完整正常通路，不是例外或降级。
