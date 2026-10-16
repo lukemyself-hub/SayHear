@@ -75,6 +75,17 @@ import {
   type TrustedPrReviewPolicy,
 } from "./pr-review-gate.ts";
 import { SignedIntegrationRefreshStore, requestIntegrationRefresh, type IntegrationRefreshStore } from "./pr-approval/integration-refresh.ts";
+import {
+  parseProviderBehaviorReview,
+  parseProviderReviewContext,
+  type ProviderBehaviorReview,
+  type ProviderReviewContext,
+  type ProviderReviewInput,
+} from "./provider-behavior-review.ts";
+import {
+  parseBehaviorScopeReview,
+  type BehaviorScopeReview,
+} from "./pr-approval/behavior-scope.ts";
 import { SignedMergeRefRebuildStore, requestMergeRefRebuild, resumeMergeRefRebuilds, type MergeRefRebuildStore } from "./pr-approval/merge-ref-rebuild.ts";
 import { collectPullRequestDiff, readPullRequestFileManifest, type CollectedPrDiff } from "./pr-approval/diff.ts";
 import {
@@ -311,6 +322,18 @@ export type ModelReviewReport = Readonly<{
   declaredImpacts: readonly ReleaseImpactKind[];
   capability: PrReviewGateInput["review"]["capability"];
   riskFlags: PrReviewGateInput["review"]["riskFlags"];
+  /**
+   * Model provider-behavior evidence. Parsed with the shared protocol parser and
+   * bound to the controller-owned providerContext by identity alone.
+   * Optional so reports produced before the binding still parse; an absent
+   * assessment then resolves fail-closed as unknown in the gate.
+   */
+  providerBehavior?: ProviderBehaviorReview;
+  /**
+   * Model behavior-scope evidence bound to the same providerContext. Optional
+   * for the same reason as providerBehavior.
+   */
+  behaviorScope?: BehaviorScopeReview;
   findings: PrReviewGateInput["review"]["findings"];
   // Coordinator verdict on requirement changes after Luke's final decision.
   scopeReconciliation?: ScopeReconciliation;
@@ -323,6 +346,12 @@ type ReviewPacket = Readonly<{
   evidence: PrReviewGateInput["evidence"];
   branchProtection: PrReviewGateInput["branchProtection"];
   runtime: PrReviewGateInput["runtime"];
+  /**
+   * The live diff identity every provider-behavior and behavior-scope
+   * assessment in the submitted report must bind to. The reviewer copies it;
+   * the gate re-derives it from the same snapshot and compares.
+   */
+  providerContext: ProviderReviewContext;
   workflow: Readonly<{
     path: string;
     trustedBlobSha: string | null;
@@ -2183,6 +2212,7 @@ export async function collectEvidence(
   mergeSha: string | null,
   baseSha: string,
   humanBinding: HumanReviewBinding = NO_HUMAN_BINDING,
+  provider?: ProviderReviewInput,
 ): Promise<Readonly<{
   evidence: PrReviewGateInput["evidence"];
   trustedWorkflowBlobSha: string | null;
@@ -2198,6 +2228,7 @@ export async function collectEvidence(
       changedPaths: changedFiles.map(({ path }) => path),
     },
     capability,
+    ...(provider === undefined ? {} : { provider }),
   });
   const requiredIds = [
     ...plan.fixedBaseline,
@@ -2529,6 +2560,10 @@ export async function readSnapshot(
     externalMvpRelease: false,
   },
   options: Readonly<{ freezeBrowserChallenge?: boolean; scopeReconciliation?: SubmittedScopeReconciliation }> = {},
+  // The model's provider-behavior assessment for this head, when one exists yet.
+  // It only selects which provider checks evidence collection plans; the gate
+  // still judges the assessment itself against its own re-derived context.
+  providerBehavior?: ProviderBehaviorReview,
 ): Promise<Snapshot> {
   const integrationMode = parseIntegrationMode(config.app.integrationMode);
   const [
@@ -2758,6 +2793,23 @@ export async function readSnapshot(
     freeze: options.freezeBrowserChallenge === true,
     ...(options.scopeReconciliation ? { scopeReconciliation: options.scopeReconciliation } : {}),
   });
+  // Controller-owned binding identity for the two model judgments. The base is
+  // the PR base in every integration mode, because that is what the collected
+  // diff was computed against. An incomplete diff is reported as false rather
+  // than omitted, so both judgments fail closed with the reason the diff itself
+  // is the problem.
+  const providerContext: ProviderReviewContext = {
+    headSha: normalizedPullRequest.headSha,
+    baseSha: normalizedPullRequest.baseSha,
+    diffDigest,
+    diffComplete,
+  };
+  // Evidence collection plans the same provider-migration checks the gate does,
+  // so the model's assessment reaches it bound to this exact diff. A bare
+  // `provider-migration` declaration stays advisory until an assessment says
+  // the diff actually affects provider behavior.
+  const providerInput: ProviderReviewInput | undefined =
+    providerBehavior === undefined ? undefined : { context: providerContext, assessment: providerBehavior };
   const collected = await collectEvidence(
     config,
     pullNumber,
@@ -2768,6 +2820,7 @@ export async function readSnapshot(
     normalizedPullRequest.mergeSha,
     integrationMode === "serialized-merge" ? defaultBranchSha : normalizedPullRequest.baseSha,
     humanBinding,
+    providerInput,
   );
   return {
     staleIntegrationRunId: collected.staleIntegrationRunId,
@@ -2778,6 +2831,7 @@ export async function readSnapshot(
       repository: normalizedRepository,
       pullRequest: normalizedPullRequest,
       issues: normalizedIssues,
+      providerContext,
       branchProtection: protection,
       runtime: {
         reviewAppInstalledForRepository: true,
@@ -2809,6 +2863,20 @@ export async function readSnapshot(
   };
 }
 
+/**
+ * The controller-owned binding identity for the two model judgments, read back
+ * from the same snapshot the gate will judge. Reading it through the shared
+ * parser means a snapshot cannot carry a shape the gate would refuse.
+ */
+function providerContextOf(
+  gateInput: Omit<PrReviewGateInput, "review" | "evidence">,
+): ProviderReviewContext {
+  if (gateInput.providerContext === undefined) {
+    throw new Error("The snapshot carries no provider review context.");
+  }
+  return parseProviderReviewContext(gateInput.providerContext);
+}
+
 function createModelReviewInput(
   config: ControllerConfig,
   snapshot: Snapshot,
@@ -2816,6 +2884,7 @@ function createModelReviewInput(
 ): PrReviewGateInput {
   return {
     ...snapshot.gateInput,
+    providerContext: providerContextOf(snapshot.gateInput),
     evidence: snapshot.evidence,
     review: {
       version: report.version,
@@ -2832,6 +2901,12 @@ function createModelReviewInput(
       declaredImpacts: report.declaredImpacts,
       capability: report.capability,
       riskFlags: report.riskFlags,
+      ...(report.providerBehavior === undefined
+        ? {}
+        : { providerBehavior: report.providerBehavior }),
+      ...(report.behaviorScope === undefined
+        ? {}
+        : { behaviorScope: report.behaviorScope }),
       findings: report.findings,
     },
   };
@@ -2893,6 +2968,9 @@ function reviewPacket(
   });
   return {
     ...snapshot.gateInput,
+    // Restated explicitly: the reviewer must always see the exact binding
+    // identity, and a snapshot that somehow lost it must not reach submit.
+    providerContext: providerContextOf(snapshot.gateInput),
     evidence: snapshot.evidence,
     workflow: {
       path: PR_VALIDATE_WORKFLOW_PATH,
@@ -3035,6 +3113,15 @@ export function parseModelReviewReport(value: unknown): ModelReviewReport {
   if (!/^[0-9a-f]{64}$/i.test(requirement)) {
     throw new Error("requirementDigest must be a SHA-256 digest.");
   }
+  // Both model judgments are validated by the shared protocol parsers, so a
+  // report can never carry a shape the gate would refuse to re-parse. Absent
+  // stays absent: the gate then resolves it fail-closed as unknown.
+  const providerBehavior = value.providerBehavior === undefined
+    ? undefined
+    : parseProviderBehaviorReview(value.providerBehavior);
+  const behaviorScope = value.behaviorScope === undefined
+    ? undefined
+    : parseBehaviorScopeReview(value.behaviorScope);
   const scope = value.scopeReconciliation;
   if (scope !== undefined && (!isRecord(scope) || typeof scope.epoch !== "string" || scope.epoch.length === 0 ||
       typeof scope.approvedRequirementDigest !== "string" || !/^[0-9a-f]{64}$/.test(scope.approvedRequirementDigest) ||
@@ -3083,6 +3170,8 @@ export function parseModelReviewReport(value: unknown): ModelReviewReport {
       ),
     },
     findings,
+    ...(providerBehavior === undefined ? {} : { providerBehavior }),
+    ...(behaviorScope === undefined ? {} : { behaviorScope }),
     ...(scope ? { scopeReconciliation: { epoch: scope.epoch as string, approvedRequirementDigest: scope.approvedRequirementDigest as string,
       verdict: scope.verdict as ScopeReconciliation["verdict"] } } : {}),
   };
@@ -4428,7 +4517,8 @@ export async function guardImmediateMerge(config: ControllerConfig, identity: Co
     throw new CompletionMismatch("saved_review_identity_mismatch");
   }
   const report = saved.report;
-  const snapshot = await readSnapshot(config, identity.pullRequestNumber, report.declaredImpacts, report.capability);
+  const snapshot = await readSnapshot(config, identity.pullRequestNumber, report.declaredImpacts, report.capability,
+    {}, report.providerBehavior);
   if (snapshot.diff.digest !== identity.reviewIdentity.diffDigest || snapshot.diff.changeDigest !== identity.reviewIdentity.changeDigest ||
       await readHeadWorkflowBlob(config.api, identity.headSha) !== identity.reviewIdentity.workflowBlobSha) throw new CompletionMismatch("review_content_mismatch");
   if (await refreshStaleIntegration(config, snapshot)) throw new CompletionUnavailable("waiting_for_integration_validation");
@@ -4802,6 +4892,7 @@ export async function reportReviewResult(
     // Only a report this gate version will evaluate may persist a scope verdict.
     report.scopeReconciliation && report.version === PR_REVIEW_REPORT_VERSION && report.policyVersion === PR_REVIEW_GATE_POLICY_VERSION
       ? { scopeReconciliation: { reconciliation: report.scopeReconciliation, reviewedRequirementDigest: report.requirementDigest, reviewedHeadSha: report.headSha } } : {},
+    report.providerBehavior,
   );
   // In merge-queue mode a stale base is the normal state: the queue builds the
   // merged result against the current main, so main moving must not dispatch an
@@ -4890,6 +4981,8 @@ export async function reportReviewResult(
   }
   const freshSnapshot = await readSnapshot(
     config, report.pullRequestNumber, report.declaredImpacts, report.capability,
+    {},
+    report.providerBehavior,
   );
   const { gate: freshGate } = evaluateSnapshot(config, freshSnapshot, report);
   if (freshGate.outcome !== gate.outcome) {

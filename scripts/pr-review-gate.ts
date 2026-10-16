@@ -1683,21 +1683,23 @@ function verifyEvidence(
 }
 
 /**
- * The controller-owned binding context both judgments share. The actual base
- * is the serialized default-branch tip in `serialized-merge` mode, else the
- * PR base: a self-bound assessment on the wrong head or base fails here, so it
- * can never satisfy either judgment.
+ * The controller-owned binding context both judgments share.
+ *
+ * The base is always the PR base, because that is the base the controller
+ * collected the reviewed diff against in every integration mode. A serialized
+ * merge lands on whatever main is at that moment, but main moving on its own
+ * does not change the reviewed diff, so binding to the default-branch tip here
+ * would invalidate an otherwise current assessment on every unrelated merge.
+ * What must still match is the live head and base: a self-bound assessment on
+ * the wrong head or base fails here, so it can never satisfy either judgment.
  */
 function gateBindingContext(
   input: PrReviewGateInput,
 ): ProviderReviewContext | undefined {
   const context = input.providerContext;
   if (context === undefined) return undefined;
-  const expectedBase = integrationModeOf(input) === "serialized-merge"
-    ? input.repository.defaultBranchSha
-    : input.pullRequest.baseSha;
   if (context.headSha !== input.pullRequest.headSha) return undefined;
-  if (context.baseSha !== expectedBase) return undefined;
+  if (context.baseSha !== input.pullRequest.baseSha) return undefined;
   return context;
 }
 
@@ -1718,10 +1720,14 @@ function gateScopeResolution(
 
 function gateScopeOutcome(
   input: PrReviewGateInput,
+  resolution: BehaviorScopeResolution,
 ): PrReviewGateReport | null {
-  const resolution = gateScopeResolution(input);
   if (resolution.verdict === "in-scope") {
-    const covered = new Set(resolution.coveredPaths);
+    // Both sides normalize: a reviewer may cite a Windows-style separator while
+    // GitHub reports the same path with forward slashes.
+    const covered = new Set(
+      resolution.coveredPaths.map((path) => path.replaceAll("\\", "/")),
+    );
     const fullyCovered = input.pullRequest.changedFiles.length > 0 &&
       input.pullRequest.changedFiles.every(({ path }) =>
         covered.has(path.replaceAll("\\", "/")),
@@ -1809,6 +1815,9 @@ export function evaluatePrReviewGate(
   }
 
   const manual = hasHumanFinalDecision(input, policy);
+  // Resolved once and reused: both the human-review routing below and the
+  // unlocated-impact check further down judge the same bound scope evidence.
+  const scopeResolution = gateScopeResolution(input);
   if (!manual) {
     if (
       input.pullRequest.externalReviewState === "unavailable" ||
@@ -1831,10 +1840,13 @@ export function evaluatePrReviewGate(
       });
     }
 
-    const scopeBlocker = gateScopeOutcome(input);
-    if (scopeBlocker) return scopeBlocker;
-    const scopeCoveredPaths = gateScopeResolution(input).coveredPaths;
-
+    // A trusted authorization requirement outranks a model-evidence gap. A
+    // protected path still needs Luke whether or not the reviewer has finished
+    // scoping the diff, so the scope blocker must not mask it with a reason
+    // that reads as "keep waiting for the model". Covered paths come from the
+    // same single resolution either way, so a complete positive scope still
+    // excuses exactly the protected paths it covers.
+    const scopeCoveredPaths = scopeResolution.coveredPaths;
     const humanReason = requiresHumanReview(input, policy, scopeCoveredPaths);
     if (humanReason) {
       return outcome(input, "human_decision", {
@@ -1842,6 +1854,9 @@ export function evaluatePrReviewGate(
         message: humanReason.message,
       });
     }
+
+    const scopeBlocker = gateScopeOutcome(input, scopeResolution);
+    if (scopeBlocker) return scopeBlocker;
   } else {
     if (input.pullRequest.externalReviewState === "unavailable") {
       return outcome(input, "awaiting_verification", {
@@ -2122,13 +2137,16 @@ export function evaluatePrReviewGate(
       message: "Ordinary merges trigger production deployment, but that effect is not authorized.",
     });
   }
+  // Both judgments share one checked binding context. A providerContext that
+  // no longer names the current head and base is dropped here exactly as it is
+  // for the scope judgment, so a self-consistent but stale pair of context and
+  // assessment can never satisfy the provider judgment.
+  const boundContext = gateBindingContext(input);
   const providerInput: ProviderReviewInput | undefined =
-    input.providerContext === undefined && input.review.providerBehavior === undefined
+    boundContext === undefined && input.review.providerBehavior === undefined
       ? undefined
       : {
-          ...(input.providerContext === undefined
-            ? {}
-            : { context: input.providerContext }),
+          ...(boundContext === undefined ? {} : { context: boundContext }),
           ...(input.review.providerBehavior === undefined
             ? {}
             : { assessment: input.review.providerBehavior }),
@@ -2182,7 +2200,6 @@ export function evaluatePrReviewGate(
   // above) and never drops targeted checks. An unaffected Provider verdict is
   // not general scope or no-runtime proof on its own.
   if (!manual && plan.requiresImpactLocation && ownerLocatedTooling) {
-    const scopeResolution = gateScopeResolution(input);
     const hasTargeted = plan.targeted.length > 0 || plan.reused.length > 0;
     const scopeExcuse = !providerUnknown &&
       !hasTargeted &&

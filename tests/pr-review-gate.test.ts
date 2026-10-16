@@ -291,12 +291,10 @@ function input(
   } satisfies PrReviewGateInput;
   const finalHeadSha = overrides.pullRequest?.headSha ?? base.pullRequest.headSha;
   const finalBaseSha = overrides.pullRequest?.baseSha ?? base.pullRequest.baseSha;
-  const finalDefaultBranchSha = overrides.repository?.defaultBranchSha ?? base.repository.defaultBranchSha;
-  const finalIntegrationMode = overrides.runtime?.integrationMode ??
-    (base.runtime as { integrationMode?: PrReviewGateInput["runtime"]["integrationMode"] }).integrationMode;
-  const expectedProviderBase = finalIntegrationMode === "serialized-merge"
-    ? finalDefaultBranchSha
-    : finalBaseSha;
+  // The reviewed diff is always head against the PR base, in every integration
+  // mode, so that is the base both model judgments bind to. A serialized merge
+  // landing on a moved main does not invalidate them.
+  const expectedProviderBase = finalBaseSha;
   const finalChangedFiles = overrides.pullRequest?.changedFiles ?? base.pullRequest.changedFiles;
   const finalDeclaredImpacts = overrides.review?.declaredImpacts ?? base.review.declaredImpacts;
   const scopeObservationFor = (
@@ -2713,6 +2711,51 @@ describe("PR review gate", () => {
       },
     };
     expect(evaluatePrReviewGate(rebound, policy).outcome).toBe("merge_candidate");
+  });
+
+  it("never lets an unbound provider assessment satisfy the provider judgment", () => {
+    // The controller-owned context is current and the scope judgment still
+    // passes on it, so nothing earlier can mask the provider judgment. An
+    // assessment that disagrees with that context must resolve unknown rather
+    // than contribute a real verdict.
+    const candidate = input();
+    const drifted = {
+      ...candidate,
+      review: {
+        ...candidate.review,
+        providerBehavior: { ...candidate.review.providerBehavior!, diffDigest: "8".repeat(64) },
+      },
+    };
+    expect(evaluatePrReviewGate(drifted, policy).reasons[0]?.code).toBe("provider_behavior_unknown");
+
+    // A context that no longer names the live head drops out of both judgments
+    // at once, so it fails closed instead of binding to itself.
+    const staleContext = {
+      ...candidate,
+      providerContext: { ...candidate.providerContext!, headSha: "7".repeat(40) },
+      review: {
+        ...candidate.review,
+        providerBehavior: { ...candidate.review.providerBehavior!, headSha: "7".repeat(40) },
+      },
+    };
+    const staleReport = evaluatePrReviewGate(staleContext, policy);
+    expect(staleReport.outcome).not.toBe("merge_candidate");
+    expect(staleReport.reasons.map((reason) => reason.code)).not.toContain("all_required_evidence_verified");
+  });
+
+  it("keeps provider evidence bound to the PR base while main moves under a serialized merge", () => {
+    // The reviewed diff is always head against the PR base. A merge that lands
+    // on a main that moved since the review does not invalidate that evidence.
+    const candidate = input({
+      repository: { defaultBranchSha: "5".repeat(40) },
+      runtime: {
+        integrationMode: "serialized-merge",
+        mainWriterGuard: APP_ONLY_MAIN_WRITER_GUARD,
+      },
+      pullRequest: { mergeable: true, mergeableState: "behind" },
+      branchProtection: { requiresUpToDate: false },
+    });
+    expect(evaluatePrReviewGate(candidate, policy).outcome).toBe("merge_candidate");
   });
 
   it("keeps an intentional main-forward passing on the manual route", () => {
