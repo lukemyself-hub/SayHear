@@ -459,12 +459,20 @@ describe("unknown impact is located, never escalated", () => {
   it("treats the PR approval apparatus as located without a behavior impact", () => {
     const paths = [
       "docs/agents/pr-auto-approval.md",
+      "docs/agents/pr-approval-v12-migration.md",
+      "docs/adr/0154-human-review-is-a-complete-pr-approval-path.md",
       "scripts/daily-release-validation.ts",
       "scripts/pr-approval-controller.ts",
+      "scripts/pr-approval/behavior-scope.ts",
+      "scripts/pr-approval/deployment-closeout.ts",
       "scripts/pr-approval/integration-refresh.ts",
       "tests/pr-approval-integration-refresh.test.ts",
       "scripts/pr-approval/merge-ref-rebuild.ts",
       "tests/pr-approval-merge-ref-rebuild.test.ts",
+      "scripts/pr-work-coordination.ts",
+      "scripts/pr-worker-coordinator.ts",
+      "scripts/pr-worker-service.ts",
+      "scripts/provider-behavior-review.ts",
       "scripts/pr-review-gate.ts",
       "tests/pr-review-gate.test.ts",
     ];

@@ -185,6 +185,19 @@ describe("deploymentRequired", () => {
     ).toBe(true);
   });
 
+  it("is required for a scripts/ file the apps/web build runs", () => {
+    // apps/web's build script ends with `node ../../scripts/check-browser-bundle.mjs`,
+    // so it runs in the Vercel production build even though it lives under scripts/.
+    expect(deploymentRequired(["scripts/check-browser-bundle.mjs"])).toBe(true);
+    expect(
+      deploymentRequired(["docs/guide.md", "scripts/check-browser-bundle.mjs"]),
+    ).toBe(true);
+  });
+
+  it("still treats other scripts/ files as non-runtime", () => {
+    expect(deploymentRequired(["scripts/check-boundaries.mjs"])).toBe(false);
+  });
+
   it("is required for an empty path list", () => {
     expect(deploymentRequired([])).toBe(true);
   });

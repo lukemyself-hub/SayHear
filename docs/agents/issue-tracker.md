@@ -130,11 +130,13 @@ head/base/当前 main SHA 与同步复验要求写回未排除的开放 Issue。
 `ready-for-agent`、清理 `ongoing` 并回读；人工分诊状态只收到提醒，保留标签等待决定。
 PR 明确保持开放的 Issue 不参与评论或标签交接；暂停优先于交接。
 
-实现 Agent 接续原 PR 和原分支，先重读最新 main、Issue 评论、依赖与暂停，按 Git 授权
-同步最新 main、处理冲突，在新 head/base 上重跑可信 CI 和受影响专项，再送审原 PR。
-不创建重复 PR，不用旧版本绿色 CI、报告或授权替代新核验。同步提醒不是代码缺陷
-request changes，不增加三轮失败计数。App 已完成的相同 PR/head/base/main 交接不再释放
-Agent 后续新认领；部分失败可重试，但不得把未完成交接写成成功。
+实现 Agent 接续原 PR 和原分支，先重读最新 main、Issue 评论、依赖与暂停，仅在
+`up-to-date-base` 部署下才按 Git 授权同步最新 main、处理冲突，在新 head/base 上重跑
+可信 CI 和受影响专项，再送审原 PR。`serialized-merge` 下不得为追 main 改写 PR head
+（新提交会使 Luke 的 Approve 失效），只重新验证当前组合。不创建重复 PR，不用旧版本
+绿色 CI、报告或授权替代新核验。同步提醒不是代码缺陷 request changes，不增加三轮
+失败计数。App 已完成的相同 PR/head/base/main 交接不再释放 Agent 后续新认领；部分
+失败可重试，但不得把未完成交接写成成功。
 
 ### 缺少验收证据时
 

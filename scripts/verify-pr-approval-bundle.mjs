@@ -116,7 +116,28 @@ for (const entry of manifest.launchers) {
   const launcher = await digestBuildArtifact(entry.name);
   if (launcher.sha256 !== entry.sha256) throw new Error(`A bundled launcher does not match its manifest: ${entry.name}`);
 }
+const CLEAN_TREE_UNTRACKED_EXCLUSIONS = [".audit/", "artifacts/", "node_modules"];
+async function assertCleanTree() {
+  const tracked = (await promisify(execFile)("git", ["diff", "HEAD", "--name-only", "-z"], { cwd: root })).stdout
+    .split("\0").filter(Boolean).sort();
+  if (tracked.length > 0) {
+    throw new Error(`Refusing to verify a bundle against dirty source: tracked changes present: ${tracked.slice(0, 20).join(", ")}${tracked.length > 20 ? ` (+${tracked.length - 20} more)` : ""}. Verify from clean committed source.`);
+  }
+  const untracked = (await promisify(execFile)("git", ["ls-files", "--others", "--exclude-standard", "-z"], { cwd: root })).stdout
+    .split("\0").filter(Boolean)
+    .filter((path) => !CLEAN_TREE_UNTRACKED_EXCLUSIONS.some((exclusion) => exclusion.endsWith("/") ? path.startsWith(exclusion) : path.split("/").includes(exclusion)))
+    .sort();
+  if (untracked.length > 0) {
+    throw new Error(`Refusing to verify a bundle against dirty source: untracked source files present: ${untracked.slice(0, 20).join(", ")}${untracked.length > 20 ? ` (+${untracked.length - 20} more)` : ""}. Verify from clean committed source.`);
+  }
+}
+// Same clean-tree refusal as the build: the bundle tests must run against the
+// same committed source the manifest input digests were taken from.
+await assertCleanTree();
 const configPath = resolve(buildDirectory, "bundle-vitest.config.mjs");
+// integration-refresh / merge-ref-rebuild are bundled into controller.mjs via
+// the controller imports; they have no bundle re-export, so their suites run
+// against source here (the controller suite still proves them inside the bundle).
 await writeFile(configPath, `export default ${JSON.stringify({
   root,
   resolve: { alias: {
@@ -128,7 +149,7 @@ await writeFile(configPath, `export default ${JSON.stringify({
     "../scripts/pr-review-gate.ts": bundlePath,
     "../scripts/daily-release-validation.ts": bundlePath,
   } },
-  test: { include: ["tests/pr-approval-controller.test.ts", "tests/pr-approval-completion.test.ts", "tests/pr-approval-diff.test.ts", "tests/pr-approval-browser-approval.test.ts", "tests/pr-review-gate.test.ts"] },
+  test: { include: ["tests/pr-approval-controller.test.ts", "tests/pr-approval-completion.test.ts", "tests/pr-approval-diff.test.ts", "tests/pr-approval-browser-approval.test.ts", "tests/pr-approval-integration-refresh.test.ts", "tests/pr-approval-merge-ref-rebuild.test.ts", "tests/pr-review-gate.test.ts"] },
 })};\n`);
 const run = await promisify(execFile)(copiedNode.artifactPath, [resolve(root, "node_modules/vitest/vitest.mjs"), "run", "--config", configPath], { cwd: root, maxBuffer: 4_000_000, env: { ...process.env, SAYHEAR_COMPLETION_BUNDLE_TEST: "1" } });
 process.stdout.write(run.stdout);
