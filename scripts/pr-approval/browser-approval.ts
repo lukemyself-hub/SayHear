@@ -11,6 +11,7 @@ export type BrowserContext = Readonly<{
   diffDigest: string; requirementDigest: string; protectedPaths: readonly string[];
   validateWorkflowBlobSha: string;
   reviewBinding?: "head-v2";
+  liveness?: "final-decision-v1";
 }>;
 type Watermark = Readonly<{ id: number; submittedAt: number }>;
 export type BrowserChallenge = Readonly<{ epoch: string; context: BrowserContext; frozenAt: number; watermark: Watermark }>;
@@ -59,6 +60,9 @@ export function parseBrowserContext(value: unknown): BrowserContext {
   if (value.reviewBinding !== undefined && value.reviewBinding !== "head-v2") {
     throw new Error("browser_binding_invalid");
   }
+  if (value.liveness !== undefined && value.liveness !== "final-decision-v1") {
+    throw new Error("browser_liveness_invalid");
+  }
   return {
     repositoryId: integer(value.repositoryId), repositoryNodeId: text(value.repositoryNodeId),
     pullRequestNumber: integer(value.pullRequestNumber), pullRequestNodeId: text(value.pullRequestNodeId),
@@ -66,6 +70,7 @@ export function parseBrowserContext(value: unknown): BrowserContext {
     diffDigest: hex(value.diffDigest, 64), requirementDigest: hex(value.requirementDigest, 64),
     protectedPaths: [...new Set(paths)].sort(), validateWorkflowBlobSha: hex(value.validateWorkflowBlobSha, 40),
     ...(value.reviewBinding === "head-v2" ? { reviewBinding: "head-v2" as const } : {}),
+    ...(value.liveness === "final-decision-v1" ? { liveness: "final-decision-v1" as const } : {}),
   };
 }
 export function browserContextDigest(context: BrowserContext): string {
@@ -101,7 +106,7 @@ export class SignedBrowserApprovalStore extends SignedJsonStore<BrowserState> im
   }
 }
 export type SubmittedLukeReview = Readonly<{ id: number; submittedAt: number; state: string; headSha: string }>;
-export function latestLukeReview(reviews: readonly unknown[]): SubmittedLukeReview | null {
+function sortedLukeReviews(reviews: readonly unknown[]): SubmittedLukeReview[] {
   const relevant: SubmittedLukeReview[] = [];
   for (const raw of reviews) {
     if (!record(raw) || !record(raw.user)) throw new Error("browser_review_identity_invalid");
@@ -120,6 +125,10 @@ export function latestLukeReview(reviews: readonly unknown[]): SubmittedLukeRevi
   for (let i = 1; i < relevant.length; i++) {
     if (relevant[i]!.id === relevant[i - 1]!.id || relevant[i]!.submittedAt <= relevant[i - 1]!.submittedAt) throw new Error("browser_review_order_invalid");
   }
+  return relevant;
+}
+export function latestLukeReview(reviews: readonly unknown[]): SubmittedLukeReview | null {
+  const relevant = sortedLukeReviews(reviews);
   return relevant.at(-1) ?? null;
 }
 
@@ -134,14 +143,24 @@ export async function readBrowserAuthorization(
   now = Date.now(),
 ): Promise<Extract<HumanAuthorization, { channel: "browser" }>> {
   let current = await store.read(number);
-  let latest: SubmittedLukeReview | null;
-  try { latest = latestLukeReview(reviews); }
+  let ordered: SubmittedLukeReview[];
+  try { ordered = sortedLukeReviews(reviews); }
   catch (error) {
     await store.save({ version: 1, pullRequestNumber: number, epoch: randomUUID(), challenge: null, receipt: null });
     throw error;
   }
+  const latest = ordered.at(-1) ?? null;
+  let decisive: SubmittedLukeReview | null = null;
+  for (let i = ordered.length - 1; i >= 0; i--) {
+    if (ordered[i]!.state !== "COMMENTED") { decisive = ordered[i]!; break; }
+  }
   const drift = current?.challenge && (!context || browserContextDigest(current.challenge.context) !== browserContextDigest(context));
-  const revoked = current?.receipt && (!latest || latest.id < current.receipt.reviewId || latest.state !== "APPROVED" || latest.headSha !== context?.headSha);
+  // Old signed receipts keep old exact semantics: only a stored
+  // final-decision-v1 challenge ignores trailing COMMENTED reviews, and only
+  // for selecting the decisive approval. Identity/time/order validation above
+  // still covers every review.
+  const revocationReview = current?.receipt?.challenge.context.liveness === "final-decision-v1" ? decisive : latest;
+  const revoked = current?.receipt && (!revocationReview || revocationReview.id < current.receipt.reviewId || revocationReview.state !== "APPROVED" || revocationReview.headSha !== context?.headSha);
   if (drift || revoked) {
     current = { version: 1, pullRequestNumber: number, epoch: randomUUID(), challenge: null, receipt: null };
     await store.save(current);
@@ -154,11 +173,12 @@ export async function readBrowserAuthorization(
     await store.save(current);
   }
   const challenge = current?.challenge ?? null;
-  if (!challenge || !latest || latest.state !== "APPROVED" || latest.headSha !== context?.headSha ||
-      latest.id <= challenge.watermark.id || latest.submittedAt <= Math.max(challenge.frozenAt, challenge.watermark.submittedAt)) {
+  const bindingReview = challenge?.context.liveness === "final-decision-v1" ? decisive : latest;
+  if (!challenge || !bindingReview || bindingReview.state !== "APPROVED" || bindingReview.headSha !== context?.headSha ||
+      bindingReview.id <= challenge.watermark.id || bindingReview.submittedAt <= Math.max(challenge.frozenAt, challenge.watermark.submittedAt)) {
     return { channel: "browser", challenge, receipt: null };
   }
-  const receipt: BrowserReceipt = { challenge, reviewId: latest.id, submittedAt: latest.submittedAt };
+  const receipt: BrowserReceipt = { challenge, reviewId: bindingReview.id, submittedAt: bindingReview.submittedAt };
   if (JSON.stringify(current?.receipt) !== JSON.stringify(receipt)) await store.save({ version: 1, pullRequestNumber: number, epoch: challenge.epoch, challenge, receipt });
   return { channel: "browser", challenge, receipt };
 }

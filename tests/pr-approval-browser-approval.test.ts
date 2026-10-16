@@ -221,6 +221,127 @@ describe("browser approval channel", () => {
     }
   });
 
+  it("keeps a final-decision approval after a later COMMENTED review", async () => {
+    const store = new MemoryBrowserStore();
+    const finalContext = context({ liveness: "final-decision-v1" });
+    const at = Date.parse("2026-10-14T00:00:05Z");
+    await readBrowserAuthorization(store, 400, finalContext, [], true, at);
+    expect((await readBrowserAuthorization(store, 400, finalContext, [lukeReview()], false, Date.parse("2026-10-14T00:00:11Z"))).receipt?.reviewId).toBe(10);
+    const kept = await readBrowserAuthorization(store, 400, finalContext,
+      [lukeReview(), lukeReview({ id: 11, state: "COMMENTED", submitted_at: "2026-10-14T00:00:20Z" })], false, Date.parse("2026-10-14T00:00:21Z"));
+    expect(kept.receipt?.reviewId).toBe(10);
+    expect(kept.challenge).not.toBeNull();
+  });
+
+  it("still revokes a final-decision approval after CHANGES_REQUESTED or DISMISSED", async () => {
+    const finalContext = context({ liveness: "final-decision-v1" });
+    const at = Date.parse("2026-10-14T00:00:05Z");
+    const approved = lukeReview();
+    const requested = lukeReview({ id: 11, state: "CHANGES_REQUESTED", submitted_at: "2026-10-14T00:00:20Z" });
+    const comment = lukeReview({ id: 12, state: "COMMENTED", submitted_at: "2026-10-14T00:00:30Z" });
+
+    const store = new MemoryBrowserStore();
+    await readBrowserAuthorization(store, 400, finalContext, [], true, at);
+    expect((await readBrowserAuthorization(store, 400, finalContext, [approved], false, Date.parse("2026-10-14T00:00:11Z"))).receipt?.reviewId).toBe(10);
+    // A decisive CHANGES_REQUESTED stays revoked even with a trailing comment,
+    // and later comments never resurrect the cleared receipt.
+    const revoked = await readBrowserAuthorization(store, 400, finalContext, [approved, requested, comment], false, Date.parse("2026-10-14T00:00:31Z"));
+    expect(revoked.receipt).toBeNull();
+    expect(revoked.challenge).toBeNull();
+    const staysCleared = await readBrowserAuthorization(store, 400, finalContext,
+      [approved, requested, comment, lukeReview({ id: 13, state: "COMMENTED", submitted_at: "2026-10-14T00:00:40Z" })], false, Date.parse("2026-10-14T00:00:41Z"));
+    expect(staysCleared.receipt).toBeNull();
+    expect(staysCleared.challenge).toBeNull();
+
+    const dismissedStore = new MemoryBrowserStore();
+    await readBrowserAuthorization(dismissedStore, 400, finalContext, [], true, at);
+    expect((await readBrowserAuthorization(dismissedStore, 400, finalContext, [approved], false, Date.parse("2026-10-14T00:00:11Z"))).receipt?.reviewId).toBe(10);
+    const dismissed = await readBrowserAuthorization(dismissedStore, 400, finalContext,
+      [approved, lukeReview({ id: 11, state: "DISMISSED", submitted_at: "2026-10-14T00:00:20Z" })], false, Date.parse("2026-10-14T00:00:21Z"));
+    expect(dismissed.receipt).toBeNull();
+    expect(dismissed.challenge).toBeNull();
+  });
+
+  it("fails closed on malformed, out-of-order or disappeared reviews in final-decision mode", async () => {
+    const finalContext = context({ liveness: "final-decision-v1" });
+    const at = Date.parse("2026-10-14T00:00:05Z");
+
+    const malformedStore = new MemoryBrowserStore();
+    await readBrowserAuthorization(malformedStore, 400, finalContext, [], true, at);
+    await expect(readBrowserAuthorization(malformedStore, 400, finalContext,
+      [lukeReview(), { ...lukeReview({ id: 11, state: "COMMENTED" }), submitted_at: "not-a-time" }], false, Date.parse("2026-10-14T00:00:21Z")))
+      .rejects.toThrow("browser_review_time_invalid");
+    expect(malformedStore.value?.challenge).toBeNull();
+
+    const orderStore = new MemoryBrowserStore();
+    await readBrowserAuthorization(orderStore, 400, finalContext, [], true, at);
+    await expect(readBrowserAuthorization(orderStore, 400, finalContext,
+      [lukeReview(), lukeReview({ id: 11, state: "COMMENTED", submitted_at: "2026-10-14T00:00:10Z" })], false, Date.parse("2026-10-14T00:00:21Z")))
+      .rejects.toThrow("browser_review_order_invalid");
+    expect(orderStore.value?.challenge).toBeNull();
+
+    const disappearedStore = new MemoryBrowserStore();
+    await readBrowserAuthorization(disappearedStore, 400, finalContext, [], true, at);
+    expect((await readBrowserAuthorization(disappearedStore, 400, finalContext, [lukeReview()], false, Date.parse("2026-10-14T00:00:11Z"))).receipt?.reviewId).toBe(10);
+    const disappeared = await readBrowserAuthorization(disappearedStore, 400, finalContext, [], false, Date.parse("2026-10-14T00:00:21Z"));
+    expect(disappeared.receipt).toBeNull();
+    expect(disappeared.challenge).toBeNull();
+  });
+
+  it("versions final-decision opt-in so old records keep old exact semantics", () => {
+    expect(() => parseBrowserContext({ ...context(), liveness: "final-decision-v2" })).toThrow("browser_liveness_invalid");
+    // Old records stay parseable, but opting in changes the digest identity, so
+    // an old frozen challenge drifts instead of being silently broadened.
+    expect(parseBrowserContext(context()).liveness).toBeUndefined();
+    expect(browserContextDigest(context())).not.toBe(browserContextDigest(context({ liveness: "final-decision-v1" })));
+  });
+
+  it("drifts an old frozen challenge instead of broadening it into final-decision", async () => {
+    const at = Date.parse("2026-10-14T00:00:05Z");
+    const store = new MemoryBrowserStore();
+    await readBrowserAuthorization(store, 400, context(), [], true, at);
+    expect((await readBrowserAuthorization(store, 400, context(), [lukeReview()], false, Date.parse("2026-10-14T00:00:11Z"))).receipt?.reviewId).toBe(10);
+    // Presenting the opted-in context against the old challenge clears state;
+    // the controller must freeze a fresh final-decision challenge next slice.
+    const drifted = await readBrowserAuthorization(store, 400, context({ liveness: "final-decision-v1" }), [lukeReview()], false, Date.parse("2026-10-14T00:00:12Z"));
+    expect(drifted.receipt).toBeNull();
+    expect(drifted.challenge).toBeNull();
+  });
+
+  it("still revokes a final-decision approval after head, diff, scope or workflow drift", async () => {
+    const finalContext = context({ liveness: "final-decision-v1" });
+    for (const next of [
+      null,
+      context({ liveness: "final-decision-v1", headSha: NEXT_HEAD }),
+      context({ liveness: "final-decision-v1", diffDigest: "2".repeat(64) }),
+      context({ liveness: "final-decision-v1", requirementDigest: NEXT_REQUIREMENT }),
+      context({ liveness: "final-decision-v1", validateWorkflowBlobSha: "3".repeat(40) }),
+      context({ liveness: "final-decision-v1", protectedPaths: ["scripts/another.ts"] }),
+    ]) {
+      const store = new MemoryBrowserStore();
+      const at = Date.parse("2026-10-14T00:00:05Z");
+      await readBrowserAuthorization(store, 400, finalContext, [], true, at);
+      expect((await readBrowserAuthorization(store, 400, finalContext, [lukeReview()], false, Date.parse("2026-10-14T00:00:11Z"))).receipt?.reviewId).toBe(10);
+      const invalid = await readBrowserAuthorization(store, 400, next, [lukeReview()], false, Date.parse("2026-10-14T00:00:12Z"));
+      expect(invalid.receipt).toBeNull();
+      expect(invalid.challenge).toBeNull();
+      expect((await readBrowserAuthorization(store, 400, finalContext, [lukeReview()], false, Date.parse("2026-10-14T00:00:13Z"))).receipt).toBeNull();
+    }
+  });
+
+  it("keeps final-decision liveness orthogonal to head-v2 base advancement", async () => {
+    const store = new MemoryBrowserStore();
+    const original = context({ reviewBinding: "head-v2", liveness: "final-decision-v1" });
+    const advanced = context({ reviewBinding: "head-v2", liveness: "final-decision-v1", baseSha: "2".repeat(40) });
+    const at = Date.parse("2026-10-14T00:00:05Z");
+    await readBrowserAuthorization(store, 400, original, [], true, at);
+    expect((await readBrowserAuthorization(store, 400, original, [lukeReview()], false, Date.parse("2026-10-14T00:00:11Z"))).receipt?.reviewId).toBe(10);
+    const kept = await readBrowserAuthorization(store, 400, advanced,
+      [lukeReview(), lukeReview({ id: 11, state: "COMMENTED", submitted_at: "2026-10-14T00:00:20Z" })], false, Date.parse("2026-10-14T00:00:21Z"));
+    expect(kept.receipt?.reviewId).toBe(10);
+    expect(browserContextDigest(original)).toBe(browserContextDigest(advanced));
+  });
+
   it("ignores pending reviews and fails closed when a receipt no longer matches live reviews", async () => {
     const store = new MemoryBrowserStore();
     const at = Date.parse("2026-10-14T00:00:05Z");

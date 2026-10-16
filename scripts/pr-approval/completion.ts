@@ -29,7 +29,7 @@ export type CompletionIdentity = Readonly<{
 }>;
 export type CompletionPhase = "merge_unconfirmed" | "issues_pending" | "complete" | "needs_attention";
 export type CompletionRecord = Readonly<{
-  version: 1;
+  version: 1 | 2;
   identity: CompletionIdentity;
   phase: CompletionPhase;
   attempts: number;
@@ -75,18 +75,19 @@ function digest(value: unknown, length: number): string {
   return result;
 }
 export function parseCompletionRecord(value: unknown): CompletionRecord {
-  if (!record(value) || value.version !== 1 || !record(value.identity)) throw new Error("completion_schema_invalid");
+  if (!record(value) || (value.version !== 1 && value.version !== 2) || !record(value.identity)) throw new Error("completion_schema_invalid");
+  const version = value.version;
   const identity = value.identity;
   const reviewIdentity = identity.reviewIdentity;
   if (reviewIdentity !== undefined && !record(reviewIdentity)) throw new Error("completion_schema_invalid");
   if (identity.mergeAction !== undefined && identity.mergeAction !== "merge-now") throw new Error("completion_schema_invalid");
   if (value.mergeWriteState !== undefined &&
       !["not-sent", "uncertain", "rejected", "accepted"].includes(string(value.mergeWriteState))) throw new Error("completion_schema_invalid");
-  if (!Array.isArray(identity.issueNumbers) || identity.issueNumbers.length === 0 || identity.issueNumbers.length > 100) throw new Error("completion_schema_invalid");
+  if (!Array.isArray(identity.issueNumbers) || identity.issueNumbers.length > 100 || (version === 1 && identity.issueNumbers.length === 0)) throw new Error("completion_schema_invalid");
   const phase = value.phase;
   if (phase !== "merge_unconfirmed" && phase !== "issues_pending" && phase !== "complete" && phase !== "needs_attention") throw new Error("completion_schema_invalid");
   const result: CompletionRecord = {
-    version: 1,
+    version,
     identity: {
       repositoryId: positive(identity.repositoryId), pullRequestNumber: positive(identity.pullRequestNumber),
       pullRequestNodeId: string(identity.pullRequestNodeId), headSha: digest(identity.headSha, 40),

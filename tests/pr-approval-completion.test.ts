@@ -301,3 +301,65 @@ describe("completion serialization", () => {
     await expect(withGlobalLock(async () => "unsafe", path)).rejects.toThrow("holds the repository lock");
   });
 });
+
+describe("versioned empty-issue completion", () => {
+  const emptyV2 = {
+    ...initial,
+    version: 2,
+    identity: { ...initial.identity, issueNumbers: [] as readonly number[] },
+  } as CompletionRecord;
+  it("roundtrips version2 empty-issue record through signed store", async () => {
+    const { store } = await signedStore();
+    await store.save(emptyV2);
+    const reread = await store.read(339);
+    expect(reread).toEqual(emptyV2);
+    expect(reread?.version).toBe(2);
+    expect(parseCompletionRecord(structuredClone(emptyV2)).version).toBe(2);
+  });
+  it("recovers version2 empty-issue record to complete after merge confirmation without issue writes or new merges", async () => {
+    const { store } = await signedStore();
+    await store.save(emptyV2);
+    const restarted = await store.read(339);
+    if (!restarted) throw new Error("Receipt missing");
+    const { clock } = virtualClock();
+    const issueRequests: string[] = [];
+    let mergePuts = 0;
+    let confirmCalls = 0;
+    const api: GitHubApi = {
+      request: async <T>(path: string, options?: Readonly<{ method?: string }>) => {
+        if (options?.method === "PUT") { mergePuts += 1; return { merged: true } as T; }
+        if (path.includes("/issues/")) { issueRequests.push(`${options?.method ?? "GET"} ${path}`); throw new Error("unexpected issue write"); }
+        return structuredClone(mergedPull) as T;
+      },
+      pages: async <T>() => structuredClone([approval]) as T[],
+      bytes: async () => new Uint8Array(),
+    };
+    const result = await recoverCompletion(store, restarted, {
+      confirmMerge: async (identity) => { confirmCalls += 1; return confirmCompletionMerge(api, identity); },
+      completeIssues: async (identity) => {
+        expect(identity.issueNumbers).toEqual([]);
+        await completeLinkedIssuesAfterMerge(api, identity.issueNumbers, { autoMergeEnabled: false, merged: true });
+      },
+    }, clock);
+    expect(result).toMatchObject({ version: 2, phase: "complete", mergeSha: merge });
+    expect(confirmCalls).toBeGreaterThanOrEqual(1);
+    expect(mergePuts).toBe(0);
+    expect(issueRequests).toEqual([]);
+    expect(await store.read(339)).toEqual(result);
+  });
+  it("keeps version1 empty-issue semantics invalid and rejects unknown versions", async () => {
+    expect(() => parseCompletionRecord({ ...initial, identity: { ...initial.identity, issueNumbers: [] } })).toThrow("completion_schema_invalid");
+    expect(() => parseCompletionRecord({ ...emptyV2, version: 1 })).toThrow("completion_schema_invalid");
+    expect(() => parseCompletionRecord({ ...emptyV2, version: 3 })).toThrow("completion_schema_invalid");
+    expect(() => parseCompletionRecord({ ...emptyV2, version: "2" })).toThrow("completion_schema_invalid");
+    const { store } = await signedStore();
+    await expect(store.save({ ...initial, identity: { ...initial.identity, issueNumbers: [] } })).rejects.toThrow();
+    await expect(store.save({ ...emptyV2, version: 99 } as unknown as CompletionRecord)).rejects.toThrow();
+  });
+  it("still reads version1 nonempty records", async () => {
+    const { store } = await signedStore();
+    await store.save(initial);
+    await expect(store.read(339)).resolves.toEqual(initial);
+    expect(parseCompletionRecord(structuredClone(initial)).version).toBe(1);
+  });
+});
