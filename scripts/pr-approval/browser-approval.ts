@@ -207,7 +207,8 @@ export async function readBrowserAuthorization(
 }
 
 // Applies the authorized coordinator's reconciliation of a requirement change
-// after Luke's final decision. Only the controller's submit path calls this.
+// after Luke's final decision. Called from report submission, including the
+// saved-report replay during scans.
 // Unchanged extends coverage to the live digest, material revokes the receipt
 // so a new Approve is needed, and unknown leaves the human route withheld.
 export async function reconcileBrowserScope(

@@ -669,6 +669,16 @@ export function closingKeywordIssueNumbers(text: string): number[] {
   return [...numbers].sort((left, right) => left - right);
 }
 
+/** An explicit pause in the PR or any linked Issue title or body. Shared by the gate and controller. */
+export function hasExplicitMergeHold(
+  pullRequest: Readonly<{ title: string; body: string }>,
+  issues: readonly Readonly<{ title: string; body: string }>[],
+): boolean {
+  return /\b(?:do not merge|do not auto[- ]merge|not for merge|not to be merged)\b|不要(?:自动)?合入|暂停自动审批/i.test(
+    [pullRequest.title, pullRequest.body, ...issues.flatMap((issue) => [issue.title, issue.body])].join("\n"),
+  );
+}
+
 export function parseIssueClosureExclusions(title: string, body: string): Readonly<{
   keepOpenIssueNumbers: readonly number[];
   ambiguous: boolean;
@@ -1439,12 +1449,8 @@ function requiresHumanReview(input: PrReviewGateInput, policy: TrustedPrReviewPo
     return { code: "human_review_required", message: "The PR must supply every referenced Issue exactly once." };
   }
   if (input.pullRequest.state !== "open") return { code: "human_review_required", message: "The PR is closed." };
-  const exclusions = parseIssueClosureExclusions(input.pullRequest.title, input.pullRequest.body);
-  if (input.pullRequest.issueClosureAmbiguous || exclusions.ambiguous ||
-    exclusions.keepOpenIssueNumbers.join() !== [...input.pullRequest.keepOpenIssueNumbers].sort((a, b) => a - b).join() ||
-    input.pullRequest.keepOpenIssueNumbers.some((number) => !numbers.includes(number))) {
-    return { code: "human_review_required", message: "The PR's keep-open Issue declarations are ambiguous or inconsistent." };
-  }
+  const closure = closureDeclarationReason(input);
+  if (closure) return closure;
   const deliveryIssues = input.issues.filter((issue) => !input.pullRequest.keepOpenIssueNumbers.includes(issue.number));
   if (!deliveryIssues.some((issue) => issue.state === "open")) {
     return { code: "human_review_required", message: "All referenced Issues are already closed." };
@@ -1465,6 +1471,19 @@ function requiresHumanReview(input: PrReviewGateInput, policy: TrustedPrReviewPo
     }
   }
   return protectedReason;
+}
+
+// Which Issues completion writes after the merge follows from these
+// declarations, so both routes require them to be unambiguous.
+function closureDeclarationReason(input: PrReviewGateInput): Readonly<{ code: string; message: string }> | null {
+  const numbers = input.issues.map((issue) => issue.number);
+  const exclusions = parseIssueClosureExclusions(input.pullRequest.title, input.pullRequest.body);
+  if (input.pullRequest.issueClosureAmbiguous || exclusions.ambiguous ||
+    exclusions.keepOpenIssueNumbers.join() !== [...input.pullRequest.keepOpenIssueNumbers].sort((a, b) => a - b).join() ||
+    input.pullRequest.keepOpenIssueNumbers.some((number) => !numbers.includes(number))) {
+    return { code: "human_review_required", message: "The PR's keep-open Issue declarations are ambiguous or inconsistent." };
+  }
+  return null;
 }
 
 function deferralPolicyEquals(
@@ -1666,11 +1685,7 @@ export function evaluatePrReviewGate(
           "The current PR reviews, Issue discussion, or dependency state could not be read.",
       });
     }
-    if (
-      /\b(?:do not merge|do not auto[- ]merge|not for merge|not to be merged)\b|不要(?:自动)?合入|暂停自动审批/i.test(
-        [input.pullRequest.title, input.pullRequest.body, ...input.issues.map((issue) => issue.body)].join("\n"),
-      )
-    ) {
+    if (hasExplicitMergeHold(input.pullRequest, input.issues)) {
       return outcome(input, "human_decision", {
         code: "human_review_required",
         message: "The PR or Issue explicitly pauses automatic merging.",
@@ -1682,6 +1697,8 @@ export function evaluatePrReviewGate(
         message: "The PR is closed.",
       });
     }
+    const closure = closureDeclarationReason(input);
+    if (closure) return outcome(input, "human_decision", closure);
     for (const issue of input.issues) {
       if (input.pullRequest.keepOpenIssueNumbers.includes(issue.number)) continue;
       if (issue.pause.active || issue.pause.source === "unknown") {

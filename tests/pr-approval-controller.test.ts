@@ -10,6 +10,7 @@ import {
   guardImmediateMerge,
   readHumanBinding,
   readSavedReviewReport,
+  reportReviewResult,
   refreshStaleIntegration,
   scanPullRequests,
   readSnapshot,
@@ -57,6 +58,7 @@ import {
   MAIN_WRITER_ATTESTATION_VERSION,
   PR_VALIDATE_WORKFLOW_PATH,
   PR_REVIEW_GATE_POLICY_VERSION,
+  PR_REVIEW_GATE_V11_POLICY_VERSION,
   PR_REVIEW_REPORT_VERSION,
   SAYHEAR_REPOSITORY_ID,
   requirementDigest,
@@ -2492,7 +2494,7 @@ class ControllerBrowserStore implements BrowserApprovalStore {
   async save(value: BrowserState) { this.value = structuredClone(value); }
 }
 
-async function serializedControllerFixture(channel: "browser" | "legacy-root", options: Readonly<{ linkedIssue?: boolean; bodySuffix?: string }> = {}) {
+async function serializedControllerFixture(channel: "browser" | "legacy-root", options: Readonly<{ linkedIssue?: boolean; bodySuffix?: string; issueTitle?: string }> = {}) {
   const linkedIssue = options.linkedIssue !== false;
   const workflow = "f".repeat(40);
   const path = "scripts/pr-approval-controller.ts";
@@ -2506,7 +2508,7 @@ async function serializedControllerFixture(channel: "browser" | "legacy-root", o
     user: channel === "browser" ? AGENT_IDENTITY : LUKE_IDENTITY,
     merge_commit_sha: MERGE_SHA, changed_files: 1, mergeable: true, mergeable_state: "clean", auto_merge: null,
   };
-  const issue = { number: 42, state: "open", title: "Controller safety repair", body: "Deliver safe serialized integration and durable recovery.",
+  const issue = { number: 42, state: "open", title: options.issueTitle ?? "Controller safety repair", body: "Deliver safe serialized integration and durable recovery.",
     updated_at: "2026-10-14T00:00:00Z", labels: ["ongoing"] };
   const browserApprovalStore = new ControllerBrowserStore();
   const reviews: Array<Record<string, unknown>> = [];
@@ -3333,6 +3335,51 @@ describe("guarded serialized controller completion", () => {
     expect(results[0]?.outcome).not.toBe("merge_candidate");
     expect(f.writes.some((write) => write.includes("/pulls/321/merge"))).toBe(false);
     expect(f.stored()).toBeNull();
+  });
+
+  it("approves through the App when Luke's final decision overrides an agent request_changes", async () => {
+    const f = await serializedControllerFixture("browser");
+    acceptCheckRunWrites(f);
+    withSavedReport(f, (report) => ({ ...report, decision: "request_changes", findings: [{ severity: "P2",
+      file: "scripts/pr-approval-controller.ts", line: 1, trigger: "retry", userImpact: "stale", evidence: "skip" }] }));
+    // No App review exists yet, so submission has to choose the event.
+    f.reviews.splice(f.reviews.findIndex((review) => review.id === 20), 1);
+    const posted: string[] = [];
+    const request = f.api.request.bind(f.api);
+    f.api.request = async <T>(path: string, options?: StubRequestOptions): Promise<T> => {
+      if (options?.method === "POST" && path.endsWith("/pulls/321/reviews")) {
+        const body = requestBody<{ event: string; body: string; commit_id: string }>(options);
+        posted.push(body.event);
+        const review = { id: 21, state: body.event === "APPROVE" ? "APPROVED" : "CHANGES_REQUESTED", commit_id: body.commit_id,
+          body: body.body, user: { id: REVIEW_BOT_ACTOR_ID, login: "sayhear-pr-review-gate[bot]" } };
+        f.reviews.push(review);
+        return structuredClone(review) as T;
+      }
+      return request<T>(path, options);
+    };
+    const results = await scanPullRequests(f.config, 321);
+    expect(posted).toEqual(["APPROVE"]);
+    expect(results).toEqual([expect.objectContaining({ pullRequest: 321, outcome: "merge_candidate" })]);
+    expect(f.pull.merged).toBe(true);
+  });
+
+  it("never lets a final decision override a pause in a linked Issue title", async () => {
+    const f = await serializedControllerFixture("browser", { issueTitle: "暂停自动审批: controller safety repair" });
+    acceptCheckRunWrites(f);
+    expect(f.browserApprovalStore.value?.receipt?.challenge.context.liveness).toBe("final-decision-v1");
+    const results = await scanPullRequests(f.config, 321);
+    expect(results[0]?.outcome).not.toBe("merge_candidate");
+    expect(f.writes.some((write) => write.includes("/pulls/321/merge"))).toBe(false);
+    expect(f.stored()).toBeNull();
+  });
+
+  it("ignores a scope verdict carried by a submitted report for another gate version", async () => {
+    const { f, live, approved } = await commentAfterFinalDecision("material");
+    const epoch = f.browserApprovalStore.value?.epoch ?? "";
+    await reportReviewResult(f.config, { ...modelReport, baseSha: BASE_SHA, requirementDigest: live, declaredImpacts: [],
+      policyVersion: PR_REVIEW_GATE_V11_POLICY_VERSION, scopeReconciliation: { epoch, approvedRequirementDigest: approved, verdict: "material" } });
+    expect(f.browserApprovalStore.value?.receipt?.reviewId).toBe(10);
+    expect(f.writes.some((write) => write.includes("/pulls/321/merge"))).toBe(false);
   });
 
   it("rejects a dismissed human review during guarded recovery", async () => {

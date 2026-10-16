@@ -2210,6 +2210,22 @@ describe("PR review gate", () => {
       issues: [{ ...pausedSetup.candidate.issues[0]!, pause: { active: false, source: "unknown" as const } }],
     }, pausedSetup.bound).outcome).toBe("human_decision");
 
+    // Content edits re-bind the final decision so only the hold itself decides.
+    const rebound = (changed: PrReviewGateInput) => {
+      const digest = requirementDigest(changed.issues, changed.pullRequest);
+      return [{ ...changed, review: { ...changed.review, requirementDigest: digest } },
+        { ...pausedSetup.bound, humanFinalDecision: { ...pausedSetup.bound.humanFinalDecision!, requirementDigest: digest } }] as const;
+    };
+    expect(evaluatePrReviewGate(...rebound(pausedSetup.candidate)).outcome).toBe("merge_candidate");
+    expect(evaluatePrReviewGate(...rebound({
+      ...pausedSetup.candidate,
+      issues: [{ ...pausedSetup.candidate.issues[0]!, title: "暂停自动审批: fix the server path" }],
+    })).reasons[0]?.message).toContain("explicitly pauses");
+    expect(evaluatePrReviewGate(...rebound({
+      ...pausedSetup.candidate,
+      pullRequest: { ...pausedSetup.candidate.pullRequest, issueClosureAmbiguous: true },
+    })).reasons[0]?.message).toContain("keep-open");
+
     expect(evaluatePrReviewGate(candidate, { ...bound, reviewAppId: null }).outcome)
       .toBe("awaiting_verification");
     expect(evaluatePrReviewGate(

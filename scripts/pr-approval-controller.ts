@@ -59,6 +59,7 @@ import {
   parseIntegrationMode,
   requirementDigest,
   parseIssueClosureExclusions,
+  hasExplicitMergeHold,
   closingKeywordIssueNumbers,
   protectedReviewPaths,
   SAYHEAR_REPOSITORY_ID,
@@ -2467,7 +2468,7 @@ async function readHeadWorkflowBlob(api: GitHubApi, headSha: string): Promise<st
   return file.sha.toLowerCase();
 }
 
-type SubmittedScopeReconciliation = Readonly<{ reconciliation: ScopeReconciliation; reviewedRequirementDigest: string }>;
+type SubmittedScopeReconciliation = Readonly<{ reconciliation: ScopeReconciliation; reviewedRequirementDigest: string; reviewedHeadSha: string }>;
 
 export async function readHumanBinding(
   config: ControllerConfig,
@@ -2534,9 +2535,10 @@ export async function readHumanBinding(
     store, input.number, context, input.reviews, input.freeze, input.now ?? Date.now(),
   );
   let authorization = await read();
-  // A verdict counts only for the exact live requirement the coordinator read.
+  // A verdict counts only for the exact live head and requirement the coordinator read.
   const scope = input.scopeReconciliation;
-  if (authorization.receipt && scope && scope.reviewedRequirementDigest === input.requirement) {
+  if (authorization.receipt && scope && scope.reviewedRequirementDigest === input.requirement &&
+      scope.reviewedHeadSha.toLowerCase() === input.headSha.toLowerCase()) {
     await reconcileBrowserScope(store, input.number, scope.reconciliation, input.requirement);
     authorization = await read();
   }
@@ -3585,9 +3587,12 @@ async function findExistingAppReview(
   return matching.at(-1) ?? null;
 }
 
+// The review event follows the gate, not the agent's report: after Luke's final
+// decision a request_changes report can still reach merge_candidate.
 async function submitPullRequestReview(
   config: ControllerConfig,
   report: ModelReviewReport,
+  gateOutcome: PrReviewGateReport["outcome"],
   deferred: PrReviewGateReport["deferredEvidence"],
 ): Promise<GitHubReview> {
   const existing = await findExistingAppReview(
@@ -3595,7 +3600,7 @@ async function submitPullRequestReview(
     report,
   );
   const desired: AppReviewOutcome =
-    report.decision === "request_changes"
+    gateOutcome === "request_changes"
       ? "request_changes"
       : deferred.length > 0
         ? "approve_deferred"
@@ -4773,7 +4778,7 @@ async function reportReviewOutcome(
   }
 }
 
-async function reportReviewResult(
+export async function reportReviewResult(
   config: ControllerConfig,
   input: unknown,
 ): Promise<Readonly<{ outcome: string; message: string }>> {
@@ -4786,8 +4791,9 @@ async function reportReviewResult(
   }
   const snapshot = await withReviewSafety(config, await readSnapshot(
     config, report.pullRequestNumber, report.declaredImpacts, report.capability,
-    report.scopeReconciliation
-      ? { scopeReconciliation: { reconciliation: report.scopeReconciliation, reviewedRequirementDigest: report.requirementDigest } } : {},
+    // Only a report this gate version will evaluate may persist a scope verdict.
+    report.scopeReconciliation && report.version === PR_REVIEW_REPORT_VERSION && report.policyVersion === PR_REVIEW_GATE_POLICY_VERSION
+      ? { scopeReconciliation: { reconciliation: report.scopeReconciliation, reviewedRequirementDigest: report.requirementDigest, reviewedHeadSha: report.headSha } } : {},
   ), report);
   // In merge-queue mode a stale base is the normal state: the queue builds the
   // merged result against the current main, so main moving must not dispatch an
@@ -4827,7 +4833,7 @@ async function reportReviewResult(
   }
 
   if (gate.outcome === "request_changes") {
-    const review = await submitPullRequestReview(config, report, []);
+    const review = await submitPullRequestReview(config, report, gate.outcome, []);
     await recordReviewHandoff(config, snapshot, report, gate, review);
     return {
       outcome: gate.outcome,
@@ -4866,6 +4872,7 @@ async function reportReviewResult(
   const approval = await submitPullRequestReview(
     config,
     report,
+    gate.outcome,
     gate.deferredEvidence,
   );
   if (
@@ -5031,13 +5038,7 @@ function controllerReviewReport(
 }
 
 function containsExplicitMergeHold(snapshot: Snapshot): boolean {
-  return /\b(?:do not merge|do not auto[- ]merge|not for merge|not to be merged)\b|不要(?:自动)?合入|暂停自动审批/i.test(
-    [
-      snapshot.gateInput.pullRequest.title,
-      snapshot.gateInput.pullRequest.body,
-      ...snapshot.gateInput.issues.flatMap((issue) => [issue.title, issue.body]),
-    ].join("\n"),
-  );
+  return hasExplicitMergeHold(snapshot.gateInput.pullRequest, snapshot.gateInput.issues);
 }
 
 async function writeReviewPacketFile(
