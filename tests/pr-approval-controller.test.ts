@@ -4311,6 +4311,41 @@ describe("remediation history consistency and budget dispatch", () => {
     expect(f.stored()).toBeNull();
   });
 
+  it("holds a direct submit on inconsistent history without flipping the linked Issue handoff", async () => {
+    const f = await serializedControllerFixture("legacy-root");
+    withPrHistory(f, [malformedHistoryComment()]);
+    const snapshot = await readSnapshot(f.config, 321);
+    expect(snapshot.remediation.historyConsistent).toBe(false);
+    const saved = await readSavedReviewReport(f.config, snapshot);
+    if (!saved) throw new Error("Expected a saved review report for PR 321");
+    const summaries: string[] = [];
+    const request = f.api.request.bind(f.api);
+    f.api.request = async <T>(path: string, options?: StubRequestOptions): Promise<T> => {
+      if (options?.method === "PATCH" && path.endsWith("/check-runs/9002")) {
+        summaries.push(JSON.stringify(options.body));
+        return {} as T;
+      }
+      if (options?.method === "POST" && path.endsWith("/check-runs")) {
+        summaries.push(JSON.stringify(options.body));
+        return { id: 9004 } as T;
+      }
+      if (options?.method === "POST" && path.endsWith("/pulls/321/reviews")) {
+        throw new Error("App approval must not publish for inconsistent history");
+      }
+      if (path.endsWith("/pulls/321/merge")) throw new Error("Merge must not publish for inconsistent history");
+      return request<T>(path, options);
+    };
+    const result = await reportReviewResult(f.config, saved.report);
+    expect(result.outcome).toBe("awaiting_verification");
+    expect(result.remediation?.historyConsistent).toBe(false);
+    expect(summaries.join("\n")).toContain("remediation_history_inconsistent");
+    expect(f.writes.some((write) => write.includes("/issues/42/labels"))).toBe(false);
+    expect(f.issue.labels).toEqual(["ongoing"]);
+    expect(f.writes.some((write) => write.includes("/pulls/321/reviews"))).toBe(false);
+    expect(f.writes.some((write) => write.includes("/pulls/321/merge"))).toBe(false);
+    expect(f.stored()).toBeNull();
+  });
+
   it("guards the fresh snapshot when history corrupts after approval", async () => {
     const f = await serializedControllerFixture("legacy-root");
     await expect(guardImmediateMerge(f.config, f.receipt.identity)).resolves.toBeDefined();

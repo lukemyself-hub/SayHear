@@ -5230,6 +5230,13 @@ export async function reportReviewResult(
     };
   }
   await upsertCheckRun(config, snapshot, report, gate);
+  if (!manualRoute && gate.reasons.some((reason) => reason.code === "remediation_history_inconsistent")) {
+    return {
+      outcome: "awaiting_verification",
+      message: `PR #${report.pullRequestNumber} remediation history is inconsistent; automatic approval is held for maintainer verification.`,
+      remediation: snapshot.remediation,
+    };
+  }
 
   if (gate.reasons.some((reason) => reason.code === "pull_request_conflict")) {
     const handoff = await handoffStalePullRequestBase(
@@ -5311,9 +5318,16 @@ export async function reportReviewResult(
     {},
     report.providerBehavior,
   );
-  const { gate: freshGate, scopeCoveredPaths: freshScopeCoveredPaths } = evaluateSnapshot(config, freshSnapshot, report);
+  const { gate: freshGate, manualRoute: freshManualRoute, scopeCoveredPaths: freshScopeCoveredPaths } = evaluateSnapshot(config, freshSnapshot, report);
   if (freshGate.outcome !== gate.outcome) {
     await upsertCheckRun(config, freshSnapshot, report, freshGate);
+    if (!freshManualRoute && freshGate.reasons.some((reason) => reason.code === "remediation_history_inconsistent")) {
+      return {
+        outcome: "awaiting_verification",
+        message: `PR #${report.pullRequestNumber} remediation history is inconsistent; automatic approval is held for maintainer verification.`,
+        remediation: freshSnapshot.remediation,
+      };
+    }
     await postNonBlockingOutcome(config, freshSnapshot, report, {
       ...freshGate,
       outcome: "human_decision",
