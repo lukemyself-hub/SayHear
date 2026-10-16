@@ -44,7 +44,7 @@ Luke 对当前被审版本的 GitHub Approve 表达最终决定。控制器继�
 
 ## 与现行实现的边界
 
-本 ADR 是已确认的目标契约，不是最终安装或最终生效声明。当前已安装控制器为
-`sayhear-pr-review-gate:v12` / `sayhear-pr-review-report:v5`（预合入候选 `c5fa984f`，`build.sourceCommit 34ab5815`，`serialized-merge`），
-非最终 main `7ee8e89`（PR #379，已含其后修复）；最终 main 升级尚未安装。旧版 `v11 / report v4` 已由 root 备份保留。实施前须核验实时 main、安装版本、保护设置、worker 有效配置及既有
+本 ADR 是已确认的目标契约，不是最终生效声明。2026-10-16 快照（真实值以固定 `status` 为准）：当前已安装控制器为
+`sayhear-pr-review-gate:v12` / `sayhear-pr-review-report:v5`（最终源码安装：控制器 `05ee8089fad58a1d49d7138a15941a8e348e60d2fd85918301fd8defcdc1d4aa`，`build.sourceCommit 7ee8e897194df8300089094cef7fac2b86e20fc1` 干净源码身份，`serialized-merge`），
+真保护／App-only 守卫 intact，全部 completion 收据 `phase` 已 complete。先前预合入候选（`c5fa984f`，`build.sourceCommit 34ab5815`）现为旧 fallback；旧版 `v11 / report v4` 为历史备份保留，本次已审查回滚恢复对象为 `c5fa984f`／`34ab5815`。这只证明安装，不证明完整端到端验收；普通自动／hourly／main 竞态受控验收仍待定。实施前须核验实时 main、安装版本、保护设置、worker 有效配置及既有
 未提交改动；沿用 ADR-0148 的部署身份、配置授权与验收分离。
