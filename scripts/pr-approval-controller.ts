@@ -77,7 +77,7 @@ import {
 
 export { SignedCompletionStore, recoverCompletion, parseCompletionRecord, CompletionMismatch, CompletionUnavailable, COMPLETION_RETRY_POLICY } from "./pr-approval/completion.ts";
 export { collectPullRequestDiff, readPullRequestFileManifest, gitBlobSha } from "./pr-approval/diff.ts";
-export { PR_REVIEW_GATE_POLICY_VERSION, PR_REVIEW_GATE_LEGACY_POLICY_VERSION, PR_REVIEW_GATE_PREVIOUS_POLICY_VERSION, PR_REVIEW_GATE_INSTALLED_POLICY_VERSION, PR_REVIEW_GATE_OLDER_INSTALLED_POLICY_VERSION, PR_REVIEW_REPORT_VERSION, PR_VALIDATE_WORKFLOW_PATH,
+export { MAIN_WRITER_ATTESTATION_VERSION, PR_REVIEW_GATE_POLICY_VERSION, PR_REVIEW_GATE_LEGACY_POLICY_VERSION, PR_REVIEW_GATE_PREVIOUS_POLICY_VERSION, PR_REVIEW_GATE_INSTALLED_POLICY_VERSION, PR_REVIEW_GATE_OLDER_INSTALLED_POLICY_VERSION, PR_REVIEW_REPORT_VERSION, PR_VALIDATE_WORKFLOW_PATH,
   SAYHEAR_REPOSITORY_ID, SAYHEAR_REPOSITORY_NAME, evaluatePrReviewGate, parsePrReviewGateInput, integrationModeOf, parseIntegrationMode, type IntegrationMode,
   requirementDigest, parseIssueClosureExclusions, closingKeywordIssueNumbers, protectedReviewPaths } from "./pr-review-gate.ts";
 export { FIXED_PR_CI_BASELINE, RELEASE_CHECKS, preMergeDeferralFor } from "./daily-release-validation.ts";
@@ -3933,14 +3933,13 @@ export function mergeActionFor(
   if (integrationMode !== "up-to-date-base") {
     // Both head-bound modes merge the reviewed head against the live main
     // without moving it, so an out-of-date base is expected and must not block.
-    // Only a confirmed clean/behind state proceeds; every other state waits
-    // instead of arming a deferred intent that could land without fresh
-    // verification. The queue performs the merge itself; serialized merge pins
-    // it here. The gate deliberately leaves this state check to this step,
-    // because its own check run keeps GitHub reporting `blocked` until the
-    // candidate is reached.
+    // Serialized merge also accepts `blocked`: main's update restriction can
+    // keep GitHub reporting it even when the approval App may merge. The fresh
+    // gate and immediate merge guard must still prove the App-only main writer,
+    // current integration CI, and approvals before a pinned write.
     const state = pullRequest.mergeable_state;
-    if (pullRequest.mergeable !== true || (state !== "clean" && state !== "behind")) {
+    if (pullRequest.mergeable !== true ||
+        (state !== "clean" && state !== "behind" && !(integrationMode === "serialized-merge" && state === "blocked"))) {
       return "wait";
     }
     return integrationMode === "merge-queue" ? "enqueue" : "merge-now";
@@ -4282,6 +4281,80 @@ function assertLiveBrowserApproval(reviews: readonly GitHubReview[], identity: C
   }
 }
 
+async function blockedMergeProtectionsAreSafe(
+  config: ControllerConfig,
+  guard: PrReviewGateInput["runtime"]["mainWriterGuard"],
+): Promise<boolean> {
+  if (!guard?.readable || !guard.restrictsDefaultBranchUpdates || !guard.rulesetFingerprints?.length) return false;
+  try {
+    const rulesets = await readRulesetDetails(config.api);
+    if (rulesets === null) return false;
+    const writers = new Map(guard.rulesetFingerprints.map(({ id, fingerprint }) => [id, fingerprint]));
+    const freshWriters = new Set<number>();
+    for (const ruleset of rulesets) {
+      if (ruleset.enforcement === "disabled" || ruleset.enforcement === "evaluate") continue;
+      if (ruleset.enforcement !== "active") return false;
+      if (ruleset.target === "tag") continue;
+      if (ruleset.target !== "branch") return false;
+      const applies = blockedMergeRulesetCoversMain(ruleset.conditions);
+      if (applies === null) return false;
+      if (!applies) continue;
+      // An App with always bypass could skip every rule here, including rules
+      // in a second applicable ruleset that does not restrict writers at all.
+      if (!Array.isArray(ruleset.rules) || ruleset.rules.some((rule) =>
+        !isRecord(rule) || (rule.type !== "update" && rule.type !== "non_fast_forward") ||
+        !blockedMergeRuleParametersAreSafe(rule.type, rule.parameters))) return false;
+      if (!ruleset.rules.some((rule) => rule.type === "update")) continue;
+      const id = requiredPositiveInteger(ruleset.id, "rulesetId");
+      if (freshWriters.has(id) || writers.get(id) !== fingerprintRuleset(ruleset)) return false;
+      freshWriters.add(id);
+      if (Array.isArray(ruleset.bypass_actors)) {
+        const actor = ruleset.bypass_actors[0];
+        if (ruleset.bypass_actors.length !== 1 || !isRecord(actor) ||
+            actor.actor_id !== config.policy.reviewAppId || actor.actor_type !== "Integration" ||
+            !["always", "pull_request", "exempt"].includes(String(actor.bypass_mode))) return false;
+      } else if (ruleset.bypass_actors !== undefined || guard.bypassActorsEnumerated !== false) {
+        return false;
+      }
+    }
+    // The gate already validated the live enumeration or root attestation.
+    // Matching every writer fingerprint carries that proof to this final read.
+    if (freshWriters.size !== writers.size) return false;
+    const protection = await config.api.request<unknown>(repositoryPath("/branches/main/protection"));
+    if (!isRecord(protection) || !isRecord(protection.required_pull_request_reviews)) return false;
+    const allowances = protection.required_pull_request_reviews.bypass_pull_request_allowances;
+    if (allowances === undefined) return true;
+    return isRecord(allowances) && Object.keys(allowances).every((key) => ["users", "teams", "apps"].includes(key)) &&
+      ["users", "teams", "apps"].every((key) => Array.isArray(allowances[key]) && allowances[key].length === 0);
+  } catch {
+    return false;
+  }
+}
+
+// The pinned rulesets API documents update_allows_fetch_and_merge as the update
+// rule's required parameter; false is the strict form, so only it is accepted.
+function blockedMergeRuleParametersAreSafe(type: "update" | "non_fast_forward", parameters: unknown): boolean {
+  if (parameters === undefined) return true;
+  if (!isRecord(parameters)) return false;
+  const keys = Object.keys(parameters);
+  if (keys.length === 0) return true;
+  return type === "update" && keys.length === 1 && parameters.update_allows_fetch_and_merge === false;
+}
+
+function blockedMergeRulesetCoversMain(conditions: unknown): boolean | null {
+  if (!isRecord(conditions) || Object.keys(conditions).some((key) => key !== "ref_name") ||
+      !isRecord(conditions.ref_name)) return null;
+  const ref = conditions.ref_name;
+  if (Object.keys(ref).some((key) => key !== "include" && key !== "exclude") ||
+      !Array.isArray(ref.include) || ref.include.length === 0 || !Array.isArray(ref.exclude)) return null;
+  for (const pattern of [...ref.include, ...ref.exclude]) {
+    if (typeof pattern !== "string" ||
+        (pattern !== "~ALL" && pattern !== "~DEFAULT_BRANCH" &&
+          (!/^[A-Za-z0-9_./*-]+$/.test(pattern) || pattern.includes("**")))) return null;
+  }
+  return rulesetCoversBranch(conditions, "main");
+}
+
 export async function guardImmediateMerge(config: ControllerConfig, identity: CompletionIdentity): Promise<Readonly<{
   report: ModelReviewReport; repository: JsonRecord; pullRequest: GitHubPullRequest;
 }>> {
@@ -4325,6 +4398,10 @@ export async function guardImmediateMerge(config: ControllerConfig, identity: Co
       await readCurrentPullRequestMergeSha(config.api, pullRequest, snapshot.gateInput.repository.defaultBranchSha) !== snapshot.gateInput.pullRequest.mergeSha ||
       mergeActionFor(snapshot.humanBinding, pullRequest, integrationModeOf(snapshot.gateInput)) !== "merge-now") {
     throw new CompletionUnavailable("integration_changed_before_merge");
+  }
+  if (integrationModeOf(snapshot.gateInput) === "serialized-merge" && pullRequest.mergeable_state === "blocked" &&
+      !await blockedMergeProtectionsAreSafe(config, snapshot.gateInput.runtime.mainWriterGuard)) {
+    throw new CompletionUnavailable("blocked_merge_protections_unproven");
   }
   return { report, repository, pullRequest };
 }
@@ -4746,13 +4823,12 @@ async function reportReviewResult(
     integrationModeOf(freshSnapshot.gateInput),
   );
   if (mergeAction === "wait") {
-    // Nothing is armed and no durable intent is written while the PR is not
-    // cleanly mergeable. A saved intent would only be confirmed later, which
-    // would strand an approved merge; the saved review report lets the next
-    // scan retry the pinned merge once the state is clean.
+    // Nothing is armed and no durable intent is written until mergeability and
+    // state permit the integration mode's action. The saved review report lets
+    // the next scan retry with fresh verification.
     return {
       outcome: "awaiting_verification",
-      message: `PR #${report.pullRequestNumber} is approved but not cleanly mergeable; the merge waits for a clean state.`,
+      message: `PR #${report.pullRequestNumber} is approved but mergeability or state does not permit ${integrationModeOf(freshSnapshot.gateInput)}; the merge waits for fresh verification.`,
     };
   }
   const receipt: CompletionRecord = {

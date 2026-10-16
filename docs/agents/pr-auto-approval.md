@@ -138,8 +138,17 @@ Luke 于 2026-10-14 选择轻量串行集成模式：独立 PR 并行开发和�
   PR。当前集成失败不会盲目重跑。
 - `mergeable=false` 是真实冲突，交回原 PR 修复；未知状态继续等待。gate 不要求
   `mergeable_state=clean`，因为它自己就是 required check，尚未变绿时 GitHub 可以
-  正常报告 `blocked`。最终合入动作仍要求 `mergeable=true` 且状态为 `clean` 或
-  `behind`，不使用延后 auto-merge。
+  正常报告 `blocked`。`serialized-merge` 最终合入动作要求 `mergeable=true`，状态为
+  `clean`、`behind` 或 `blocked`，且新的 gate 与即时合入 guard 证明全部通过；
+  `blocked` 还须在最终 guard 重读全部 ruleset：每条适用的 active Branch ruleset
+  只允许 `update` 与 `non_fast_forward`，两者的参数只能缺省或为空对象，`update`
+  另可仅含 `update_allows_fetch_and_merge: false`；这同样适用于不含 `update` 的
+  第二条规则集。写入规则集指纹须与刚通过 gate 的守卫一致，实时可见的
+  bypass 仍须仅有审批 App；classic review 的 user/team/App bypass allowances
+  须省略或全部为空。规则详情、适用条件或 enforcement 不可读，或存在未知条件、
+  不支持的 glob、active push 等目标时均阻断；只有 disabled/evaluate、tag 或已证明
+  不覆盖 main 的规则集可忽略。其他 classic 保护继续由 GitHub 合入端点执行。
+  `mergeable` 未知或为 false 时不合入，不使用延后 auto-merge。
 - `serialized-merge` 必须关闭 `requiresUpToDate`，并以 active Branch ruleset 的
   `update` 规则限制 main 写入，唯一 bypass 是审批 App `5270295`。controller 从
   `/rulesets?includes_parents=true` 枚举编号，再读每条详情。规则、目标条件读不全
