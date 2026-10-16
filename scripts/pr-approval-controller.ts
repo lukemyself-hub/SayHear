@@ -1147,7 +1147,10 @@ export async function readClosingIssueReferences(
       repository?: {
         pullRequest?: {
           closingIssuesReferences?: {
-            nodes?: readonly { number?: number }[];
+            nodes?: readonly {
+              number?: number;
+              repository?: { nameWithOwner?: unknown } | null;
+            }[] | null;
             pageInfo?: { hasNextPage?: boolean };
           };
         } | null;
@@ -1157,7 +1160,7 @@ export async function readClosingIssueReferences(
       `query($owner:String!,$name:String!,$number:Int!){
         repository(owner:$owner,name:$name){
           pullRequest(number:$number){
-            closingIssuesReferences(first:100){nodes{number} pageInfo{hasNextPage}}
+            closingIssuesReferences(first:100){nodes{number repository{nameWithOwner}} pageInfo{hasNextPage}}
           }
         }
       }`,
@@ -1167,7 +1170,12 @@ export async function readClosingIssueReferences(
     if (!references?.nodes || references.pageInfo?.hasNextPage !== false) return null;
     const numbers: number[] = [];
     for (const node of references.nodes) {
-      if (typeof node.number !== "number" || !Number.isSafeInteger(node.number) || node.number <= 0) return null;
+      if (typeof node?.number !== "number" || !Number.isSafeInteger(node.number) || node.number <= 0) return null;
+      const nameWithOwner = node.repository?.nameWithOwner;
+      if (typeof nameWithOwner !== "string" || nameWithOwner.length === 0) return null;
+      const segments = nameWithOwner.split("/");
+      if (segments.length !== 2 || segments.some((segment) => segment.length === 0 || /[\s\x00-\x1f\x7f]/.test(segment))) return null;
+      if (nameWithOwner.toLowerCase() !== SAYHEAR_REPOSITORY_NAME.toLowerCase()) continue;
       numbers.push(node.number);
     }
     return numbers;
