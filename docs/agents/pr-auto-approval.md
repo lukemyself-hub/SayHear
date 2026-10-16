@@ -27,7 +27,13 @@ v11 保留在已签发收据的恢复允许列表中。候选不等于安装，�
 - 无 Issue 要求：PR 可以没有关联 Issue；仅明确由 PR 完成的 Issue 才自动关闭，
   背景引用与 keep-open 项不做生命周期写入。
 - 最新 main 组合证明：实际合入绑定通过验证的 PR 与 main 组合；main 再变化时重新
-  验证，不沿用旧组合成功；旧 CI 成功不用于新结果。
+  验证，不沿用旧组合成功；旧 CI 成功不用于新结果。每次发出合入前，完成记录写入
+  已测 merge ref 的 tree（`testedTreeSha`）；确认合入后实际合入提交的 tree 必须相同。
+  不一致记为 `merged_tree_mismatch`，未经本控制器发出、无法证明的合入记为
+  `merged_tree_unproven`，两者都进入 `needs_attention`，不关闭 Issue，并阻断仓库内
+  后续自动合入，等待人工处理。旧策略签名的意图按原语义恢复。
+- 人工通路刷新组合 CI：有 final-decision 回执时，`ongoing`、分诊标签和依赖不再挡住
+  集成刷新；显式暂停、Issue 暂停与关闭声明歧义仍会挡住。
 - 有界 OpenCode 修复：Codex 协调 OpenCode V2 implementation / code-review worker，
   同一 PR 单一写入者，独立工作树与明确范围，修复者不自批；implementation 完成声明
   须经实际 diff 与验证结果核验；review 每轮独立新会话；最多三轮自动整改，轮次跨
@@ -170,15 +176,16 @@ Luke 于 2026-10-14 选择轻量串行集成模式：独立 PR 并行开发和�
 
 - `serialized-merge` 的代码审查绑定 head、完整 diff/change digest、全部需求摘要、
   受保护路径、被审 workflow blob 与策略版本。历史 base 保存在报告中，不改写成
-  当前 main。main 前进时，controller 完整读取认证的 base 变化，确认没有触及
-  PR 文件或安全、依赖、迁移、策略等实质风险路径，才复用已有审查；截断、读取失败
-  或风险不明都要求重新审查。head、需求或完整 diff 改变也使旧审查失效。
+  当前 main。v12 候选起，main 无冲突前进本身不撤销审查或人工批准，路径重叠与
+  配置类变化也不再单独撤销（Luke 2026-10-15 决定）；main 侧风险由当前 merge ref
+  上的可信组合 Validate 承担，组合失败即停止，真实冲突交回修复。只有新提交、
+  需求实质变化、真实冲突或组合 CI 失败使批准失效。
 - 审核报告的 `baseSha` 从包内 `reviewContext.baseSha` 取得。严格模式下它仍是
   PR base；v10 轻量模式下它是本次审查针对的 main SHA。`pullRequest.baseSha`
   始终保留 GitHub 原值。这样实质 main 风险可以通过重新审查当前集成解除，无须
   为了改变报告身份而强制提交一次 rebase。
-- 浏览器新挑战用 `reviewBinding=head-v2` 标识可复用的授权。只有 controller 已证明
-  main 变化安全时，才允许比较忽略 base；作者、审核者、head、完整 diff、需求、
+- 浏览器新挑战用 `reviewBinding=head-v2` 标识可复用的授权，比较时忽略 base，
+  main 前进不重置挑战；作者、审核者、head、完整 diff、需求、
   路径与 workflow blob 仍精确绑定。旧 exact-base 挑战不能升级为 head-v2 收据。
 - 轻量模式的 legacy root 授权额外绑定 `approvedBaseSha` 与精确
   `approvedHeadSha`。缺少被审 main 基线的旧记录不能获得新模式权限；main 引入

@@ -2405,10 +2405,8 @@ export async function collectEvidence(
 }
 
 type Snapshot = Readonly<{
-  baseReviewSafe?: boolean;
   staleIntegrationRunId: number | null;
   staleMergeRefSha?: string | null;
-  changedPaths: readonly string[];
   humanBinding: HumanReviewBinding;
   browserChallenge: BrowserChallenge | null;
   gateInput: Omit<PrReviewGateInput, "review" | "evidence">;
@@ -2418,45 +2416,6 @@ type Snapshot = Readonly<{
   workflowConclusion: string | null;
   diff: CollectedPrDiff & Readonly<{ changeDigest: string }>;
 }>;
-
-export async function baseReviewRiskSafe(
-  api: GitHubApi,
-  reviewedBase: string,
-  currentMain: string,
-  changedPaths: readonly string[],
-): Promise<boolean> {
-  if (![reviewedBase, currentMain].every((sha) => /^[a-f0-9]{40}$/.test(sha))) return false;
-  if (reviewedBase === currentMain) return true;
-  try {
-    const comparison = await api.request<JsonRecord>(repositoryPath(`/compare/${reviewedBase}...${currentMain}`));
-    const lastCommit = Array.isArray(comparison.commits) ? comparison.commits.at(-1) : null;
-    if (!isRecord(comparison.base_commit) || comparison.base_commit.sha !== reviewedBase ||
-        !isRecord(comparison.merge_base_commit) || comparison.merge_base_commit.sha !== reviewedBase ||
-        comparison.status !== "ahead" || !Array.isArray(comparison.commits) ||
-        comparison.commits.length === 0 || comparison.commits.length >= 250 ||
-        comparison.total_commits !== comparison.commits.length ||
-        !isRecord(lastCommit) || lastCommit.sha !== currentMain ||
-        !Array.isArray(comparison.files) || comparison.files.length >= 300) return false;
-    const proposed = new Set(changedPaths);
-    const highRisk = /(?:^|\/)(?:\.github|migrations?|schema|schemas|shared|contracts?|types|providers?|auth|authentication|authorization|security|permissions?|capabilities|feature-flags|polic(?:y|ies)|pr-approval)(?:\/|[.-])|(?:^|\/)(?:package\.json|[^/]*lock[^/]*|tsconfig[^/]*|[^/]*config\.[^/]+|AGENTS\.md|CLAUDE\.md)|^scripts\/pr-review-gate\.ts$|^docs\/(?:adr|architecture|product|agents)\//i;
-    return comparison.files.every((file) => {
-      if (!isRecord(file) || typeof file.filename !== "string" ||
-          !["added", "modified", "removed", "renamed", "copied"].includes(String(file.status)) ||
-          ((file.status === "renamed" || file.status === "copied") && typeof file.previous_filename !== "string")) return false;
-      const paths = [file.filename, ...(typeof file.previous_filename === "string" ? [file.previous_filename] : [])];
-      return paths.every((path) => path.length > 0 && !path.startsWith("/") && !path.split("/").includes("..") &&
-        !proposed.has(path) && !highRisk.test(path));
-    });
-  } catch {
-    return false;
-  }
-}
-
-async function withReviewSafety(config: ControllerConfig, snapshot: Snapshot, report: ModelReviewReport): Promise<Snapshot> {
-  if (integrationModeOf(snapshot.gateInput) !== "serialized-merge") return snapshot;
-  return { ...snapshot, baseReviewSafe: await baseReviewRiskSafe(config.api, report.baseSha,
-    snapshot.gateInput.repository.defaultBranchSha, snapshot.changedPaths) };
-}
 
 async function readHeadWorkflowBlob(api: GitHubApi, headSha: string): Promise<string> {
   const file = await api.request<JsonRecord>(
@@ -2485,7 +2444,6 @@ export async function readHumanBinding(
     freeze: boolean;
     now?: number;
     currentMainSha?: string;
-    changedPaths?: readonly string[];
     scopeReconciliation?: SubmittedScopeReconciliation;
   }>,
 ): Promise<HumanReviewBinding> {
@@ -2495,9 +2453,9 @@ export async function readHumanBinding(
       pullRequestNumber: input.number, diffDigest: input.diffDigest, requirementDigest: input.requirement, diffComplete: input.diffComplete,
     });
     const serialized = parseIntegrationMode(config.app.integrationMode) === "serialized-merge";
-    const eligible = record !== null && (!serialized || (record.approvedHeadSha === input.headSha && record.approvedBaseSha !== undefined &&
-      await baseReviewRiskSafe(config.api, record.approvedBaseSha, input.currentMainSha ?? input.pullRequest.base.sha,
-        input.changedPaths ?? input.changedFiles.map((file) => file.path))));
+    // Main advancing alone never revokes the head approval; combined Validate
+    // on the current merge ref carries the main-side risk.
+    const eligible = record !== null && (!serialized || (record.approvedHeadSha === input.headSha && record.approvedBaseSha !== undefined));
     return record === null || !eligible
       ? { ...NO_HUMAN_BINDING, channel: "legacy-root" }
       : { channel: "legacy-root", paths: record.paths, noRuntimeImpact: record.noRuntimeImpact === true, validateWorkflowBlobSha: record.validateWorkflowBlobSha, receipt: null, challenge: null };
@@ -2507,11 +2465,6 @@ export async function readHumanBinding(
   if (input.repositoryNodeId === null) throw new Error("browser_repository_identity_unavailable");
   const serialized = parseIntegrationMode(config.app.integrationMode) === "serialized-merge";
   const currentMain = input.currentMainSha ?? input.pullRequest.base.sha.toLowerCase();
-  const previous = await config.browserApprovalStore.read(input.number);
-  if (serialized && previous?.challenge && !await baseReviewRiskSafe(config.api,
-      previous.challenge.context.baseSha, currentMain, input.changedPaths ?? input.changedFiles.map((file) => file.path))) {
-    await readBrowserAuthorization(config.browserApprovalStore, input.number, null, input.reviews, false, input.now);
-  }
   const legacyContext = {
     ...(serialized ? { reviewBinding: "head-v2" as const } : {}),
     repositoryId: SAYHEAR_REPOSITORY_ID, repositoryNodeId: input.repositoryNodeId,
@@ -2792,7 +2745,6 @@ export async function readSnapshot(
     requirement: requirementDigest(normalizedIssues, normalizedPullRequest),
     headSha: normalizedPullRequest.headSha,
     currentMainSha: defaultBranchSha,
-    changedPaths: changedFileRecords.flatMap((file) => typeof file.filename === "string" ? [file.filename, ...(typeof file.previous_filename === "string" ? [file.previous_filename] : [])] : []),
     freeze: options.freezeBrowserChallenge === true,
     ...(options.scopeReconciliation ? { scopeReconciliation: options.scopeReconciliation } : {}),
   });
@@ -2810,7 +2762,6 @@ export async function readSnapshot(
   return {
     staleIntegrationRunId: collected.staleIntegrationRunId,
     staleMergeRefSha: integrationMode === "serialized-merge" ? mergeRef.stale : null,
-    changedPaths: changedFileRecords.flatMap((file) => typeof file.filename === "string" ? [file.filename, ...(typeof file.previous_filename === "string" ? [file.previous_filename] : [])] : []),
     humanBinding,
     browserChallenge: humanBinding.challenge,
     gateInput: {
@@ -2862,7 +2813,6 @@ function createModelReviewInput(
       pullRequestNumber: report.pullRequestNumber,
       headSha: report.headSha,
       baseSha: report.baseSha,
-      baseReviewSafe: report.baseSha === snapshot.gateInput.repository.defaultBranchSha || snapshot.baseReviewSafe === true,
       policyVersion: report.policyVersion,
       requirementDigest: report.requirementDigest,
       decision: report.decision,
@@ -3520,9 +3470,7 @@ export async function readSavedReviewReport(
     ) {
       return null;
     }
-    if (integrationModeOf(snapshot.gateInput) === "serialized-merge" &&
-        (!snapshot.diff.complete || !await baseReviewRiskSafe(config.api, report.baseSha,
-          snapshot.gateInput.repository.defaultBranchSha, snapshot.changedPaths))) return null;
+    if (integrationModeOf(snapshot.gateInput) === "serialized-merge" && !snapshot.diff.complete) return null;
     return {
       report,
       evidenceDigest: marker[7]!.toLowerCase(),
@@ -4455,12 +4403,12 @@ export async function guardImmediateMerge(config: ControllerConfig, identity: Co
     throw new CompletionMismatch("saved_review_identity_mismatch");
   }
   const report = saved.report;
-  const snapshot = await withReviewSafety(config, await readSnapshot(config, identity.pullRequestNumber, report.declaredImpacts, report.capability), report);
+  const snapshot = await readSnapshot(config, identity.pullRequestNumber, report.declaredImpacts, report.capability);
   if (snapshot.diff.digest !== identity.reviewIdentity.diffDigest || snapshot.diff.changeDigest !== identity.reviewIdentity.changeDigest ||
       await readHeadWorkflowBlob(config.api, identity.headSha) !== identity.reviewIdentity.workflowBlobSha) throw new CompletionMismatch("review_content_mismatch");
   if (await refreshStaleIntegration(config, snapshot)) throw new CompletionUnavailable("waiting_for_integration_validation");
   const { gate } = evaluateSnapshot(config, snapshot, report);
-  if (gate.outcome !== "merge_candidate") throw new CompletionUnavailable(gate.reasons.some((reason) => reason.code === "stale_base_review_risk") ? "stale_base_review_risk" : "fresh_merge_gate_blocked");
+  if (gate.outcome !== "merge_candidate") throw new CompletionUnavailable("fresh_merge_gate_blocked");
   if (browserAuthorizationRequired(snapshot.humanBinding, snapshot.gateInput.pullRequest.changedFiles)) {
     const human = snapshot.humanBinding.receipt;
     if (identity.humanChannel !== "browser" || !human || human.reviewId !== identity.humanReviewId || human.challenge.epoch !== identity.epoch ||
@@ -4562,16 +4510,38 @@ export async function verifyCompletionRequirements(
   if (content !== identity.requirementDigest) throw new CompletionMismatch("requirement_content_mismatch");
 }
 
+async function readCommitTreeSha(api: GitHubApi, sha: string): Promise<string> {
+  const commit = await api.request<JsonRecord>(repositoryPath(`/git/commits/${sha}`));
+  const tree = isRecord(commit.tree) ? commit.tree.sha : null;
+  if (typeof tree !== "string" || !/^[0-9a-f]{40}$/i.test(tree)) throw new CompletionUnavailable("merge_tree_unavailable");
+  return tree.toLowerCase();
+}
+
 export async function recoverControllerCompletion(config: ControllerConfig, receipt: CompletionRecord, clock?: CompletionClock): Promise<CompletionRecord> {
   if (!config.completionStore) throw new Error("Trusted completion store unavailable.");
   let latest = receipt;
   const store = config.completionStore;
+  // Write-side facts belong to this wrapper; recoverCompletion's copies of the
+  // record must not erase them.
+  const writeFacts = () => ({
+    ...(latest.mergeWriteState ? { mergeWriteState: latest.mergeWriteState } : {}),
+    ...(latest.testedTreeSha ? { testedTreeSha: latest.testedTreeSha } : {}),
+  });
   const trackedStore: CompletionStore = {
     read: (number) => store.read(number), list: () => store.list(),
     save: async (value) => {
-      latest = { ...value, ...(latest.mergeWriteState ? { mergeWriteState: latest.mergeWriteState } : {}) };
+      latest = { ...value, ...writeFacts() };
       await store.save(latest);
     },
+  };
+  // Current serialized intents only report a merge whose tree matches the
+  // tested combination. Older intents keep the semantics they were signed with.
+  const proveMergedTree = async (identity: CompletionIdentity, mergeSha: string | null): Promise<string | null> => {
+    if (mergeSha === null || identity.policyVersion !== PR_REVIEW_GATE_POLICY_VERSION || identity.mergeAction !== "merge-now" ||
+        identity.integrationMode !== "serialized-merge") return mergeSha;
+    if (!latest.testedTreeSha) throw new CompletionMismatch("merged_tree_unproven");
+    if (await readCommitTreeSha(config.api, mergeSha) !== latest.testedTreeSha) throw new CompletionMismatch("merged_tree_mismatch");
+    return mergeSha;
   };
   const recovered = await recoverCompletion(trackedStore, receipt, {
     confirmMerge: async (identity) => {
@@ -4579,12 +4549,14 @@ export async function recoverControllerCompletion(config: ControllerConfig, rece
         identity.botActorId !== config.botActorId || identity.appId !== config.app.appId ||
         !RECEIPT_POLICY_VERSIONS.includes(identity.policyVersion)) throw new CompletionMismatch("trusted_identity_mismatch");
       const confirmed = await confirmCompletionMerge(config.api, identity);
-      if (confirmed !== null) return confirmed;
+      if (confirmed !== null) return proveMergedTree(identity, confirmed);
       // An uncertain request may still be executing on GitHub. Only a proven
       // rejection or an intent never sent is eligible for a new guarded write.
       if (latest.mergeWriteState !== "not-sent" && latest.mergeWriteState !== "rejected") return null;
       const guarded = await guardImmediateMerge(config, identity);
-      latest = { ...latest, mergeWriteState: "uncertain" };
+      const testedMergeSha = guarded.pullRequest.merge_commit_sha;
+      if (typeof testedMergeSha !== "string") throw new CompletionUnavailable("merge_tree_unavailable");
+      latest = { ...latest, mergeWriteState: "uncertain", testedTreeSha: await readCommitTreeSha(config.api, testedMergeSha) };
       await store.save(latest);
       try {
         await applyMergeAction(config, guarded.report, guarded.repository, guarded.pullRequest, "merge-now");
@@ -4597,14 +4569,14 @@ export async function recoverControllerCompletion(config: ControllerConfig, rece
         }
         throw error;
       }
-      return confirmCompletionMerge(config.api, identity);
+      return proveMergedTree(identity, await confirmCompletionMerge(config.api, identity));
     },
     completeIssues: async (identity) => {
       await verifyCompletionRequirements(config.api, identity);
       await completeLinkedIssuesAfterMerge(config.api, identity.issueNumbers, { autoMergeEnabled: false, merged: true });
     },
   }, clock);
-  return { ...recovered, ...(latest.mergeWriteState ? { mergeWriteState: latest.mergeWriteState } : {}) };
+  return { ...recovered, ...writeFacts() };
 }
 
 export async function completionBlockingScope(api: GitHubApi, receipt: CompletionRecord): Promise<"none" | "this-pr" | "repository"> {
@@ -4684,11 +4656,14 @@ export async function refreshStaleIntegration(
   const staleMergeRefSha = pull.mergeSha === null ? snapshot.staleMergeRefSha ?? null : null;
   if (snapshot.staleIntegrationRunId === null && staleMergeRefSha === null) return false;
   if (staleMergeRefSha !== null && options.rebuildMergeRef !== true) return true;
+  // After Luke's final decision, Issue labels and dependencies are his call;
+  // only explicit pauses and closure ambiguity still stop the shared refresh.
+  const humanRoute = snapshot.humanBinding.receipt?.challenge.context.liveness === "final-decision-v1";
   if (pull.mergeable !== true || containsExplicitMergeHold(snapshot) || pull.issueClosureAmbiguous ||
       snapshot.gateInput.issues.some((issue) => !pull.keepOpenIssueNumbers.includes(issue.number) && issue.state === "open" &&
-        (!issue.labels.includes("ongoing") || issue.pause.active || issue.pause.source === "unknown" ||
+        (issue.pause.active || issue.pause.source === "unknown" || (!humanRoute && (!issue.labels.includes("ongoing") ||
           issue.labels.some((label) => ["ready-for-human", "needs-info", "needs-triage", "wontfix"].includes(label)) ||
-          (issue.blockedBy === null || issue.blockedBy.some((dependency) => !snapshot.gateInput.issues.some((target) => target.number === dependency && !pull.keepOpenIssueNumbers.includes(target.number))))))) {
+          (issue.blockedBy === null || issue.blockedBy.some((dependency) => !snapshot.gateInput.issues.some((target) => target.number === dependency && !pull.keepOpenIssueNumbers.includes(target.number))))))))) {
     // An ineligible stale ref falls through to the normal review and handoff.
     return staleMergeRefSha === null;
   }
@@ -4789,12 +4764,12 @@ export async function reportReviewResult(
   if (report.repositoryId !== SAYHEAR_REPOSITORY_ID) {
     throw new Error("The review report names a different repository.");
   }
-  const snapshot = await withReviewSafety(config, await readSnapshot(
+  const snapshot = await readSnapshot(
     config, report.pullRequestNumber, report.declaredImpacts, report.capability,
     // Only a report this gate version will evaluate may persist a scope verdict.
     report.scopeReconciliation && report.version === PR_REVIEW_REPORT_VERSION && report.policyVersion === PR_REVIEW_GATE_POLICY_VERSION
       ? { scopeReconciliation: { reconciliation: report.scopeReconciliation, reviewedRequirementDigest: report.requirementDigest, reviewedHeadSha: report.headSha } } : {},
-  ), report);
+  );
   // In merge-queue mode a stale base is the normal state: the queue builds the
   // merged result against the current main, so main moving must not dispatch an
   // implementation agent to rebase an already-reviewed head.
@@ -4807,9 +4782,6 @@ export async function reportReviewResult(
     return { outcome: "awaiting_verification", message: handoff.status === "handed_off"
       ? `PR #${report.pullRequestNumber} requires main synchronization; Issues ${handoff.issueNumbers.join(", ")} were handed back.`
       : `PR #${report.pullRequestNumber} base-sync handoff stopped at ${handoff.status}.` };
-  }
-  if (integrationModeOf(snapshot.gateInput) === "serialized-merge" && snapshot.baseReviewSafe !== true) {
-    return { outcome: "awaiting_verification", message: "stale_base_review_risk: current main introduces material or unknown review risk; prepare a fresh review anchored to current main." };
   }
   if (await refreshStaleIntegration(config, snapshot, { rebuildMergeRef: true })) {
     return { outcome: "awaiting_verification", message: "Waiting for current-main integration Validate; no Issue handoff was created." };
@@ -4882,9 +4854,9 @@ export async function reportReviewResult(
   ) {
     throw new Error("GitHub did not retain the expected independent App approval.");
   }
-  const freshSnapshot = await withReviewSafety(config, await readSnapshot(
+  const freshSnapshot = await readSnapshot(
     config, report.pullRequestNumber, report.declaredImpacts, report.capability,
-  ), report);
+  );
   const { gate: freshGate } = evaluateSnapshot(config, freshSnapshot, report);
   if (freshGate.outcome !== gate.outcome) {
     await upsertCheckRun(config, freshSnapshot, report, freshGate);

@@ -334,9 +334,6 @@ export type PrReviewGateInput = Readonly<{
     baseSha: string;
     policyVersion: string;
     requirementDigest: string;
-    // Derived by the controller from authenticated base changes, never a model
-    // assertion. Omission cannot authorize reuse across main advancement.
-    baseReviewSafe?: boolean;
     decision:
       | "approve"
       | "request_changes"
@@ -1006,9 +1003,6 @@ export function parsePrReviewGateInput(value: unknown): PrReviewGateInput {
         review.requirementDigest,
         "review.requirementDigest",
       ),
-      ...(review.baseReviewSafe === undefined ? {} : {
-        baseReviewSafe: requiredBoolean(review.baseReviewSafe, "review.baseReviewSafe"),
-      }),
       decision,
       diffComplete: requiredBoolean(review.diffComplete, "review.diffComplete"),
       reviewerAppId: requiredPositiveInteger(
@@ -1637,14 +1631,6 @@ export function evaluatePrReviewGate(
     return outcome(input, "awaiting_verification", {
       code: "stale_review",
       message: "The review report does not match the current repository, PR, head, and base.",
-    });
-  }
-  if (integrationModeOf(input) === "serialized-merge" &&
-      input.review.baseSha !== input.repository.defaultBranchSha &&
-      input.review.baseReviewSafe !== true) {
-    return outcome(input, "awaiting_verification", {
-      code: "stale_base_review_risk",
-      message: "Main changed after this review and its effect on the reviewed code has not been cleared.",
     });
   }
   if (

@@ -40,6 +40,9 @@ export type CompletionRecord = Readonly<{
   mergeSha: string | null;
   // Absence means an older operation whose delivery must be reconciled.
   mergeWriteState?: "not-sent" | "uncertain" | "rejected" | "accepted";
+  // Tree of the merge ref whose combined Validate passed, read just before the
+  // merge write. The confirmed merge commit must carry the same tree.
+  testedTreeSha?: string;
 }>;
 export class CompletionMismatch extends Error {}
 export class CompletionUnavailable extends Error {
@@ -116,6 +119,7 @@ export function parseCompletionRecord(value: unknown): CompletionRecord {
     ...(value.mergeWriteState === "not-sent" || value.mergeWriteState === "uncertain" ||
       value.mergeWriteState === "rejected" || value.mergeWriteState === "accepted"
       ? { mergeWriteState: value.mergeWriteState } : {}),
+    ...(value.testedTreeSha === undefined ? {} : { testedTreeSha: digest(value.testedTreeSha, 40) }),
   };
   if ((phase === "issues_pending" || phase === "complete") && result.mergeSha === null) throw new Error("completion_schema_invalid");
   return result;
