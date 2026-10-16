@@ -38,6 +38,7 @@ const OPEN_LEDGER: TrustedLedger = {
   roundsConsumed: 0,
   paused: false,
   historyConsistent: true,
+  latestReviewedHead: HEAD_A,
 };
 
 const stopped: ProbeWorker = async () => "stopped";
@@ -363,7 +364,7 @@ describe("controller ledger gates new reservations", () => {
     const paused = await reserveWork(
       store,
       reserveArgs(41, "ledger", {
-        ledger: { roundsConsumed: 0, paused: true, historyConsistent: true },
+        ledger: { roundsConsumed: 0, paused: true, historyConsistent: true, latestReviewedHead: HEAD_A },
       }),
     );
     if (paused.ok) throw new Error("paused ledger must refuse");
@@ -372,7 +373,7 @@ describe("controller ledger gates new reservations", () => {
     const inconsistent = await reserveWork(
       store,
       reserveArgs(41, "ledger", {
-        ledger: { roundsConsumed: 0, paused: false, historyConsistent: false },
+        ledger: { roundsConsumed: 0, paused: false, historyConsistent: false, latestReviewedHead: HEAD_A },
       }),
     );
     if (inconsistent.ok) throw new Error("inconsistent ledger must refuse");
@@ -381,7 +382,7 @@ describe("controller ledger gates new reservations", () => {
     const exhausted = await reserveWork(
       store,
       reserveArgs(41, "ledger", {
-        ledger: { roundsConsumed: 3, paused: false, historyConsistent: true },
+        ledger: { roundsConsumed: 3, paused: false, historyConsistent: true, latestReviewedHead: HEAD_A },
       }),
     );
     if (exhausted.ok) throw new Error("exhausted ledger must refuse");
@@ -391,7 +392,7 @@ describe("controller ledger gates new reservations", () => {
     const lastRound = await reserveWork(
       store,
       reserveArgs(42, "ledger-two", {
-        ledger: { roundsConsumed: 2, paused: false, historyConsistent: true },
+        ledger: { roundsConsumed: 2, paused: false, historyConsistent: true, latestReviewedHead: HEAD_A },
       }),
     );
     if (!lastRound.ok) throw new Error("roundsConsumed 2 must still reserve");
@@ -404,7 +405,7 @@ describe("controller ledger gates new reservations", () => {
       store,
       reserveArgs(41, "ledger-retry", {
         startHead: HEAD_B,
-        ledger: { roundsConsumed: 9, paused: true, historyConsistent: false },
+        ledger: { roundsConsumed: 9, paused: true, historyConsistent: false, latestReviewedHead: HEAD_A },
       }),
     );
     if (blocked.ok) throw new Error("permanent reasons precede occupied");
@@ -484,6 +485,7 @@ describe("sessions", () => {
     expect(reattached.record.seenSessions[0]).toEqual({
       id: "sess-cycle",
       role: "implementation",
+      model: null,
     });
 
     const conflict = await attachSession(again, {
@@ -1216,5 +1218,113 @@ describe("byte budget on every write path", () => {
       (await readWork(store, { repositoryId: REPO, pullRequestNumber: 81 }))
         ?.version,
     ).toBe(1);
+  });
+});
+
+describe("review binding and repeat escalation (P2-1/P2-2)", () => {
+  it("refuses implementation reserve unless the controller review covers the head", async () => {
+    const { store } = await makeStore();
+    const unreviewed = await reserveWork(
+      store,
+      reserveArgs(91, "unreviewed", {
+        ledger: { roundsConsumed: 0, paused: false, historyConsistent: true, latestReviewedHead: null },
+      }),
+    );
+    if (unreviewed.ok) throw new Error("null reviewed head must refuse");
+    expect(unreviewed.reason).toBe("review_not_recorded");
+    const stale = await reserveWork(
+      store,
+      reserveArgs(91, "stale-review", {
+        ledger: { roundsConsumed: 0, paused: false, historyConsistent: true, latestReviewedHead: HEAD_B },
+      }),
+    );
+    if (stale.ok) throw new Error("a review for another head must refuse");
+    expect(stale.reason).toBe("review_not_recorded");
+    const fresh = await reserveWork(store, reserveArgs(91, "reviewed"));
+    if (!fresh.ok) throw new Error("a review covering the head must reserve");
+  });
+
+  it("code-review reservations bypass the review binding", async () => {
+    const { store } = await makeStore();
+    const out = await reserveWork(
+      store,
+      reserveArgs(92, "review-bypass", {
+        role: "code-review",
+        ledger: { roundsConsumed: 0, paused: false, historyConsistent: true, latestReviewedHead: null },
+      }),
+    );
+    if (!out.ok) throw new Error("code-review must bypass the review binding");
+  });
+
+  it("a repeated finding after an accepted fix blocks the next implementation reserve", async () => {
+    const { store, token } = await reserveAttached(93, "repeat-block");
+    const input = {
+      repositoryId: REPO,
+      pullRequestNumber: 93,
+      ownerToken: token,
+      key: "missing-guard",
+      status: "confirmed" as const,
+      evidence: "repro on controlled PR",
+    };
+    const first = await recordFinding(store, input);
+    if (!first.ok || first.repeated) throw new Error("first confirmation is not a repeat");
+    const accepted = await acceptResult(
+      store,
+      {
+        repositoryId: REPO,
+        pullRequestNumber: 93,
+        ownerToken: token,
+        sessionId: "sess-repeat-block",
+        startHead: HEAD_A,
+        scopeDigest: SCOPE_A,
+        liveHead: HEAD_A,
+      },
+      stopped,
+    );
+    if (!accepted.ok) throw new Error("fix result must be accepted");
+    const again = await recordFinding(store, { ...input, evidence: "same guard missing after fix" });
+    if (!again.ok || !again.repeated) throw new Error("reappearance must report repeated");
+    const released = await releaseWork(
+      store,
+      { repositoryId: REPO, pullRequestNumber: 93, ownerToken: token },
+      stopped,
+    );
+    if (!released.ok || !released.released) throw new Error("stopped release must clear");
+    const next = await reserveWork(store, reserveArgs(93, "repeat-block-2"));
+    if (next.ok) throw new Error("a repeated finding must block the next implementation fix");
+    expect(next.reason).toBe("repeated_finding");
+    // The refusal preserves the record: findings and history are intact.
+    expect(next.record?.findings.some((finding) => finding.repeatedAfterFix)).toBe(true);
+  });
+});
+
+describe("worker model pinning (P2-3)", () => {
+  it("records the attach model and refuses a resume on a changed model", async () => {
+    const { store } = await makeStore();
+    const reserved = await reserveWork(store, reserveArgs(94, "model-pin"));
+    if (!reserved.ok || reserved.record.owner === null) throw new Error("reservation must succeed");
+    const token = reserved.record.owner.token;
+    const attach = (sessionId: string, model: string | null) =>
+      attachSession(store, {
+        repositoryId: REPO,
+        pullRequestNumber: 94,
+        ownerToken: token,
+        startHead: HEAD_A,
+        scopeDigest: SCOPE_A,
+        role: "implementation",
+        sessionId,
+        ...(model === null ? {} : { model }),
+      });
+    const first = await attach("sess-model", "magpie/group/group#high");
+    if (!first.ok || first.resumed) throw new Error("first attach must succeed");
+    expect(first.record.owner?.model).toBe("magpie/group/group#high");
+    const same = await attach("sess-model", "magpie/group/group#high");
+    if (!same.ok || !same.resumed) throw new Error("same-model resume must succeed");
+    const changed = await attach("sess-model", "magpie/group/other#low");
+    if (changed.ok) throw new Error("a changed model must refuse");
+    expect(changed.reason).toBe("model_changed");
+    // The refusal preserves the owner and its files-side state.
+    expect(changed.record?.owner?.sessionId).toBe("sess-model");
+    expect(changed.record?.owner?.model).toBe("magpie/group/group#high");
   });
 });

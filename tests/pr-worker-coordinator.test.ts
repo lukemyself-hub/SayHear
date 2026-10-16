@@ -87,7 +87,7 @@ async function setupEnv(opts: { role?: "implementation" | "code-review"; pr?: nu
   const attempt = opts.attempt ?? 1;
   const request: CoordinatorRequest = {
     repositoryId: REPO, pullRequestNumber: pr, head, changeDigest: "e".repeat(64),
-    ledger: { roundsConsumed: 0, paused: false, historyConsistent: true },
+    ledger: { roundsConsumed: 0, paused: false, historyConsistent: true, latestReviewedHead: head },
     role: opts.role ?? "implementation", worktree: wt, allowedPaths: ["src", "docs/note.md"],
     taskFile, taskSha256, workerStateDir: wrapper, expectedAttempt: attempt, expectedService: { ...SERVICE },
   };
@@ -236,9 +236,9 @@ describe("fail-closed bindings", () => {
   });
   it("refuses paused / exhausted / inconsistent ledgers", async () => {
     for (const ledger of [
-      { roundsConsumed: 0, paused: true, historyConsistent: true },
-      { roundsConsumed: 3, paused: false, historyConsistent: true },
-      { roundsConsumed: 0, paused: false, historyConsistent: false },
+      { roundsConsumed: 0, paused: true, historyConsistent: true, latestReviewedHead: null },
+      { roundsConsumed: 3, paused: false, historyConsistent: true, latestReviewedHead: null },
+      { roundsConsumed: 0, paused: false, historyConsistent: false, latestReviewedHead: null },
     ]) {
       const env = await setupEnv({ pr: 50 + ledger.roundsConsumed + (ledger.paused ? 10 : 0) + (ledger.historyConsistent ? 0 : 20) });
       const out = await runReserve({ ...env.request, ledger }, { stateDir: env.stateDir });
@@ -409,7 +409,7 @@ describe("immutable request and task binding", () => {
     const variants: Array<[string, Partial<CoordinatorRequest>]> = [
       ["head", { head: "c".repeat(40) }],
       ["changeDigest", { changeDigest: "d".repeat(64) }],
-      ["ledger", { ledger: { roundsConsumed: 1, paused: false, historyConsistent: true } }],
+      ["ledger", { ledger: { roundsConsumed: 1, paused: false, historyConsistent: true, latestReviewedHead: null } }],
       ["taskSha256", { taskSha256: "f".repeat(64) }],
       ["role", { role: "code-review", allowedPaths: [] }],
       ["expectedAttempt", { expectedAttempt: 2 }],
@@ -820,5 +820,43 @@ describe("dirty-resume recovery contract", () => {
     const out = await runReserve(unpaired, { stateDir: env.stateDir, serviceConfig: stoppedSvc(env.cred) });
     expect(out.exitCode).toBe(1);
     expect(out.output.reason).toBe("resume_requires_paired_fields");
+  });
+});
+
+describe("review binding and status findings (P2-1/P2-2)", () => {
+  it("refuses implementation reserve without a recorded review, code-review bypasses", async () => {
+    const env = await setupEnv({ pr: 720 });
+    const unreviewed = await runReserve(
+      { ...env.request, ledger: { ...env.request.ledger, latestReviewedHead: null } },
+      { stateDir: env.stateDir },
+    );
+    expect(unreviewed.exitCode).toBe(2);
+    expect(unreviewed.output.reason).toBe("review_not_recorded");
+    const stale = await runReserve(
+      { ...env.request, ledger: { ...env.request.ledger, latestReviewedHead: "b".repeat(40) } },
+      { stateDir: env.stateDir },
+    );
+    expect(stale.exitCode).toBe(2);
+    expect(stale.output.reason).toBe("review_not_recorded");
+    const reviewEnv = await setupEnv({ pr: 721, role: "code-review" });
+    const bypass = await runReserve(
+      { ...reviewEnv.request, ledger: { ...reviewEnv.request.ledger, latestReviewedHead: null } },
+      { stateDir: reviewEnv.stateDir },
+    );
+    expect(bypass.exitCode).toBe(0);
+  });
+
+  it("status carries stored findings for a restarted coordinator", async () => {
+    const env = await setupEnv({ pr: 722 });
+    const reserved = await runReserve(env.request, { stateDir: env.stateDir });
+    expect(reserved.exitCode).toBe(0);
+    const token = reserved.output.ownerToken as string;
+    const noted = await runFinding(
+      { ...env.request, finding: { key: "k1", status: "confirmed", evidence: "ev" } },
+      { stateDir: env.stateDir, ownerToken: token },
+    );
+    expect(noted.exitCode).toBe(0);
+    const status = await runStatus(env.request, { stateDir: env.stateDir });
+    expect(status.output.findings).toEqual([{ key: "k1", status: "confirmed", repeatedAfterFix: false }]);
   });
 });
