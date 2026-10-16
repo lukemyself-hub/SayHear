@@ -3529,7 +3529,7 @@ describe("guarded serialized controller completion", () => {
     expect(f.pull.merged).toBe(true);
   });
 
-  it("publishes no App approval and no merge candidate while a protected path is unauthorized", async () => {
+  it("publishes no App approval and no merge candidate while waiting for a protected-path approval", async () => {
     const f = await serializedControllerFixture("browser", { linkedIssue: false });
     withoutLukeApproval(f);
     // Same diff, but the current scope cites no observation for any changed
@@ -3543,9 +3543,11 @@ describe("guarded serialized controller completion", () => {
     }));
     const summaries = captureCheckRunWrites(f);
     const results = await scanPullRequests(f.config, 321);
+    // This is the gate's own protected-path wait (`browser_human_approval_required`),
+    // not the controller's pre-publication guard: the gate stops first, so what
+    // this pins is the published surface while waiting, never an approval or a
+    // merge_candidate check run for a PR the controller will not merge.
     expect(results).toEqual([expect.objectContaining({ pullRequest: 321, outcome: "awaiting_verification" })]);
-    // The App must never approve a PR it is about to refuse, and no
-    // merge_candidate check run may claim this head is mergeable.
     expect(f.writes.some((write) => write.includes("/pulls/321/reviews"))).toBe(false);
     expect(f.writes.some((write) => write.includes("/pulls/321/merge"))).toBe(false);
     expect(summaries.join("\n")).toContain("outcome=human_decision");
@@ -3790,6 +3792,59 @@ describe("guarded serialized controller completion", () => {
     expect(f.browserApprovalStore.value?.receipt).toBeNull();
     expect(f.writes.some((write) => write.includes("/pulls/321/merge"))).toBe(false);
     expect(f.stored()).toBeNull();
+  });
+
+  /**
+   * Replaces Luke's approval with an older decisive call of his own, then a
+   * current-head approval that becomes the bound receipt. The older call is not a
+   * takeover any more, because the newer approval answers it.
+   */
+  function withEarlierLukeDecisionThenApproval(
+    f: Awaited<ReturnType<typeof serializedControllerFixture>>,
+    earlier: Readonly<{ state: "CHANGES_REQUESTED" | "DISMISSED" }>,
+  ) {
+    const state = f.browserApprovalStore.value;
+    const frozenAt = state?.challenge?.frozenAt;
+    if (!state?.challenge || frozenAt === undefined) throw new Error("Expected a frozen browser challenge");
+    const index = f.reviews.findIndex((review) => review.id === 10);
+    if (index < 0) throw new Error("Expected Luke's approval");
+    f.reviews.splice(index, 1);
+    f.reviews.push({ id: 8, state: earlier.state, body: "Earlier call", commit_id: "7".repeat(40),
+      user: LUKE_IDENTITY, submitted_at: new Date(frozenAt + 2_000).toISOString() });
+    f.reviews.push({ id: 11, state: "APPROVED", body: "Approved", commit_id: HEAD_SHA, user: LUKE_IDENTITY,
+      submitted_at: new Date(frozenAt + 3_000).toISOString() });
+    const { receipt: _receipt, ...rest } = state;
+    f.browserApprovalStore.value = { ...rest, receipt: null };
+  }
+
+  it.each(["CHANGES_REQUESTED", "DISMISSED"] as const)(
+    "merges after a current approval answers an older %s",
+    async (earlier) => {
+      const f = await serializedControllerFixture("browser", { linkedIssue: false });
+      withEarlierLukeDecisionThenApproval(f, { state: earlier });
+      acceptCheckRunWrites(f);
+      const results = await scanPullRequests(f.config, 321);
+      expect(results).toEqual([expect.objectContaining({ pullRequest: 321, outcome: "merge_candidate" })]);
+      expect(f.browserApprovalStore.value?.receipt?.reviewId).toBe(11);
+      expect(f.stored()).toMatchObject({ phase: "complete", identity: { humanChannel: "browser", humanReviewId: 11 } });
+      expect(f.pull.merged).toBe(true);
+    },
+  );
+
+  it("tells Luke to approve again when his takeover has no current approval", async () => {
+    const f = await serializedControllerFixture("browser");
+    const dismissed = f.reviews.find((review) => review.id === 10);
+    if (!dismissed) throw new Error("human review missing");
+    dismissed.state = "DISMISSED";
+    acceptCheckRunWrites(f);
+    const summaries = captureCheckRunWrites(f);
+    await scanPullRequests(f.config, 321);
+    // The published reason has to name the action, because Luke cannot approve
+    // yet: nothing is left to approve and no current decision exists.
+    const published = summaries.join("\n");
+    expect(published).toContain("human_decision_required");
+    expect(published).toContain("Approve again on the current head");
+    expect(published).toContain("challenge");
   });
 
   it("treats a comment-only Luke trail as no takeover", async () => {

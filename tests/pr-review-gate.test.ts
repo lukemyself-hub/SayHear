@@ -2756,6 +2756,69 @@ describe("PR review gate", () => {
     expect(staleReport.reasons.map((reason) => reason.code)).toEqual(["behavior_scope_incomplete"]);
   });
 
+  it("drops a stale provider context from the plan on the manual route", () => {
+    // The manual route never runs the scope judgment, so the checked binding
+    // context is refused here for the first time on this route. The context and
+    // the assessment are self-consistent with each other but describe an older
+    // head, so neither may add work to a plan that is about this diff.
+    const staleHead = "7".repeat(40);
+    const { candidate, bound } = manualSetup({
+      issues: [],
+      pullRequest: {
+        linkedIssueNumbers: [],
+        closingIssueNumbers: [],
+        keepOpenIssueNumbers: [],
+      },
+      providerContext: {
+        headSha: staleHead,
+        baseSha: BASE_SHA,
+        diffDigest: SYNTHETIC_DIFF_DIGEST,
+        diffComplete: true,
+      },
+      review: {
+        declaredImpacts: ["provider-migration"],
+        providerBehavior: {
+          headSha: staleHead,
+          baseSha: BASE_SHA,
+          diffDigest: SYNTHETIC_DIFF_DIGEST,
+          verdict: "affected" as const,
+          rationale: "The stale assessment declares a provider change on the changed path.",
+          evidence: [{
+            file: "packages/application/src/server/fix.ts",
+            line: 12,
+            before: "before",
+            after: "after",
+          }],
+          missingEvidence: [],
+        },
+        behaviorScope: {
+          headSha: staleHead,
+          baseSha: BASE_SHA,
+          diffDigest: SYNTHETIC_DIFF_DIGEST,
+          verdict: "in-scope" as const,
+          runtimeImpact: "none" as const,
+          rationale: "The stale assessment claims full coverage of the changed path.",
+          evidence: [{
+            file: "packages/application/src/server/fix.ts",
+            line: 12,
+            before: "before",
+            after: "after",
+          }],
+          contractRefs: [SYNTHETIC_SCOPE_CONTRACT],
+          missingEvidence: [],
+        },
+      },
+      evidence: FIXED_PR_CI_BASELINE.map((id) => makeEvidence(id)),
+    });
+    const report = evaluatePrReviewGate(candidate, bound);
+    expect(report.outcome).toBe("merge_candidate");
+    // No provider check is planned from a context that no longer names this
+    // head, and the manual route requires exactly the fixed baseline.
+    expect(report.requiredEvidenceIds).toEqual([...FIXED_PR_CI_BASELINE]);
+    expect(report.acceptedEvidenceIds).toEqual([...FIXED_PR_CI_BASELINE]);
+    expect(report.deferredEvidence).toEqual([]);
+  });
+
   it("keeps provider evidence bound to the PR base while main moves under a serialized merge", () => {
     // The reviewed diff is always head against the PR base. A merge that lands
     // on a main that moved since the review does not invalidate that evidence.
