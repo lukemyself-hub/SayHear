@@ -1726,7 +1726,7 @@ describe("stale main Issue handoff", () => {
   function fixture() {
     const pull = {
       number: 333, state: "open", draft: false, title: "Deliver #42 #43 #44 #45",
-      body: "本 PR 不关闭也不修改 #44。", base: { ref: "main", sha: BASE_SHA },
+      body: "Closes #42. Closes #43. Closes #45. 本 PR 不关闭也不修改 #44。", base: { ref: "main", sha: BASE_SHA },
       head: { sha: HEAD_SHA, repo: { id: SAYHEAR_REPOSITORY_ID } }, auto_merge: null, mergeable: false,
     };
     let main = "f".repeat(40);
@@ -2464,21 +2464,27 @@ class ControllerBrowserStore implements BrowserApprovalStore {
   async save(value: BrowserState) { this.value = structuredClone(value); }
 }
 
-async function serializedControllerFixture(channel: "browser" | "legacy-root", options: Readonly<{ linkedIssue?: boolean; bodySuffix?: string; issueTitle?: string }> = {}) {
+async function serializedControllerFixture(channel: "browser" | "legacy-root", options: Readonly<{ linkedIssue?: boolean; bodySuffix?: string; issueTitle?: string; backgroundOnly?: boolean; secondIssue?: boolean }> = {}) {
   const linkedIssue = options.linkedIssue !== false;
+  // backgroundOnly references #42 without delivering it (no closing keyword or
+  // Development link). secondIssue additionally delivers #43.
+  const backgroundOnly = options.backgroundOnly === true;
+  const deliversSecondIssue = options.secondIssue === true;
   const workflow = "f".repeat(40);
   const path = "scripts/pr-approval-controller.ts";
   const diff = `diff --git a/${path} b/${path}\nindex 1111111..2222222 100644\n--- a/${path}\n+++ b/${path}\n@@ -1 +1 @@\n-old\n+new\n`;
   const changedFile = { filename: path, sha: "2".repeat(40), status: "modified", additions: 1, deletions: 1 };
   const pull = {
     number: 321, node_id: "PR_321", state: "open" as "open" | "closed", merged: false, draft: false,
-    title: "Controller safety repair", body: `${linkedIssue ? "Fixes #42" : "Tidy controller wording."}${options.bodySuffix ?? ""}`, updated_at: "2026-10-14T00:00:00Z",
+    title: "Controller safety repair", body: `${backgroundOnly ? "See #42 for context." : linkedIssue ? (deliversSecondIssue ? "Fixes #42. Fixes #43." : "Fixes #42") : "Tidy controller wording."}${options.bodySuffix ?? ""}`, updated_at: "2026-10-14T00:00:00Z",
     head: { sha: HEAD_SHA, repo: { id: SAYHEAR_REPOSITORY_ID } },
     base: { sha: BASE_SHA, ref: "main", repo: { id: SAYHEAR_REPOSITORY_ID } },
     user: channel === "browser" ? AGENT_IDENTITY : LUKE_IDENTITY,
     merge_commit_sha: MERGE_SHA, changed_files: 1, mergeable: true, mergeable_state: "clean", auto_merge: null,
   };
   const issue = { number: 42, state: "open", title: options.issueTitle ?? "Controller safety repair", body: "Deliver safe serialized integration and durable recovery.",
+    updated_at: "2026-10-14T00:00:00Z", labels: ["ongoing"] };
+  const issue43 = { number: 43, state: "open", title: "Second delivered requirement", body: "Preserve the second contract.",
     updated_at: "2026-10-14T00:00:00Z", labels: ["ongoing"] };
   const browserApprovalStore = new ControllerBrowserStore();
   const reviews: Array<Record<string, unknown>> = [];
@@ -2519,7 +2525,7 @@ async function serializedControllerFixture(channel: "browser" | "legacy-root", o
     }
     if (url === "/graphql") return { data: { repository: {
       autoMergeAllowed: true, mergeCommitAllowed: true, squashMergeAllowed: false, rebaseMergeAllowed: false,
-      pullRequest: { reviewThreads: { nodes: [], pageInfo: { hasNextPage: false } }, closingIssuesReferences: { nodes: linkedIssue ? [{ number: 42 }] : [], pageInfo: { hasNextPage: false } } },
+      pullRequest: { reviewThreads: { nodes: [], pageInfo: { hasNextPage: false } }, closingIssuesReferences: { nodes: linkedIssue && !backgroundOnly ? [{ number: 42 }, ...(deliversSecondIssue ? [{ number: 43 }] : [])] : [], pageInfo: { hasNextPage: false } } },
       issue: { blockedBy: { nodes: [], pageInfo: { hasNextPage: false } } },
     } } };
     if (url === "/repos/lukemyself-hub/SayHear") return structuredClone(repository);
@@ -2580,6 +2586,11 @@ async function serializedControllerFixture(channel: "browser" | "legacy-root", o
       if (options?.method === "PATCH") issue.state = "closed";
       return structuredClone(issue);
     }
+    if (deliversSecondIssue && url.endsWith("/issues/43/labels/ongoing") && options?.method === "DELETE") { issue43.labels = []; return []; }
+    if (deliversSecondIssue && url.endsWith("/issues/43")) {
+      if (options?.method === "PATCH") issue43.state = "closed";
+      return structuredClone(issue43);
+    }
     throw new Error(`Unexpected controller request ${url}`);
   }, (url) => {
     if (url.includes("/rulesets?")) return [{ id: 9 }, ...additionalRulesets.map(({ id }) => ({ id }))];
@@ -2624,16 +2635,17 @@ async function serializedControllerFixture(channel: "browser" | "legacy-root", o
     body: `<!-- sayhear-pr-auto-approval-review:v2 pr=321 head=${HEAD_SHA} base=${BASE_SHA} requirement=${digest} outcome=approve -->` });
   // Materializing the receipt uses the same live browser binding as submission.
   const bound = await readSnapshot(activeConfig, 321);
-  const receipt: CompletionRecord = { version: linkedIssue ? 1 : 2, phase: "merge_unconfirmed", attempts: 0, nextRetryAt: 0, reason: null, mergeSha: null, mergeWriteState: "not-sent",
+  const delivered = linkedIssue && !backgroundOnly ? [42, ...(deliversSecondIssue ? [43] : [])] : [];
+  const receipt: CompletionRecord = { version: delivered.length > 0 ? 1 : 2, phase: "merge_unconfirmed", attempts: 0, nextRetryAt: 0, reason: null, mergeSha: null, mergeWriteState: "not-sent",
     identity: { repositoryId: SAYHEAR_REPOSITORY_ID, pullRequestNumber: 321, pullRequestNodeId: "PR_321", headSha: HEAD_SHA,
       approvedBaseSha: BASE_SHA, requirementDigest: digest, baseRepositoryId: SAYHEAR_REPOSITORY_ID, baseRef: "main", botActorId: REVIEW_BOT_ACTOR_ID,
-      reviewId: 20, appId: 98765, policyVersion: PR_REVIEW_GATE_POLICY_VERSION, issueNumbers: linkedIssue ? [42] : [], integrationMode: "serialized-merge",
+      reviewId: 20, appId: 98765, policyVersion: PR_REVIEW_GATE_POLICY_VERSION, issueNumbers: delivered, integrationMode: "serialized-merge",
       humanChannel: channel === "browser" ? "browser" : "app", humanReviewId: channel === "browser" ? 10 : 20,
       ...(bound.humanBinding.receipt?.challenge.context.liveness ? { humanLiveness: bound.humanBinding.receipt.challenge.context.liveness } : {}),
       epoch: bound.humanBinding.receipt?.challenge.epoch ?? null, mergeAction: "merge-now",
       reviewIdentity: { diffDigest: frozen.diff.digest, changeDigest: frozen.diff.changeDigest, workflowBlobSha: workflow } } };
   const clock = { now: () => 1_000_000, sleep: async () => {}, random: () => 0 };
-  return { config: activeConfig, receipt, api, pull, issue, reviews, reviewChecks, browserApprovalStore, rootAuthorization, clock, writes, writerRuleset, additionalRulesets, reviewRules,
+  return { config: activeConfig, receipt, api, pull, issue, secondIssue: deliversSecondIssue ? issue43 : null, reviews, reviewChecks, browserApprovalStore, rootAuthorization, clock, writes, writerRuleset, additionalRulesets, reviewRules,
     hideBypass: (): MainWriterAttestation => {
       bypassVisible = false;
       return { version: MAIN_WRITER_ATTESTATION_VERSION, rulesetId: writerRuleset.id,
@@ -3352,14 +3364,56 @@ describe("guarded serialized controller completion", () => {
     expect(f.writes.some((write) => write.includes("/issues/42"))).toBe(false);
   });
 
-  it("leaves a zero-Issue PR without a final decision to a human", async () => {
+  it("merges a zero-Issue PR on the automatic route without Issue writes", async () => {
     const f = await serializedControllerFixture("browser", { linkedIssue: false });
     asLegacyBrowserApproval(f);
     acceptCheckRunWrites(f);
     const results = await scanPullRequests(f.config, 321);
-    // Automatic no-Issue eligibility belongs to #367; until then it waits for a human.
-    expect(results[0]?.outcome).toBe("human_decision");
-    expect(f.writes.some((write) => write.includes("/pulls/321/merge"))).toBe(false);
+    // SPEC #362 #367: a PR with no Issues is not refused for lacking an open
+    // delivery Issue. The automatic route merges and completes with no writes.
+    expect(results).toEqual([expect.objectContaining({ pullRequest: 321, outcome: "merge_candidate" })]);
+    expect(f.stored()).toMatchObject({ version: 2, phase: "complete", identity: { issueNumbers: [] } });
+    expect(f.pull.merged).toBe(true);
+    expect(f.writes.some((write) => write.includes("/issues/42"))).toBe(false);
+  });
+
+  it("merges a background-only PR without touching the referenced Issue", async () => {
+    const f = await serializedControllerFixture("browser", { backgroundOnly: true });
+    acceptCheckRunWrites(f);
+    const results = await scanPullRequests(f.config, 321);
+    // #42 is referenced but not delivered, so the merge completes with no
+    // lifecycle writes and the Issue stays open.
+    expect(results).toEqual([expect.objectContaining({ pullRequest: 321, outcome: "merge_candidate" })]);
+    expect(f.stored()).toMatchObject({ version: 2, phase: "complete", identity: { issueNumbers: [] } });
+    expect(f.pull.merged).toBe(true);
+    expect(f.issue.state).toBe("open");
+    expect(f.writes.some((write) => write.includes("/issues/42"))).toBe(false);
+  });
+
+  it("recovers a partial multi-Issue close without a second merge", async () => {
+    const f = await serializedControllerFixture("browser", { secondIssue: true });
+    if (!f.secondIssue) throw new Error("Second delivery Issue missing");
+    let close43Blocked = true;
+    const request = f.api.request.bind(f.api);
+    f.api.request = async <T>(path: string, options?: StubRequestOptions): Promise<T> => {
+      if (close43Blocked && options?.method === "PATCH" && path.endsWith("/issues/43")) {
+        throw new GitHubApiError(500, "PATCH", path);
+      }
+      return request<T>(path, options);
+    };
+    f.mergeAs(MERGE_SHA);
+    const pending = await recoverControllerCompletion(f.config, f.receipt, f.clock);
+    // The merge is confirmed and kept; only the Issue close is pending.
+    expect(pending).toMatchObject({ phase: "issues_pending", reason: "completion_issue_updates_incomplete", mergeSha: MERGE_SHA });
+    expect(f.issue.state).toBe("closed");
+    expect(f.secondIssue.state).toBe("open");
+    close43Blocked = false;
+    const completed = await recoverControllerCompletion(f.config, { ...pending, nextRetryAt: 0 }, f.clock);
+    expect(completed).toMatchObject({ phase: "complete", mergeSha: MERGE_SHA });
+    expect(f.issue.state).toBe("closed");
+    expect(f.secondIssue.state).toBe("closed");
+    // One merge write total across the failure and the recovery.
+    expect(f.writes.filter((write) => write.includes("/pulls/321/merge"))).toHaveLength(1);
   });
 
   it("never lets a final decision override an explicit merge pause", async () => {

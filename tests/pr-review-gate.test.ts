@@ -1337,7 +1337,9 @@ describe("PR review gate", () => {
   function multiIssueInput(): PrReviewGateInput {
     const original = input();
     const issues = [original.issues[0]!, { ...original.issues[0]!, number: 43, title: "Second requirement", body: "Preserve the second contract." }];
-    const pullRequest = { ...original.pullRequest, linkedIssueNumbers: [42, 43], body: "Fixes #42 and #43" };
+    // Both Issues are delivered: each needs its own closing keyword, since the
+    // parser does not carry one keyword across "and".
+    const pullRequest = { ...original.pullRequest, linkedIssueNumbers: [42, 43], body: "Fixes #42. Fixes #43." };
     return { ...original, issues, pullRequest,
       review: { ...original.review, requirementDigest: requirementDigest(issues, pullRequest) } };
   }
@@ -1369,7 +1371,9 @@ describe("PR review gate", () => {
     const candidate = multiIssueInput();
     const issues = [candidate.issues[0]!, { ...candidate.issues[1]!, state: "closed" as const, labels: [], blockedBy: null }];
     expect(evaluatePrReviewGate({ ...candidate, issues }, policy).outcome).toBe("merge_candidate");
-    expect(evaluatePrReviewGate({ ...candidate, issues: issues.map((issue) => ({ ...issue, state: "closed" })) }, policy).outcome).toBe("human_decision");
+    // A PR with only closed delivery context is not refused for lacking an
+    // open delivery Issue (SPEC #362 #367): there is nothing left to close.
+    expect(evaluatePrReviewGate({ ...candidate, issues: issues.map((issue) => ({ ...issue, state: "closed" })) }, policy).outcome).toBe("merge_candidate");
   });
 
   it("rejects duplicate or incomplete Issue sets rather than silently omitting requirements", () => {
@@ -1383,7 +1387,9 @@ describe("PR review gate", () => {
 
   it("keeps explicit reference-only Issues open without claiming or handing them off", () => {
     const candidate = multiIssueInput();
-    const pullRequest = { ...candidate.pullRequest, body: "Deliver #42. 本 PR 不关闭也不修改 #43。", keepOpenIssueNumbers: [43] };
+    // Only #42 is delivered; #43 stays a background reference that is also
+    // declared keep-open, so it draws no lifecycle writes or checks.
+    const pullRequest = { ...candidate.pullRequest, body: "Fixes #42. 本 PR 不关闭也不修改 #43。", keepOpenIssueNumbers: [43] };
     const issues = [candidate.issues[0]!, { ...candidate.issues[1]!, labels: [], blockedBy: null }];
     const review = { ...candidate.review, requirementDigest: requirementDigest(issues, pullRequest) };
     expect(evaluatePrReviewGate({ ...candidate, pullRequest, issues, review }, policy).outcome).toBe("merge_candidate");
@@ -2063,32 +2069,32 @@ describe("PR review gate", () => {
     );
   });
 
-  it("activates the complete human route only with a valid binding and fixed evidence", () => {
-    function manualSetup(overrides: InputOverrides = {}) {
-      const raw = input(overrides);
-      const digest = requirementDigest(raw.issues, raw.pullRequest);
-      const candidate: PrReviewGateInput = {
-        ...raw,
-        review: { ...raw.review, requirementDigest: digest },
-      };
-      const bound: TrustedPrReviewPolicy = {
-        ...policy,
-        humanApprovalChannel: "browser",
-        humanFinalDecision: {
-          version: HUMAN_FINAL_DECISION_VERSION,
-          repositoryId: SAYHEAR_REPOSITORY_ID,
-          pullRequestNumber: candidate.pullRequest.number,
-          headSha: candidate.pullRequest.headSha,
-          requirementDigest: digest,
-          validateWorkflowBlobSha: WORKFLOW_BLOB_SHA,
-          reviewerActorId: HUMAN_FINAL_DECISION_REVIEWER_ID,
-          reviewerLogin: HUMAN_FINAL_DECISION_REVIEWER_LOGIN,
-          reviewId: 999,
-        },
-      };
-      return { candidate, bound };
-    }
+  function manualSetup(overrides: InputOverrides = {}) {
+    const raw = input(overrides);
+    const digest = requirementDigest(raw.issues, raw.pullRequest);
+    const candidate: PrReviewGateInput = {
+      ...raw,
+      review: { ...raw.review, requirementDigest: digest },
+    };
+    const bound: TrustedPrReviewPolicy = {
+      ...policy,
+      humanApprovalChannel: "browser",
+      humanFinalDecision: {
+        version: HUMAN_FINAL_DECISION_VERSION,
+        repositoryId: SAYHEAR_REPOSITORY_ID,
+        pullRequestNumber: candidate.pullRequest.number,
+        headSha: candidate.pullRequest.headSha,
+        requirementDigest: digest,
+        validateWorkflowBlobSha: WORKFLOW_BLOB_SHA,
+        reviewerActorId: HUMAN_FINAL_DECISION_REVIEWER_ID,
+        reviewerLogin: HUMAN_FINAL_DECISION_REVIEWER_LOGIN,
+        reviewId: 999,
+      },
+    };
+    return { candidate, bound };
+  };
 
+  it("activates the complete human route only with a valid binding and fixed evidence", () => {
     const { candidate, bound } = manualSetup({
       issues: [],
       pullRequest: {
@@ -2245,6 +2251,31 @@ describe("PR review gate", () => {
       { ...candidate, pullRequest: { ...candidate.pullRequest, externalReviewState: "unavailable" as const } },
       bound,
     ).outcome).toBe("awaiting_verification");
+  });
+
+  it("ignores the plan targeted deferrals on the human route", () => {
+    // The automatic plan defers prompt-budget:effective-config-diff before the
+    // merge; on the human route only the fixed baseline is required, so the
+    // deferral creates no obligation and delivery Issues close normally.
+    const deferredId = "prompt-budget:effective-config-diff";
+    const { candidate, bound } = manualSetup({
+      review: { declaredImpacts: ["prompt-budget"] },
+      evidence: [...FIXED_PR_CI_BASELINE.map((id) => makeEvidence(id)),
+        makeEvidence("server:deterministic-behavior", { artifactSha256: "e".repeat(64),
+          coveredCheckIds: ["server:deterministic-behavior"] }),
+        makeEvidence("prompt-budget:synthetic-samples", { artifactSha256: "e".repeat(64),
+          coveredCheckIds: ["prompt-budget:synthetic-samples"] }),
+        makeDeferral(deferredId)],
+    });
+    expect(preMergeDeferralFor(deferredId)).not.toBeNull();
+    const approved = evaluatePrReviewGate(candidate, bound);
+    expect(approved.outcome).toBe("merge_candidate");
+    expect(approved.deferredEvidence).toEqual([]);
+    // The same evidence on the automatic route is a deferred merge with closing
+    // keywords, which stays with a human instead of arming auto-merge.
+    // The same evidence on the automatic route is a deferred merge with closing
+    // keywords, which stays with a human instead of arming auto-merge.
+    expect(evaluatePrReviewGate(candidate, policy).outcome).toBe("human_decision");
   });
 
   it("validates the trusted human final decision binding only", () => {

@@ -60,6 +60,7 @@ import {
   requirementDigest,
   parseIssueClosureExclusions,
   hasExplicitMergeHold,
+  deliveryIssueNumbers,
   closingKeywordIssueNumbers,
   protectedReviewPaths,
   SAYHEAR_REPOSITORY_ID,
@@ -3862,7 +3863,7 @@ async function recordReviewHandoff(
   gate: PrReviewGateReport,
   review: GitHubReview,
 ): Promise<void> {
-  await forEachLinkedIssue(snapshot.gateInput.issues.filter((issue) => issue.state === "open" && !snapshot.gateInput.pullRequest.keepOpenIssueNumbers.includes(issue.number)).map((issue) => issue.number), async (issueNumber) => {
+  await forEachLinkedIssue(openDeliveryIssueNumbers(snapshot.gateInput), async (issueNumber) => {
     const history = parseRequestChangeHistory(
       await config.api.pages<GitHubComment>(
         repositoryPath(`/issues/${issueNumber}/comments`),
@@ -4139,7 +4140,7 @@ async function postNonBlockingOutcome(
     "",
     marker,
   ].join("\n");
-  await forEachLinkedIssue(snapshot.gateInput.issues.filter((issue) => issue.state === "open" && !snapshot.gateInput.pullRequest.keepOpenIssueNumbers.includes(issue.number)).map((issue) => issue.number),
+  await forEachLinkedIssue(openDeliveryIssueNumbers(snapshot.gateInput),
     (issueNumber) => publishIssueHandoff(config.api, issueNumber, marker, body, config.botActorId));
 }
 
@@ -4183,7 +4184,8 @@ export async function handoffStalePullRequestBase(
     [...expected.keepOpenIssueNumbers].sort((a, b) => a - b).join() !== exclusions.keepOpenIssueNumbers.join()) {
     return result("state_changed");
   }
-  const targets = issues.filter((issue) => issue.state === "open" && !exclusions.keepOpenIssueNumbers.includes(issue.number));
+  const delivery = deliveryIssueNumbers(expected, issues);
+  const targets = issues.filter((issue) => issue.state === "open" && delivery.includes(issue.number));
   if (targets.length === 0) return result("no_open_issue");
   const prComments = await api.pages<GitHubComment>(repositoryPath(`/issues/${pull.number}/comments`));
   const contexts = await Promise.all(targets.map(async (issue) => ({
@@ -4192,9 +4194,8 @@ export async function handoffStalePullRequestBase(
       ...await api.pages<GitHubComment>(repositoryPath(`/issues/${issue.number}/comments`)), ...prComments,
     ], actors.ownerActorId, actors.botActorId),
   })));
-  const held = /\b(?:do not merge|do not auto[- ]merge|not for merge|not to be merged)\b|不要(?:自动)?合入|暂停自动审批/i.test(
-    [pull.title, pull.body ?? "", ...issues.flatMap((issue) => [issue.title, issue.body ?? ""])].join("\n"),
-  );
+  const held = hasExplicitMergeHold({ title: pull.title, body: pull.body ?? "" },
+    issues.map((issue) => ({ title: issue.title, body: issue.body ?? "" })));
   if (held || contexts.some(({ pause }) => pause.active || pause.source === "unknown")) return result("held_for_human");
 
   const markerName = kind === "base-sync"
@@ -4674,11 +4675,12 @@ export async function refreshStaleIntegration(
   // withholds the human route, so its labels and dependencies still stop here.
   const humanRoute = snapshot.humanBinding.receipt?.challenge.context.liveness === "final-decision-v1" &&
     snapshot.humanBinding.coveredRequirementDigest === requirementDigest(snapshot.gateInput.issues, snapshot.gateInput.pullRequest);
+  const delivery = deliveryIssueNumbers(pull, snapshot.gateInput.issues);
   if (pull.mergeable !== true || containsExplicitMergeHold(snapshot) || pull.issueClosureAmbiguous ||
       snapshot.gateInput.issues.some((issue) => !pull.keepOpenIssueNumbers.includes(issue.number) && issue.state === "open" &&
-        (issue.pause.active || issue.pause.source === "unknown" || (!humanRoute && (!issue.labels.includes("ongoing") ||
+        (issue.pause.active || issue.pause.source === "unknown" || (!humanRoute && delivery.includes(issue.number) && (!issue.labels.includes("ongoing") ||
           issue.labels.some((label) => ["ready-for-human", "needs-info", "needs-triage", "wontfix"].includes(label)) ||
-          (issue.blockedBy === null || issue.blockedBy.some((dependency) => !snapshot.gateInput.issues.some((target) => target.number === dependency && !pull.keepOpenIssueNumbers.includes(target.number))))))))) {
+          (issue.blockedBy === null || issue.blockedBy.some((dependency) => !delivery.includes(dependency)))))))) {
     // An ineligible stale ref falls through to the normal review and handoff.
     return staleMergeRefSha === null;
   }
@@ -4960,7 +4962,7 @@ export async function reportReviewResult(
       approvedBaseSha: report.baseSha, requirementDigest: report.requirementDigest,
       baseRepositoryId: SAYHEAR_REPOSITORY_ID, baseRef: "main", botActorId: config.botActorId,
       reviewId: approval.id, appId: config.app.appId, policyVersion: PR_REVIEW_GATE_POLICY_VERSION,
-      issueNumbers: freshSnapshot.gateInput.issues.filter((issue) => !freshSnapshot.gateInput.pullRequest.keepOpenIssueNumbers.includes(issue.number)).map((issue) => issue.number),
+      issueNumbers: deliveryIssueNumbers(freshSnapshot.gateInput.pullRequest, freshSnapshot.gateInput.issues),
       humanChannel: browserReceipt === null ? "app" : "browser",
       humanReviewId: browserReceipt?.reviewId ?? approval.id,
       ...(browserReceipt?.challenge.context.liveness === "final-decision-v1" ? { humanLiveness: "final-decision-v1" as const } : {}),
@@ -5022,6 +5024,11 @@ function controllerReviewReport(
     },
     findings: [],
   };
+}
+
+function openDeliveryIssueNumbers(input: Pick<PrReviewGateInput, "issues" | "pullRequest">): number[] {
+  const delivery = deliveryIssueNumbers(input.pullRequest, input.issues);
+  return input.issues.filter((issue) => issue.state === "open" && delivery.includes(issue.number)).map((issue) => issue.number);
 }
 
 function containsExplicitMergeHold(snapshot: Snapshot): boolean {
@@ -5315,7 +5322,6 @@ export async function scanPullRequests(
 
 
     if (
-      !snapshot.gateInput.issues.some((issue) => issue.state === "open" && !snapshot.gateInput.pullRequest.keepOpenIssueNumbers.includes(issue.number)) ||
       snapshot.gateInput.issues.some((issue) => !snapshot.gateInput.pullRequest.keepOpenIssueNumbers.includes(issue.number) && (issue.pause.active || issue.pause.source === "unknown")) ||
       snapshot.gateInput.pullRequest.issueClosureAmbiguous ||
       containsExplicitMergeHold(snapshot)
@@ -5324,7 +5330,7 @@ export async function scanPullRequests(
         results.push({
           pullRequest: pullRequest.number,
           status: "held_for_human",
-          reason: "The Issue is closed or paused, or the PR explicitly requests a hold.",
+          reason: "A referenced Issue is paused, the closure declaration is ambiguous, or the PR explicitly requests a hold.",
         });
         continue;
       }
