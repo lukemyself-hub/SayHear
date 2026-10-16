@@ -886,6 +886,26 @@ describe("PR approval controller", () => {
     } as Parameters<typeof resolveLinkedIssues>[1])).rejects.toMatchObject({ status: 404 });
   });
 
+  it("stores new submit intents as version 2 completion records", async () => {
+    const f = await serializedControllerFixture("legacy-root");
+    const snapshot = await readSnapshot(f.config, 321);
+    const saved = await readSavedReviewReport(f.config, snapshot);
+    if (!saved) throw new Error("Expected a saved review report for PR 321");
+    const request = f.api.request.bind(f.api);
+    f.api.request = async <T>(path: string, options?: StubRequestOptions): Promise<T> => {
+      if (options?.method === "PATCH" && path.endsWith("/check-runs/9002")) return {} as T;
+      if (options?.method === "POST" && path.endsWith("/check-runs")) return { id: 9004 } as T;
+      return request<T>(path, options);
+    };
+    const results = await scanPullRequests(f.config, 321);
+    expect(results).toEqual([
+      expect.objectContaining({ pullRequest: 321, outcome: "merge_candidate" }),
+    ]);
+    const stored = f.stored();
+    if (!stored) throw new Error("Expected submit to store a completion intent");
+    expect(parseCompletionRecord(stored).version).toBe(2);
+  });
+
   it("waits for merge without closing any Issue when auto-merge is only enabled", async () => {
     const api = new StubApi(() => { throw new Error("No Issue mutation or lookup is allowed yet"); });
     await completeLinkedIssuesAfterMerge(api, [42, 43], { autoMergeEnabled: true, merged: false });

@@ -4888,7 +4888,7 @@ async function reportReviewResult(
     };
   }
   const receipt: CompletionRecord = {
-    version: 1, phase: "merge_unconfirmed", attempts: 0, nextRetryAt: 0, reason: null, mergeSha: null,
+    version: 2, phase: "merge_unconfirmed", attempts: 0, nextRetryAt: 0, reason: null, mergeSha: null,
     mergeWriteState: mergeAction === "merge-now" ? "not-sent" : "uncertain",
     identity: {
       repositoryId: SAYHEAR_REPOSITORY_ID, pullRequestNumber: report.pullRequestNumber,
