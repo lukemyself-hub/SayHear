@@ -1939,6 +1939,26 @@ describe("pre-merge deferral evidence collection", () => {
     majorContractChange: false,
     externalMvpRelease: false,
   };
+  // A `provider-migration` declaration is advisory on its own: the provider
+  // checks are planned only when an assessment bound to this exact diff says the
+  // change actually affects provider behavior.
+  const AFFECTED_PROVIDER = {
+    context: {
+      headSha: HEAD_SHA,
+      baseSha: BASE_SHA,
+      diffDigest: CHANGE_DIGEST,
+      diffComplete: true,
+    },
+    assessment: {
+      headSha: HEAD_SHA,
+      baseSha: BASE_SHA,
+      diffDigest: CHANGE_DIGEST,
+      verdict: "affected" as const,
+      rationale: "The diff rewrites the provider client construction path.",
+      evidence: [{ file: "packages/ai/src/provider.ts", line: 1, before: "-old", after: "+new" }],
+      missingEvidence: [] as string[],
+    },
+  };
 
   function storedZipArchiveWithZeroCrc(
     entries: readonly Readonly<{ name: string; content: Uint8Array }>[],
@@ -2125,6 +2145,8 @@ describe("pre-merge deferral evidence collection", () => {
       capability,
       MERGE_SHA,
       BASE_SHA,
+      undefined,
+      AFFECTED_PROVIDER,
     );
 
     const byId = new Map(
@@ -2357,6 +2379,8 @@ describe("pre-merge deferral evidence collection", () => {
       capability,
       MERGE_SHA,
       BASE_SHA,
+      undefined,
+      AFFECTED_PROVIDER,
     );
 
     expect(collected.evidence.map((entry) => entry.checkId)).toEqual(
@@ -2505,6 +2529,51 @@ describe("pre-merge deferral evidence collection", () => {
     },
   );
 });
+
+/**
+ * Provider-behavior and behavior-scope assessments bound to the exact diff the
+ * fixture produced.
+ *
+ * The shared parsers and resolvers still decide whether each one holds: these
+ * carry the live head, base, and diff digest, so a fixture that drifts from the
+ * snapshot fails closed instead of being waved through.
+ */
+function boundModelJudgments(
+  diffDigest: string,
+  changedFiles: readonly Readonly<{ path: string; status: "added" | "modified" | "removed" | "renamed" | "copied" }>[],
+  identity: Readonly<{ headSha: string; baseSha: string }> = { headSha: HEAD_SHA, baseSha: BASE_SHA },
+) {
+  const observations = changedFiles.map((file) => ({
+    file: file.path,
+    line: 1,
+    before: "-old",
+    after: "+new",
+  }));
+  return {
+    providerBehavior: {
+      headSha: identity.headSha,
+      baseSha: identity.baseSha,
+      diffDigest,
+      verdict: "unaffected" as const,
+      rationale:
+        "The changed approval controller code touches no model provider call, prompt, role mapping, or model configuration.",
+      evidence: observations,
+      missingEvidence: [] as string[],
+    },
+    behaviorScope: {
+      headSha: identity.headSha,
+      baseSha: identity.baseSha,
+      diffDigest,
+      verdict: "in-scope" as const,
+      runtimeImpact: "none" as const,
+      rationale:
+        "The diff stays inside the PR approval apparatus and changes no product runtime behavior.",
+      evidence: observations,
+      contractRefs: ["docs/agents/pr-auto-approval.md"],
+      missingEvidence: [] as string[],
+    },
+  };
+}
 
 class ControllerBrowserStore implements BrowserApprovalStore {
   value: BrowserState | null = null;
@@ -2675,7 +2744,8 @@ async function serializedControllerFixture(channel: "browser" | "legacy-root", o
     diffDigest: frozen.diff.digest, requirementDigest: digest, paths: [path], noRuntimeImpact: true,
     validateWorkflowBlobSha: workflow, approvedAt: "2026-10-14T00:00:00Z" };
   const activeConfig = channel === "legacy-root" ? { ...config, app: { ...app, humanReviewAuthorizations: [rootAuthorization] } } : config;
-  const report: ModelReviewReport = { ...modelReport, baseSha: BASE_SHA, requirementDigest: digest, declaredImpacts: [] };
+  const report: ModelReviewReport = { ...modelReport, baseSha: BASE_SHA, requirementDigest: digest, declaredImpacts: [],
+    ...boundModelJudgments(frozen.diff.digest, [{ path, status: "modified" }]) };
   const externalId = `sayhear-pr-review:321:${HEAD_SHA}:${BASE_SHA}:${digest}`;
   reviewChecks.push({ id: 9002, name: "pr-review-gate", app: { id: 98765 }, status: "completed", external_id: externalId,
     output: { summary: `<!-- sayhear-pr-auto-approval-state:v1 pr=321 head=${HEAD_SHA} base=${BASE_SHA} requirement=${digest} diff=${frozen.diff.digest} change=${frozen.diff.changeDigest} evidence=${"0".repeat(64)} outcome=merge_candidate report=${Buffer.from(JSON.stringify(report)).toString("base64url")} -->` } });
@@ -3349,6 +3419,7 @@ describe("guarded serialized controller completion", () => {
     // As if submit stored the coordinator's report for the live requirement.
     const report: ModelReviewReport = { ...modelReport, baseSha: BASE_SHA, requirementDigest: live, declaredImpacts: [],
       riskFlags: { ...modelReport.riskFlags, productDefinitionChanged: true },
+      ...boundModelJudgments(after.diff.digest, [{ path: "scripts/pr-approval-controller.ts", status: "modified" }]),
       scopeReconciliation: { epoch, approvedRequirementDigest: approved, verdict } };
     const check = f.reviewChecks.find((entry) => entry.id === 9002) as { external_id: string; output: { summary: string } };
     check.external_id = check.external_id.replace(approved, live);
@@ -3629,7 +3700,9 @@ describe("guarded serialized controller completion", () => {
     const human = f.reviews.find((review) => review.id === 10);
     if (!human) throw new Error("human review missing");
     human.state = "DISMISSED";
-    await expect(guardImmediateMerge(f.config, f.receipt.identity)).rejects.toThrow("fresh_merge_gate_blocked");
+    // The dismissal invalidates the bound browser receipt, so the guard stops on
+    // the human binding itself rather than reaching the gate.
+    await expect(guardImmediateMerge(f.config, f.receipt.identity)).rejects.toThrow("human_review_binding_changed");
     expect(f.writes.some((write) => write.includes("/pulls/321/merge"))).toBe(false);
   });
 
