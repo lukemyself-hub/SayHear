@@ -155,7 +155,11 @@ async function canonicalWorkerDir(path: string): Promise<string> {
     const canon = await realpath(path);
     if (resolve(path) !== canon) fail("workerStateDir must be canonical.");
     return canon;
-  } catch {
+  } catch (error) {
+    // Only a missing directory falls back to parent validation. Any other
+    // failure (including the canonicality refusal above for a pre-existing
+    // symlink) is rethrown so an alias can never stand in for the bound dir.
+    if ((error as { code?: unknown } | null)?.code !== "ENOENT") throw error;
     const parentCanon = await realpath(dirname(path)).catch(() => fail("workerStateDir parent is not accessible."));
     const base = basename(resolve(path));
     if (!base || base === "." || base === ".." || base.includes("\0")) fail("workerStateDir must be canonical.");

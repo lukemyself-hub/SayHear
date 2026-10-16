@@ -879,3 +879,16 @@ describe("worker model forwarding (re-review follow-up)", () => {
     expect(refused.output.reason).toBe("model_changed");
   });
 });
+
+describe("workerStateDir canonicality (group-review follow-up)", () => {
+  it("refuses a pre-existing symlink instead of validating only its parent", async () => {
+    const env = await setupEnv({ pr: 740 });
+    const real = join(env.root, "real");
+    const alias = join(env.root, "alias");
+    await import("node:fs/promises").then((fs) => fs.mkdir(real, { recursive: true }));
+    await symlink(real, alias);
+    await expect(runReserve({ ...env.request, workerStateDir: alias }, { stateDir: env.stateDir })).rejects.toThrow(
+      /canonical/,
+    );
+  });
+});
