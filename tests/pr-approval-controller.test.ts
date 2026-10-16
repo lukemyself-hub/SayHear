@@ -64,6 +64,7 @@ import {
   type PrReviewGateInput,
 } from "../scripts/pr-review-gate.ts";
 import type { IntegrationRefreshRecord } from "../scripts/pr-approval/integration-refresh.ts";
+import type { MergeRefRebuildRecord } from "../scripts/pr-approval/merge-ref-rebuild.ts";
 import type { CompletionRecord } from "../scripts/pr-approval/completion.ts";
 import type { BrowserApprovalStore, BrowserState } from "../scripts/pr-approval/browser-approval.ts";
 import { preMergeDeferralFor } from "../scripts/daily-release-validation.ts";
@@ -2943,6 +2944,80 @@ describe("guarded serialized controller completion", () => {
     expect(f.writes.filter((write) => write.endsWith("/issues/321/labels"))).toHaveLength(1);
     expect(f.issue.labels).toEqual(["ongoing"]);
     expect(f.writes.some((write) => write.includes("/pulls/321/merge"))).toBe(false);
+  });
+
+  it("rebuilds a merge ref GitHub left on the old main by reopening the PR once", async () => {
+    const f = await serializedControllerFixture("browser");
+    f.advanceMain(false);
+    // GitHub keeps the head's merge ref on the reviewed main after main advances.
+    f.pull.merge_commit_sha = MERGE_SHA;
+    let record: MergeRefRebuildRecord | null = null;
+    const mergeRefRebuildStore = { read: async () => record, list: async () => record ? [record] : [],
+      save: async (value: MergeRefRebuildRecord) => { record = structuredClone(value); } };
+    const transitions: string[] = [];
+    const request = f.api.request.bind(f.api);
+    f.api.request = async <T>(path: string, options?: StubRequestOptions): Promise<T> => {
+      if (path.endsWith("/pulls/321") && options?.method === "PATCH") {
+        const state = requestBody<{ state: "open" | "closed" }>(options).state;
+        transitions.push(state);
+        f.pull.state = state;
+      }
+      return request<T>(path, options);
+    };
+    const config = { ...f.config, mergeRefRebuildStore };
+    const snapshot = await readSnapshot(config, 321);
+    expect(snapshot.gateInput.pullRequest.mergeSha).toBeNull();
+    expect(snapshot.staleMergeRefSha).toBe(MERGE_SHA);
+    expect(snapshot.workflowStatus).toBe("unknown");
+
+    expect(await scanPullRequests(config, null)).toEqual([
+      expect.objectContaining({ pullRequest: 321, status: "waiting_for_validation" }),
+    ]);
+    expect(transitions).toEqual(["closed", "open"]);
+    expect(record).toMatchObject({ phase: "reopened", target: { headSha: HEAD_SHA, mainSha: "9".repeat(40), staleMergeSha: MERGE_SHA } });
+    expect(f.pull.state).toBe("open");
+
+    // GitHub has not rebuilt the ref yet: wait instead of cycling the PR.
+    await scanPullRequests(config, null);
+    expect(transitions).toEqual(["closed", "open"]);
+    expect(f.writes.some((write) => write.endsWith("/issues/321/labels") || write.includes("/pulls/321/merge"))).toBe(false);
+    expect(f.issue).toMatchObject({ state: "open", labels: ["ongoing"] });
+  });
+
+  it("reopens a PR left closed by an interrupted rebuild before scanning", async () => {
+    const f = await serializedControllerFixture("browser");
+    f.pull.state = "closed";
+    let record: MergeRefRebuildRecord | null = { version: 1, pullRequestNumber: 321, phase: "closing",
+      target: { headSha: HEAD_SHA, mainSha: BASE_SHA, staleMergeSha: MERGE_SHA } };
+    const mergeRefRebuildStore = { read: async () => record, list: async () => record ? [record] : [],
+      save: async (value: MergeRefRebuildRecord) => { record = structuredClone(value); } };
+    const request = f.api.request.bind(f.api);
+    f.api.request = async <T>(path: string, options?: StubRequestOptions): Promise<T> => {
+      if (path.endsWith("/pulls/321") && options?.method === "PATCH") f.pull.state = requestBody<{ state: "open" | "closed" }>(options).state;
+      return request<T>(path, options);
+    };
+    await scanPullRequests({ ...f.config, mergeRefRebuildStore }, null, false);
+    expect(f.pull.state).toBe("open");
+    expect(record).toMatchObject({ phase: "reopened" });
+    expect(f.writes).toContain("PATCH /repos/lukemyself-hub/SayHear/pulls/321");
+  });
+
+  it("reports a failed recovery reopen, keeps the intent, and still scans", async () => {
+    const f = await serializedControllerFixture("browser");
+    f.pull.state = "closed";
+    let record: MergeRefRebuildRecord | null = { version: 1, pullRequestNumber: 321, phase: "closing",
+      target: { headSha: HEAD_SHA, mainSha: BASE_SHA, staleMergeSha: MERGE_SHA } };
+    const mergeRefRebuildStore = { read: async () => record, list: async () => record ? [record] : [],
+      save: async (value: MergeRefRebuildRecord) => { record = structuredClone(value); } };
+    const request = f.api.request.bind(f.api);
+    f.api.request = async <T>(path: string, options?: StubRequestOptions): Promise<T> => {
+      if (path.endsWith("/pulls/321") && options?.method === "PATCH") throw new GitHubApiError(422, "PATCH", path);
+      return request<T>(path, options);
+    };
+    const results = await scanPullRequests({ ...f.config, mergeRefRebuildStore }, null, false);
+    expect(results).toEqual([expect.objectContaining({ status: "merge_ref_rebuild_recovery_blocked", reason: expect.stringContaining("HTTP 422") })]);
+    expect(record).toMatchObject({ phase: "closing" });
+    expect(f.pull.state).toBe("closed");
   });
 
   it.each(["browser", "legacy-root"] as const)("requires a new review and human binding after material main movement for %s", async (channel) => {
