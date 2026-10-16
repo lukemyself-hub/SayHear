@@ -340,9 +340,6 @@ describe("browser approval channel", () => {
     expect(withheld.receipt?.reviewId).toBe(10);
     expect(withheld.coveredRequirementDigest).toBe(REQUIREMENT);
     const epoch = withheld.challenge!.epoch;
-
-    await reconcileBrowserScope(store, 400, { epoch, approvedRequirementDigest: REQUIREMENT, verdict: "unknown" }, NEXT_REQUIREMENT);
-    expect((await readBrowserAuthorization(store, 400, changed, [lukeReview()], false)).coveredRequirementDigest).toBe(REQUIREMENT);
     // A replayed verdict for another epoch is inert.
     await reconcileBrowserScope(store, 400, { epoch: "other", approvedRequirementDigest: REQUIREMENT, verdict: "material" }, NEXT_REQUIREMENT);
     expect((await readBrowserAuthorization(store, 400, changed, [lukeReview()], false)).receipt?.reviewId).toBe(10);
@@ -352,6 +349,23 @@ describe("browser approval channel", () => {
     expect((await readBrowserAuthorization(store, 400, changed, [lukeReview()], false)).coveredRequirementDigest).toBe(NEXT_REQUIREMENT);
 
     await reconcileBrowserScope(store, 400, { epoch, approvedRequirementDigest: REQUIREMENT, verdict: "material" }, NEXT_REQUIREMENT);
+    const materialRevoked = await readBrowserAuthorization(store, 400, changed, [lukeReview()], false);
+    expect(materialRevoked.receipt).toBeNull();
+    expect(materialRevoked.challenge).toBeNull();
+  });
+
+  it("revokes an unknown scope verdict like material so the next Approve is resolvable", async () => {
+    const store = new MemoryBrowserStore();
+    const finalContext = context({ liveness: "final-decision-v1" });
+    const changed = context({ liveness: "final-decision-v1", requirementDigest: NEXT_REQUIREMENT });
+    await readBrowserAuthorization(store, 400, finalContext, [], true, Date.parse("2026-10-14T00:00:05Z"));
+    await readBrowserAuthorization(store, 400, finalContext, [lukeReview()], false, Date.parse("2026-10-14T00:00:11Z"));
+    const epoch = store.value?.epoch;
+    if (!epoch) throw new Error("Expected a frozen browser challenge");
+    // Unknown revokes like material: the human route stays withheld (the old
+    // Approve never covers the live digest), but the next Approve on a fresh
+    // live-digest challenge re-confirms the scope.
+    await reconcileBrowserScope(store, 400, { epoch, approvedRequirementDigest: REQUIREMENT, verdict: "unknown" }, NEXT_REQUIREMENT);
     const revoked = await readBrowserAuthorization(store, 400, changed, [lukeReview()], false);
     expect(revoked.receipt).toBeNull();
     expect(revoked.challenge).toBeNull();

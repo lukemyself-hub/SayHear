@@ -3658,12 +3658,46 @@ describe("guarded serialized controller completion", () => {
   });
 
   it("waits for a human when the coordinator cannot classify the scope change", async () => {
-    const { f } = await commentAfterFinalDecision("unknown");
+    const { f, approved, live } = await commentAfterFinalDecision("unknown");
+    const staleEpoch = f.browserApprovalStore.value?.epoch;
     const results = await scanPullRequests(f.config, 321);
     expect(results[0]?.outcome).not.toBe("merge_candidate");
     expect(f.writes.some((write) => write.includes("/pulls/321/merge"))).toBe(false);
     expect(f.stored()).toBeNull();
-    expect(f.browserApprovalStore.value?.receipt?.reviewId).toBe(10);
+    // Unknown revokes like material: the old receipt can never cover the live
+    // digest, but the scan froze a fresh challenge on it so Luke's next
+    // browser Approve on the current head re-confirms the scope.
+    expect(f.browserApprovalStore.value?.receipt ?? null).toBeNull();
+    const fresh = f.browserApprovalStore.value?.challenge;
+    expect(fresh).not.toBeNull();
+    expect(fresh?.epoch).not.toBe(staleEpoch);
+    expect(fresh?.context.requirementDigest).toBe(live);
+    const challenge = f.browserApprovalStore.value?.challenge;
+    if (!challenge) throw new Error("Expected a fresh challenge on the live digest");
+    f.reviews.push({ id: 30, state: "APPROVED", body: "Re-confirmed", commit_id: HEAD_SHA, user: LUKE_IDENTITY,
+      submitted_at: new Date(challenge.frozenAt + 1_000).toISOString() });
+    const rechecked = await readSnapshot(f.config, 321);
+    // The re-Approve on the fresh challenge covers the live digest, so the
+    // human route is final again. The scan may still await its own completion
+    // writes; what this pins is the resolvable human binding.
+    expect(rechecked.humanBinding.receipt?.reviewId).toBe(30);
+    expect(rechecked.humanBinding.receipt?.challenge.context.requirementDigest).toBe(live);
+    expect(rechecked.humanBinding.coveredRequirementDigest).toBe(live);
+  });
+
+  it("never lets an Approve answering the old challenge cover the new scope", async () => {
+    const { f, approved } = await commentAfterFinalDecision("unknown");
+    const frozenAt = f.browserApprovalStore.value?.challenge?.frozenAt;
+    if (frozenAt === undefined) throw new Error("Expected a frozen browser challenge");
+    // An Approve that predates the revocation answers the old challenge only.
+    f.reviews.push({ id: 29, state: "APPROVED", body: "Early answer", commit_id: HEAD_SHA, user: LUKE_IDENTITY,
+      submitted_at: new Date(frozenAt - 1_000).toISOString() });
+    const results = await scanPullRequests(f.config, 321);
+    expect(results[0]?.outcome).not.toBe("merge_candidate");
+    expect(f.writes.some((write) => write.includes("/pulls/321/merge"))).toBe(false);
+    expect(f.stored()).toBeNull();
+    expect(f.browserApprovalStore.value?.receipt?.reviewId).not.toBe(29);
+    expect(f.browserApprovalStore.value?.receipt?.challenge.context.requirementDigest ?? approved).toBe(approved);
   });
 
   it("requires a new Approve after a material scope change", async () => {
