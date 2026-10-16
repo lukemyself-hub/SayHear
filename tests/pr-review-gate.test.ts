@@ -195,6 +195,7 @@ function input(
       keepOpenIssueNumbers: [],
       issueClosureAmbiguous: false,
       closingIssueNumbers: [],
+      pause: { active: false, source: "none" as const },
       changedFiles: [
         { path: "packages/application/src/server/fix.ts", status: "modified" },
       ],
@@ -1514,6 +1515,7 @@ describe("PR review gate", () => {
       expect(evaluatePrReviewGate(changed, policy).outcome).toBe("human_decision");
     }
     expect(() => parsePrReviewGateInput({ ...candidate, issues: [candidate.issues[0]!, { ...candidate.issues[1]!, pause: null }] })).toThrow("issues[1].pause");
+    expect(() => parsePrReviewGateInput({ ...candidate, pullRequest: { ...candidate.pullRequest, pause: undefined } })).toThrow("pullRequest.pause");
   });
 
   it("keeps explicit reference-only Issues open without claiming or handing them off", () => {
@@ -1587,6 +1589,40 @@ describe("PR review gate", () => {
 
     expect(paused.outcome).toBe("human_decision");
     expect(labelConflict.outcome).toBe("awaiting_verification");
+  });
+
+  it("blocks a paused PR on the automatic route, even with no linked Issue", () => {
+    const pausedRaw = input({
+      issues: [],
+      pullRequest: {
+        linkedIssueNumbers: [],
+        closingIssueNumbers: [],
+        pause: { active: true, source: "maintainer" },
+      },
+    });
+    const paused = evaluatePrReviewGate(
+      {
+        ...pausedRaw,
+        review: {
+          ...pausedRaw.review,
+          requirementDigest: requirementDigest(pausedRaw.issues, pausedRaw.pullRequest),
+        },
+      },
+      policy,
+    );
+    const untrusted = evaluatePrReviewGate(
+      input({
+        pullRequest: { pause: { active: false, source: "unknown" } },
+      }),
+      policy,
+    );
+    const unpaused = evaluatePrReviewGate(input(), policy);
+
+    expect(paused.outcome).toBe("human_decision");
+    expect(paused.reasons[0]?.message).toBe("The PR is paused or its pause state cannot be trusted.");
+    expect(untrusted.outcome).toBe("human_decision");
+    expect(untrusted.reasons[0]?.message).toBe("The PR is paused or its pause state cannot be trusted.");
+    expect(unpaused.outcome).toBe("merge_candidate");
   });
 
   it("waits for the dedicated App and trusted workflow identity", () => {
@@ -2376,6 +2412,15 @@ describe("PR review gate", () => {
     expect(evaluatePrReviewGate({
       ...pausedSetup.candidate,
       issues: [{ ...pausedSetup.candidate.issues[0]!, pause: { active: false, source: "unknown" as const } }],
+    }, pausedSetup.bound).outcome).toBe("human_decision");
+    expect(evaluatePrReviewGate({
+      ...pausedSetup.candidate,
+      pullRequest: { ...pausedSetup.candidate.pullRequest, pause: { active: true, source: "maintainer" as const } },
+    }, pausedSetup.bound)).toMatchObject({ outcome: "human_decision",
+      reasons: [{ code: "human_review_required", message: "The PR is paused or its pause state cannot be trusted." }] });
+    expect(evaluatePrReviewGate({
+      ...pausedSetup.candidate,
+      pullRequest: { ...pausedSetup.candidate.pullRequest, pause: { active: false, source: "unknown" as const } },
     }, pausedSetup.bound).outcome).toBe("human_decision");
 
     // Content edits re-bind the final decision so only the hold itself decides.

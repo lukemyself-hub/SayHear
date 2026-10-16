@@ -2797,6 +2797,7 @@ export async function readSnapshot(
     keepOpenIssueNumbers: issueClosure.keepOpenIssueNumbers,
     issueClosureAmbiguous: issueClosure.ambiguous,
     closingIssueNumbers,
+    pause: parsePauseState(prComments, config.ownerActorId, config.botActorId),
     changedFiles,
   };
   const normalizedRepository: PrReviewGateInput["repository"] = {
@@ -5514,6 +5515,7 @@ export async function scanPullRequests(
 
 
     if (
+      snapshot.gateInput.pullRequest.pause.active || snapshot.gateInput.pullRequest.pause.source === "unknown" ||
       snapshot.gateInput.issues.some((issue) => !snapshot.gateInput.pullRequest.keepOpenIssueNumbers.includes(issue.number) && (issue.pause.active || issue.pause.source === "unknown")) ||
       snapshot.gateInput.pullRequest.issueClosureAmbiguous ||
       containsExplicitMergeHold(snapshot)

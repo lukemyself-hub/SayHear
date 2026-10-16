@@ -1779,6 +1779,7 @@ describe("stale main Issue handoff", () => {
       mergeable: false,
       headRepositoryId: SAYHEAR_REPOSITORY_ID, authorId: 101, lastCommitAuthorId: 101,
       linkedIssueNumbers: [42, 43, 44, 45], keepOpenIssueNumbers: [44], issueClosureAmbiguous: false, closingIssueNumbers: [],
+      pause: { active: false, source: "none" },
       changedFiles: [],
     } satisfies PrReviewGateInput["pullRequest"];
     return { api, expected, pull, issues, comments, writes,
@@ -3566,6 +3567,46 @@ describe("guarded serialized controller completion", () => {
     expect(f.stored()).toMatchObject({ version: 2, phase: "complete", identity: { issueNumbers: [] } });
     expect(f.pull.merged).toBe(true);
     expect(f.writes.some((write) => write.includes("/issues/42"))).toBe(false);
+  });
+
+  it("holds a zero-Issue PR on PR pause and requires fresh review after resume", async () => {
+    const f = await serializedControllerFixture("browser", { linkedIssue: false });
+    asLegacyBrowserApproval(f);
+    acceptCheckRunWrites(f);
+    const approvedReviewCount = f.reviews.filter((review) => review.state === "APPROVED").length;
+    let prComments: GitHubComment[] = [{
+      ...makeIssueComment("/pause-pr-auto-approval", LUKE_IDENTITY.id),
+      created_at: "2026-10-14T01:00:00Z",
+      updated_at: "2026-10-14T01:00:00Z",
+    }];
+    const pages = f.api.pages.bind(f.api);
+    f.api.pages = async <T>(path: string): Promise<T[]> => path.endsWith("/issues/321/comments")
+      ? prComments as T[]
+      : pages<T>(path);
+    const held = await scanPullRequests(f.config, 321);
+    expect(held[0]?.outcome).not.toBe("merge_candidate");
+    expect(f.pull.merged).toBe(false);
+    expect(f.stored()).toBeNull();
+    prComments = [...prComments, {
+      ...makeIssueComment("/resume-pr-auto-approval", LUKE_IDENTITY.id),
+      created_at: "2026-10-14T02:00:00Z",
+      updated_at: "2026-10-14T02:00:00Z",
+    }];
+    // Resume clears the pause but does not revive the saved review: the
+    // pause/resume comments changed the requirement digest, so the stored
+    // report is stale and the controller surfaces a fresh review packet
+    // instead of merging.
+    const resumed = await scanPullRequests(f.config, 321);
+    expect(resumed).toEqual([expect.objectContaining({ pullRequest: 321, status: "review_required" })]);
+    const resumedResult = resumed[0] as { packetPath?: unknown; requirementDigest?: unknown };
+    expect(typeof resumedResult.packetPath).toBe("string");
+    expect(resumedResult.requirementDigest).toBeTruthy();
+    expect(f.pull.merged).toBe(false);
+    expect(f.stored()).toBeNull();
+    expect(f.writes.some((write) => write.includes("/pulls/321/merge"))).toBe(false);
+    expect(f.writes.some((write) => write.includes("/issues/42"))).toBe(false);
+    // No App approval was emitted on the stale saved review.
+    expect(f.reviews.filter((review) => review.state === "APPROVED")).toHaveLength(approvedReviewCount);
   });
 
   it("merges a background-only PR without touching the referenced Issue", async () => {

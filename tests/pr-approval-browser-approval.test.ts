@@ -662,6 +662,7 @@ describe("channel routing in the controller", () => {
         discussionDigest: "1".repeat(64), externalReviewState: "clear", headSha: HEAD, baseSha: BASE, mergeSha: null,
         baseRef: "main", headRepositoryId: 1312399710, authorId: AGENT_IDENTITY.id, lastCommitAuthorId: AGENT_IDENTITY.id,
         linkedIssueNumbers: [1], keepOpenIssueNumbers: [], issueClosureAmbiguous: false, closingIssueNumbers: [],
+        pause: { active: false, source: "none" },
         changedFiles: changedPaths.map((path) => ({ path, status: "modified" as const })),
       },
       issues: [{
