@@ -45,5 +45,5 @@ await writeFile(configPath, `export default ${JSON.stringify({
 const run = await promisify(execFile)(process.execPath, [resolve(root, "node_modules/vitest/vitest.mjs"), "run", "--config", configPath], { cwd: root, maxBuffer: 4_000_000, env: { ...process.env, SAYHEAR_COMPLETION_BUNDLE_TEST: "1" } });
 process.stdout.write(run.stdout);
 process.stderr.write(run.stderr);
-await mkdir(resolve(root, ".audit"), { recursive: true });
+await mkdir(resolve(root, ".audit/pr-approval-v5-tests"), { recursive: true });
 await writeFile(resolve(root, ".audit/pr-approval-v5-tests/bundle-proof.json"), JSON.stringify({ identity, digest, manifest }, null, 2));

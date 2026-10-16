@@ -56,8 +56,20 @@ result JSON record the profile, so a proof states which stand-ins it ran on.
 | `local` | fixed `2026-07-27T16:00:00Z` | deterministic adapter | inert synthetic client | database-session fixture | synthetic subject |
 | `live` | real, 60 s inactivity window | deterministic adapter | inert | fixture | synthetic |
 | `provider` | real, 60 s inactivity window | OpenCode Go, default model | inert | fixture | synthetic |
+| `timeline` | test-only file clock, 60 s inactivity window | deterministic adapter | inert | fixture | synthetic |
+| `fault` | test-only file clock, 60 s inactivity window | deterministic adapter with a file-driven chunk ceiling | inert | fixture | synthetic |
 | `oauth` | real | deterministic adapter | real client from the `.env` profile | none; sign in | the configured Owner subject |
 | `oauth-stranger` | real | deterministic adapter | real client | none | synthetic, so the GitHub account signing in is not the Owner |
+
+`timeline` and `fault` are test-only seams, both refused outside
+`SAYHEAR_DEPLOYMENT=test`. The driver rewrites a clock file between requests and
+`loadRuntimeConfiguration` re-reads it per request, so one instance can produce
+two logical dates without editing session rows. `fault` additionally names a
+fault file: a missing or empty file means no fault, a non-negative integer is the
+chunk ceiling where the deterministic stream fails. The driver toggles it between
+the interrupted send and the retry. These replace `SAYHEAR_TEST_NOW` and
+`SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS` for a run; the static variables stay
+the launch fallback.
 
 Real credentials come from an env profile file you name; nothing is defaulted.
 Launch reads the single variables it needs and passes them to the child
@@ -128,6 +140,10 @@ browser build the cache lacks, for example to the cached
 | --- | --- | --- | --- |
 | `access` | any | Root redirect to GitHub sign-in; anonymous access API denial | Does not complete OAuth |
 | `text` | `local`, `live`, `provider` | Send via button, clear composer, receive reply, reload, verify canonical rows and the stored model run attempt, open date URL, return to current chat | Fresh empty conversation. On `provider` it proves one live reply's transport, rendering and persistence, not quality |
+| `keyboard` | `local`, `live`, `timeline`, `fault` | Shift+Enter inserts one newline with no request; a browser-level IME composition blocks Enter; one Enter sends exactly one request and commits the multiline text | The IME is emulated through CDP `Input.imeSetComposition`; a real OS IME stays human-pending |
+| `history` | `local`, `live`, `timeline`, `fault` | 28 composer exchanges exceed the 50-message window; a reply while scrolled up preserves the viewport, 回到最新 restores continued follow, 加载更早消息 prepends the rest without duplicates or a moved reading position | Fresh instance, deterministic Provider |
+| `interruption` | `fault` | A one-chunk fault interrupts a real reply; read-only history only guides to the current chat; `Retry response` recovers once; the exact retry request replays idempotently | Deterministic fault and controlled clock, not a real Provider or network interruption |
+| `cross-date` | `timeline`, `fault` | Two controlled-clock dates each publish their own Journal; date entry, URL, date-specific 复制/导出 and 查看当天聊天 verified per date | Driver-run scans and local Workflow runtime; a real midnight crossing stays unverified. The 2026-10-13 attempts lost Journal publication to the #340 deadlock; the 2026-10-15 rerun passed after that fix |
 | `journal` | fixture session | Navigate to Journal and observe the real empty state | Empty launch only |
 | `delivery` | `live`, `provider` | Send substantive text, stay idle past the inactivity window, run the scheduled scan, read the published Journal, reload, date entries, 复制, 导出, 查看当天聊天 | Fresh instance. Shortened window, driver-run scan and local Workflow runtime stand in for the hosted schedule |
 | `context` | fixture session | Navigate through 检查工具 to Context Inspector | Entry only |
@@ -188,10 +204,12 @@ Evidence survives at `artifacts/verify/<run-id>/` (gitignored). Record which
 journey and entry point ran, its action and result, and remaining paths. The
 helper produces action logs, request/response bodies, ARIA snapshots, screenshots,
 Playwright trace ZIPs, result JSON, doctor JSON, and instance/server logs. The
-`text`, `delivery`, `context-trace` and `oauth` journeys also write `*-stored.json`
-with rows read independently through `psql`: canonical messages, content-free
-model run attempts (Provider, model, tokens, timings), Journal outcomes, outbox
-events, scan results, and sensitive-access audits.
+`text`, `delivery`, `context-trace`, `oauth`, `keyboard`, `history`,
+`interruption` and `cross-date` journeys also write `*-stored.json` with rows
+read independently through `psql`: canonical messages, content-free model run
+attempts (Provider, model, tokens, timings), Journal outcomes, outbox events,
+scan results, sensitive-access audits, observed key/composition events, retry
+turns, and per-date Journal statements.
 
 Require the real user action and resulting state, not just a final screen. For a
 mutation, reload and independently verify persistence/side effects. Synthetic

@@ -64,6 +64,7 @@ import {
   type PrReviewGateInput,
 } from "../scripts/pr-review-gate.ts";
 import type { IntegrationRefreshRecord } from "../scripts/pr-approval/integration-refresh.ts";
+import type { MergeRefRebuildRecord } from "../scripts/pr-approval/merge-ref-rebuild.ts";
 import type { CompletionRecord } from "../scripts/pr-approval/completion.ts";
 import type { BrowserApprovalStore, BrowserState } from "../scripts/pr-approval/browser-approval.ts";
 import { preMergeDeferralFor } from "../scripts/daily-release-validation.ts";
@@ -2475,6 +2476,13 @@ async function serializedControllerFixture(channel: "browser" | "legacy-root") {
   let mergeError: unknown;
   let finalMainDrift = false;
   let mainReads = 0;
+  let beforeFinalMainRead: (() => void) | undefined;
+  const reviewRules: Record<string, unknown> = { dismiss_stale_reviews: true, required_approving_review_count: 1 };
+  const additionalRulesets: Record<string, unknown>[] = [];
+  const writerRuleset = { id: 9, target: "branch", enforcement: "active", conditions: { ref_name: { include: ["~DEFAULT_BRANCH"], exclude: [] } },
+    rules: [{ type: "update" }, { type: "non_fast_forward" }], updated_at: "2026-10-14T21:00:00.000Z",
+    bypass_actors: [{ actor_id: 98765, actor_type: "Integration", bypass_mode: "always" }], current_user_can_bypass: "always" };
+  let bypassVisible = true;
   const validationArchive = () => storedZipArchive([
     { name: "vitest-report.json", content: Buffer.from(JSON.stringify({ success: true, testResults: [
       { name: "/workspace/tests/pr-approval-controller.test.ts", status: "passed", assertionResults: [{ status: "passed" }] },
@@ -2484,7 +2492,10 @@ async function serializedControllerFixture(channel: "browser" | "legacy-root") {
   ]);
   const repository = { id: SAYHEAR_REPOSITORY_ID, node_id: "R_SayHear", full_name: "lukemyself-hub/SayHear", default_branch: "main" };
   const api = new StubApi((url, options) => {
-    if (options?.method && options.method !== "GET") writes.push(`${options.method} ${url}`);
+    if (options?.method && options.method !== "GET" &&
+        (url !== "/graphql" || /^\s*mutation\b/.test(requestBody<{ query: string }>(options).query))) {
+      writes.push(`${options.method} ${url}`);
+    }
     if (url === "/graphql") return { data: { repository: {
       autoMergeAllowed: true, mergeCommitAllowed: true, squashMergeAllowed: false, rebaseMergeAllowed: false,
       pullRequest: { reviewThreads: { nodes: [], pageInfo: { hasNextPage: false } }, closingIssuesReferences: { nodes: [{ number: 42 }], pageInfo: { hasNextPage: false } } },
@@ -2493,12 +2504,17 @@ async function serializedControllerFixture(channel: "browser" | "legacy-root") {
     if (url === "/repos/lukemyself-hub/SayHear") return structuredClone(repository);
     if (url.endsWith("/branches/main/protection")) return { required_status_checks: { strict: false, checks: [
       { context: "validate", app_id: ACTIONS_APP_ID }, { context: "pr-review-gate", app_id: 98765 },
-    ] }, required_pull_request_reviews: { dismiss_stale_reviews: true, required_approving_review_count: 1 }, enforce_admins: { enabled: true } };
-    if (url.includes("/rulesets/9?")) return { id: 9, target: "branch", enforcement: "active", conditions: { ref_name: { include: ["~DEFAULT_BRANCH"], exclude: [] } },
-      rules: [{ type: "update" }], updated_at: "2026-10-14T21:00:00.000Z",
-      bypass_actors: [{ actor_id: 98765, actor_type: "Integration", bypass_mode: "always" }], current_user_can_bypass: "always" };
+    ] }, required_pull_request_reviews: structuredClone(reviewRules), enforce_admins: { enabled: true } };
+    if (url.includes("/rulesets/9?")) {
+      if (bypassVisible) return structuredClone(writerRuleset);
+      const { bypass_actors: _bypass, ...hidden } = writerRuleset;
+      return structuredClone(hidden);
+    }
+    const extraRuleset = additionalRulesets.find((ruleset) => url.includes(`/rulesets/${ruleset.id}?`));
+    if (extraRuleset) return structuredClone(extraRuleset);
     if (url.endsWith("/git/ref/heads/main")) {
       mainReads++;
+      if (mainReads === 3) beforeFinalMainRead?.();
       return { object: { sha: finalMainDrift && mainReads > 2 ? "8".repeat(40) : main } };
     }
     if (url.endsWith("/git/ref/pull/321/merge")) return { ref: "refs/pull/321/merge", object: { type: "commit", sha: pull.merge_commit_sha } };
@@ -2541,7 +2557,7 @@ async function serializedControllerFixture(channel: "browser" | "legacy-root") {
       total_commits: 1, commits: [{ sha: main }], files: [{ filename: material ? "packages/shared/src/types.ts" : "src/unrelated.ts", status: "modified" }] };
     throw new Error(`Unexpected controller request ${url}`);
   }, (url) => {
-    if (url.includes("/rulesets?")) return [{ id: 9 }];
+    if (url.includes("/rulesets?")) return [{ id: 9 }, ...additionalRulesets.map(({ id }) => ({ id }))];
     if (url.endsWith("/pulls?state=open")) return [structuredClone(pull)];
     if (url.endsWith("/pulls/321/files")) return [changedFile];
     if (url.endsWith("/pulls/321/commits")) return [{ author: { id: 101 }, committer: { id: 101 }, commit: { message: "Implement safety" } }];
@@ -2591,7 +2607,13 @@ async function serializedControllerFixture(channel: "browser" | "legacy-root") {
       epoch: bound.humanBinding.receipt?.challenge.epoch ?? null, mergeAction: "merge-now",
       reviewIdentity: { diffDigest: frozen.diff.digest, changeDigest: frozen.diff.changeDigest, workflowBlobSha: workflow } } };
   const clock = { now: () => 1_000_000, sleep: async () => {}, random: () => 0 };
-  return { config: activeConfig, receipt, api, pull, issue, reviews, reviewChecks, browserApprovalStore, rootAuthorization, clock, writes,
+  return { config: activeConfig, receipt, api, pull, issue, reviews, reviewChecks, browserApprovalStore, rootAuthorization, clock, writes, writerRuleset, additionalRulesets, reviewRules,
+    hideBypass: (): MainWriterAttestation => {
+      bypassVisible = false;
+      return { version: MAIN_WRITER_ATTESTATION_VERSION, rulesetId: writerRuleset.id,
+        rulesetFingerprint: fingerprintRuleset(writerRuleset), assertedBypassAppIds: [98765],
+        attestedAt: "2026-10-15T00:00:00.000Z", attestedBy: "test" };
+    },
     stored: () => stored,
     advanceMain: (freshCi = true, risky = false, nextMain = "9".repeat(40)) => { main = nextMain; pull.merge_commit_sha = "7".repeat(40); material = risky;
       if (freshCi) { validatedMain = main; validatedMerge = pull.merge_commit_sha; } },
@@ -2599,11 +2621,248 @@ async function serializedControllerFixture(channel: "browser" | "legacy-root") {
     queueNewerValidation: () => { newerQueued = true; reviewChecks.push({ id: 9003, name: "validate", app: { id: ACTIONS_APP_ID }, head_sha: HEAD_SHA,
       details_url: "https://github.com/lukemyself-hub/SayHear/actions/runs/556", status: "queued", conclusion: null }); },
     driftFinalMain: () => { mainReads = 0; finalMainDrift = true; },
+    beforeFinalRead: (change: () => void) => { mainReads = 0; beforeFinalMainRead = change; },
     failMerge: (error: unknown) => { mergeError = error; },
   };
 }
 
 describe("guarded serialized controller completion", () => {
+  it.each(["writer", "second"] as const)("rejects blocked merge with required signatures in the %s ruleset", async (location) => {
+    const f = await serializedControllerFixture("browser");
+    f.pull.mergeable_state = "blocked";
+    if (location === "writer") f.writerRuleset.rules.push({ type: "required_signatures" });
+    else f.additionalRulesets.push({ ...structuredClone(f.writerRuleset), id: 10, rules: [{ type: "required_signatures" }] });
+    const pending = await recoverControllerCompletion(f.config, f.receipt, f.clock);
+    expect(pending).toMatchObject({ phase: "merge_unconfirmed", mergeWriteState: "not-sent" });
+    expect(f.writes).toEqual([]);
+  });
+
+  it("rejects an extra writer rule even with a current matching attestation", async () => {
+    const f = await serializedControllerFixture("browser");
+    f.pull.mergeable_state = "blocked";
+    f.writerRuleset.rules.push({ type: "required_signatures" });
+    const config = { ...f.config, mainWriterAttestation: f.hideBypass() };
+    await expect(guardImmediateMerge(config, f.receipt.identity)).rejects.toThrow("blocked_merge_protections_unproven");
+    expect(f.writes).toEqual([]);
+  });
+
+  it.each(["required_deployments", "pull_request", "required_status_checks", "code_scanning", "future_rule"])(
+    "rejects blocked merge with an additional %s rule", async (type) => {
+      const f = await serializedControllerFixture("legacy-root");
+      f.pull.mergeable_state = "blocked";
+      f.additionalRulesets.push({ ...structuredClone(f.writerRuleset), id: 10, rules: [{ type }] });
+      const pending = await recoverControllerCompletion(f.config, f.receipt, f.clock);
+      expect(pending).toMatchObject({ phase: "merge_unconfirmed", mergeWriteState: "not-sent", reason: "blocked_merge_protections_unproven" });
+      expect(f.writes).toEqual([]);
+    },
+  );
+
+  describe.each(["update", "non_fast_forward"])("%s rule parameters", (type) => {
+    it.each([{ unknown: true }, { update_allows_fetch_and_merge: true }, null, [], "invalid", 1, false])(
+      "rejects unsupported or malformed parameters %j", async (parameters) => {
+        const f = await serializedControllerFixture("browser");
+        f.pull.mergeable_state = "blocked";
+        f.additionalRulesets.push({ ...structuredClone(f.writerRuleset), id: 10, rules: [{ type, parameters }] });
+        await expect(guardImmediateMerge(f.config, f.receipt.identity)).rejects.toThrow("blocked_merge_protections_unproven");
+        expect(f.writes).toEqual([]);
+      },
+    );
+
+    it("accepts empty parameters", async () => {
+      const f = await serializedControllerFixture("browser");
+      f.pull.mergeable_state = "blocked";
+      Object.assign(f.writerRuleset.rules.find((rule) => rule.type === type)!, { parameters: {} });
+      await expect(guardImmediateMerge(f.config, f.receipt.identity)).resolves.toMatchObject({ pullRequest: { mergeable_state: "blocked" } });
+      expect(f.writes).toEqual([]);
+    });
+  });
+
+  it("accepts the documented update parameter only when fetch and merge is disallowed", async () => {
+    const f = await serializedControllerFixture("browser");
+    f.pull.mergeable_state = "blocked";
+    Object.assign(f.writerRuleset.rules.find((rule) => rule.type === "update")!, { parameters: { update_allows_fetch_and_merge: false } });
+    await expect(guardImmediateMerge(f.config, f.receipt.identity)).resolves.toMatchObject({ pullRequest: { mergeable_state: "blocked" } });
+    expect(f.writes).toEqual([]);
+  });
+
+  it.each([
+    ["update", { update_allows_fetch_and_merge: "false" }],
+    ["update", { update_allows_fetch_and_merge: 0 }],
+    ["update", { update_allows_fetch_and_merge: null }],
+    ["update", { update_allows_fetch_and_merge: false, unknown: true }],
+    ["non_fast_forward", { update_allows_fetch_and_merge: false }],
+  ] as const)("rejects %s rule parameters %j", async (type, parameters) => {
+    const f = await serializedControllerFixture("browser");
+    f.pull.mergeable_state = "blocked";
+    f.additionalRulesets.push({ ...structuredClone(f.writerRuleset), id: 10, rules: [{ type, parameters }] });
+    await expect(guardImmediateMerge(f.config, f.receipt.identity)).rejects.toThrow("blocked_merge_protections_unproven");
+    expect(f.writes).toEqual([]);
+  });
+
+  it.each([
+    ["unknown condition", { conditions: { ref_name: { include: ["refs/heads/release"], exclude: [] }, unknown: {} } }],
+    ["missing include", { conditions: { ref_name: { exclude: [] } } }],
+    ["empty include", { conditions: { ref_name: { include: [], exclude: [] } } }],
+    ["malformed include", { conditions: { ref_name: { include: "refs/heads/release", exclude: [] } } }],
+    ["malformed pattern", { conditions: { ref_name: { include: ["refs/heads/release", null], exclude: [] } } }],
+    ["missing exclude", { conditions: { ref_name: { include: ["refs/heads/release"] } } }],
+    ["malformed exclude", { conditions: { ref_name: { include: ["~ALL"], exclude: "main" } } }],
+    ["recursive glob", { conditions: { ref_name: { include: ["refs/heads/**"], exclude: [] } } }],
+    ["question glob", { conditions: { ref_name: { include: ["refs/heads/mai?"], exclude: [] } } }],
+    ["bracket glob", { conditions: { ref_name: { include: ["refs/heads/[m]ain"], exclude: [] } } }],
+    ["unknown ref condition", { conditions: { ref_name: { include: ["~ALL"], exclude: [], unknown: true } } }],
+    ["unreadable conditions", { conditions: null }],
+    ["unknown target", { target: "push" }],
+    ["unreadable enforcement", { enforcement: null }],
+    ["unknown enforcement", { enforcement: "future" }],
+    ["missing rules", { rules: undefined }],
+    ["malformed rules", { rules: {} }],
+    ["malformed rule", { rules: [null] }],
+    ["missing rule type", { rules: [{}] }],
+  ] as const)("fails closed on %s in a freshly applicable ruleset", async (_label, overrides) => {
+    const f = await serializedControllerFixture("browser");
+    f.pull.mergeable_state = "blocked";
+    f.beforeFinalRead(() => {
+      f.additionalRulesets.push({ ...structuredClone(f.writerRuleset), id: 10, ...overrides });
+    });
+    await expect(guardImmediateMerge(f.config, f.receipt.identity)).rejects.toThrow("blocked_merge_protections_unproven");
+    expect(f.writes).toEqual([]);
+  });
+
+  it.each([
+    { enforcement: "disabled" },
+    { enforcement: "evaluate" },
+    { target: "tag" },
+    { conditions: { ref_name: { include: ["refs/heads/release/*"], exclude: [] } } },
+    { conditions: { ref_name: { include: ["~ALL"], exclude: ["~DEFAULT_BRANCH"] } } },
+  ])("ignores a proven irrelevant ruleset %j for a blocked merge", async (overrides) => {
+    const f = await serializedControllerFixture("browser");
+    f.pull.mergeable_state = "blocked";
+    f.additionalRulesets.push({ ...structuredClone(f.writerRuleset), id: 10, rules: [{ type: "required_signatures" }], ...overrides });
+    const completed = await recoverControllerCompletion(f.config, f.receipt, f.clock);
+    expect(completed).toMatchObject({ phase: "complete", mergeWriteState: "accepted" });
+    expect(f.writes.filter((write) => write.includes("/pulls/321/merge"))).toHaveLength(1);
+  });
+
+  it.each(["enumerated", "attested"] as const)("rejects a fresh writer fingerprint change with %s proof", async (proof) => {
+    const f = await serializedControllerFixture("browser");
+    f.pull.mergeable_state = "blocked";
+    const config = proof === "attested" ? { ...f.config, mainWriterAttestation: f.hideBypass() } : f.config;
+    f.beforeFinalRead(() => { f.writerRuleset.updated_at = "2026-10-15T01:00:00.000Z"; });
+    await expect(guardImmediateMerge(config, f.receipt.identity)).rejects.toThrow("blocked_merge_protections_unproven");
+    expect(f.writes).toEqual([]);
+  });
+
+  it.each(["extra-rule", "second-ruleset", "removed-writer", "changed-bypass", "hidden-bypass"] as const)(
+    "rejects a final %s change after a passing snapshot", async (change) => {
+      const f = await serializedControllerFixture("browser");
+      f.pull.mergeable_state = "blocked";
+      f.beforeFinalRead(() => {
+        if (change === "extra-rule") f.writerRuleset.rules.push({ type: "required_signatures" });
+        if (change === "second-ruleset") f.additionalRulesets.push({ ...structuredClone(f.writerRuleset), id: 10, rules: [{ type: "required_signatures" }] });
+        if (change === "removed-writer") f.writerRuleset.rules = [{ type: "non_fast_forward" }];
+        if (change === "changed-bypass") f.writerRuleset.bypass_actors[0]!.actor_id = 12345;
+        if (change === "hidden-bypass") f.hideBypass();
+      });
+      await expect(guardImmediateMerge(f.config, f.receipt.identity)).rejects.toThrow("blocked_merge_protections_unproven");
+      expect(f.writes).toEqual([]);
+    },
+  );
+
+  it.each(["list", "detail", "classic"] as const)("rejects an unreadable final %s protection read", async (kind) => {
+    const f = await serializedControllerFixture("browser");
+    f.pull.mergeable_state = "blocked";
+    f.beforeFinalRead(() => {
+      const request = f.api.request.bind(f.api);
+      f.api.request = async <T>(path: string, options?: StubRequestOptions): Promise<T> => {
+        if ((kind === "detail" && path.includes("/rulesets/9?")) ||
+            (kind === "classic" && path.endsWith("/branches/main/protection"))) throw new GitHubApiError(403, "GET", path);
+        return request<T>(path, options);
+      };
+      if (kind === "list") f.api.pages = async () => { throw new Error("unreadable rulesets"); };
+    });
+    await expect(guardImmediateMerge(f.config, f.receipt.identity)).rejects.toThrow("blocked_merge_protections_unproven");
+    expect(f.writes).toEqual([]);
+  });
+
+  it.each([
+    { users: [{ id: 101 }], teams: [], apps: [] },
+    { users: [], teams: [{ id: 102 }], apps: [] },
+    { users: [], teams: [], apps: [{ id: 98765 }] },
+    { users: [], teams: [], apps: null },
+    { users: [], teams: [] },
+    { users: [], teams: [], apps: [], unknown: [] },
+    null,
+    [],
+  ])("rejects classic review bypass allowances %j for a blocked merge", async (allowances) => {
+    const f = await serializedControllerFixture("legacy-root");
+    f.pull.mergeable_state = "blocked";
+    f.beforeFinalRead(() => { f.reviewRules.bypass_pull_request_allowances = allowances; });
+    const pending = await recoverControllerCompletion(f.config, f.receipt, f.clock);
+    expect(pending).toMatchObject({ mergeWriteState: "not-sent", reason: "blocked_merge_protections_unproven" });
+    expect(f.writes).toEqual([]);
+  });
+
+  it("accepts empty classic review bypass allowances for a blocked merge", async () => {
+    const f = await serializedControllerFixture("browser");
+    f.pull.mergeable_state = "blocked";
+    f.reviewRules.bypass_pull_request_allowances = { users: [], teams: [], apps: [] };
+    const completed = await recoverControllerCompletion(f.config, f.receipt, f.clock);
+    expect(completed).toMatchObject({ phase: "complete", mergeWriteState: "accepted" });
+  });
+
+  it.each(["clean", "behind"] as const)("preserves serialized %s merge behavior with extra rules", async (state) => {
+    const f = await serializedControllerFixture("browser");
+    f.pull.mergeable_state = state;
+    f.writerRuleset.rules.push({ type: "required_signatures" });
+    const completed = await recoverControllerCompletion(f.config, f.receipt, f.clock);
+    expect(completed).toMatchObject({ phase: "complete", mergeWriteState: "accepted" });
+  });
+
+  it.each([
+    ["browser", "enumerated"],
+    ["browser", "attested"],
+    ["legacy-root", "enumerated"],
+    ["legacy-root", "attested"],
+  ] as const)("merges blocked %s approval once with a fresh %s writer guard", async (channel, proof) => {
+    const f = await serializedControllerFixture(channel);
+    f.pull.mergeable_state = "blocked";
+    const config = proof === "attested" ? { ...f.config, mainWriterAttestation: f.hideBypass() } : f.config;
+    const completed = await recoverControllerCompletion(config, f.receipt, f.clock);
+    expect(completed).toMatchObject({ phase: "complete", mergeSha: MERGE_SHA, mergeWriteState: "accepted" });
+    expect(f.writes).toEqual([
+      "PUT /repos/lukemyself-hub/SayHear/pulls/321/merge",
+      "DELETE /repos/lukemyself-hub/SayHear/issues/42/labels/ongoing",
+      "PATCH /repos/lukemyself-hub/SayHear/issues/42",
+    ]);
+    expect(f.issue).toMatchObject({ state: "closed", labels: [] });
+    expect(f.stored()).toMatchObject({ phase: "complete", mergeWriteState: "accepted" });
+    await expect(recoverControllerCompletion(config, completed, f.clock)).resolves.toEqual(completed);
+    expect(f.writes.filter((write) => write.includes("/pulls/321/merge"))).toHaveLength(1);
+  });
+
+  it.each(["missing", "stale", "wrong-assertion", "wrong-ruleset", "wrong-live-bypass", "extra-live-bypass"] as const)(
+    "rejects blocked recovery with %s main writer proof without writes", async (failure) => {
+      const f = await serializedControllerFixture("browser");
+      f.pull.mergeable_state = "blocked";
+      let config: typeof f.config = f.config;
+      if (failure === "wrong-live-bypass" || failure === "extra-live-bypass") {
+        f.writerRuleset.bypass_actors = failure === "wrong-live-bypass"
+          ? [{ actor_id: 12345, actor_type: "Integration", bypass_mode: "always" }]
+          : [...f.writerRuleset.bypass_actors, { actor_id: 12345, actor_type: "Integration", bypass_mode: "always" }];
+      } else {
+        const attestation = f.hideBypass();
+        if (failure !== "missing") config = { ...config, mainWriterAttestation: attestation };
+        if (failure === "stale") f.writerRuleset.updated_at = "2026-10-15T01:00:00.000Z";
+        if (failure === "wrong-assertion") config = { ...config, mainWriterAttestation: { ...attestation, assertedBypassAppIds: [12345] } };
+        if (failure === "wrong-ruleset") config = { ...config, mainWriterAttestation: { ...attestation, rulesetId: 10 } };
+      }
+      const pending = await recoverControllerCompletion(config, f.receipt, f.clock);
+      expect(pending).toMatchObject({ phase: "merge_unconfirmed", mergeWriteState: "not-sent", reason: "fresh_merge_gate_blocked" });
+      expect(f.writes).toEqual([]);
+    },
+  );
+
   it.each(["preparation", "rejected", "uncertain"] as const)("continues scanning other PRs after %s refresh failure", async (failure) => {
     const f = await serializedControllerFixture("browser");
     f.advanceMain(false);
@@ -2687,6 +2946,113 @@ describe("guarded serialized controller completion", () => {
     expect(f.writes.some((write) => write.includes("/pulls/321/merge"))).toBe(false);
   });
 
+  async function staleMergeRefFixture(initial: MergeRefRebuildRecord | null = null) {
+    const f = await serializedControllerFixture("browser");
+    f.advanceMain(false);
+    // GitHub keeps the head's merge ref on the reviewed main after main advances.
+    f.pull.merge_commit_sha = MERGE_SHA;
+    const state = { record: initial, transitions: [] as string[], patchError: null as unknown };
+    const mergeRefRebuildStore = { read: async () => state.record, list: async () => state.record ? [state.record] : [],
+      save: async (value: MergeRefRebuildRecord) => { state.record = structuredClone(value); } };
+    const request = f.api.request.bind(f.api);
+    f.api.request = async <T>(path: string, options?: StubRequestOptions): Promise<T> => {
+      if (path.endsWith("/pulls/321") && options?.method === "PATCH") {
+        if (state.patchError) throw state.patchError;
+        const next = requestBody<{ state: "open" | "closed" }>(options).state;
+        state.transitions.push(next);
+        f.pull.state = next;
+      }
+      return request<T>(path, options);
+    };
+    return { f, state, config: { ...f.config, mergeRefRebuildStore } };
+  }
+
+  it("rebuilds a merge ref GitHub left on the old main by reopening the PR once", async () => {
+    const { f, state, config } = await staleMergeRefFixture();
+    const snapshot = await readSnapshot(config, 321);
+    expect(snapshot.gateInput.pullRequest.mergeSha).toBeNull();
+    expect(snapshot.staleMergeRefSha).toBe(MERGE_SHA);
+    expect(snapshot.workflowStatus).toBe("unknown");
+
+    expect(await scanPullRequests(config, null)).toEqual([
+      expect.objectContaining({ pullRequest: 321, status: "waiting_for_validation" }),
+    ]);
+    expect(state.transitions).toEqual(["closed", "open"]);
+    expect(state.record).toMatchObject({ phase: "reopened", target: { headSha: HEAD_SHA, mainSha: "9".repeat(40), staleMergeSha: MERGE_SHA } });
+    expect(f.pull.state).toBe("open");
+
+    // GitHub has not rebuilt the ref yet: wait instead of cycling the PR.
+    await scanPullRequests(config, null);
+    expect(state.transitions).toEqual(["closed", "open"]);
+    expect(f.writes.some((write) => write.endsWith("/issues/321/labels") || write.includes("/pulls/321/merge"))).toBe(false);
+    expect(f.issue).toMatchObject({ state: "open", labels: ["ongoing"] });
+  });
+
+  it("only waits on a stale merge ref inside the merge guard", async () => {
+    const { f, state, config } = await staleMergeRefFixture();
+    await expect(guardImmediateMerge(config, f.receipt.identity)).rejects.toThrow("waiting_for_integration_validation");
+    expect(state.transitions).toEqual([]);
+    expect(state.record).toBeNull();
+  });
+
+  it("does not close a PR that has a pending completion receipt", async () => {
+    const { f, state, config } = await staleMergeRefFixture();
+    await config.completionStore?.save(f.receipt);
+    expect(await refreshStaleIntegration(config, await readSnapshot(config, 321), { rebuildMergeRef: true })).toBe(true);
+    expect(state.transitions).toEqual([]);
+  });
+
+  it("lets an ineligible stale PR continue to its normal review path without closing it", async () => {
+    const { f, state, config } = await staleMergeRefFixture();
+    f.issue.labels = ["ready-for-agent"];
+    expect(await refreshStaleIntegration(config, await readSnapshot(config, 321), { rebuildMergeRef: true })).toBe(false);
+    expect(state.transitions).toEqual([]);
+  });
+
+  it("does not close the PR when main moved again under the lock", async () => {
+    const { f, state, config } = await staleMergeRefFixture();
+    const snapshot = await readSnapshot(config, 321);
+    f.advanceMain(false, false, "6".repeat(40));
+    f.pull.merge_commit_sha = MERGE_SHA;
+    expect(await refreshStaleIntegration(config, snapshot, { rebuildMergeRef: true })).toBe(true);
+    expect(state.transitions).toEqual([]);
+    expect(state.record).toBeNull();
+  });
+
+  it("reopens a PR left closed by an interrupted rebuild before scanning, without a second cycle", async () => {
+    const { f, state, config } = await staleMergeRefFixture({ version: 1, pullRequestNumber: 321, phase: "closing",
+      target: { headSha: HEAD_SHA, mainSha: "9".repeat(40), staleMergeSha: MERGE_SHA } });
+    f.pull.state = "closed";
+    await scanPullRequests(config, null, false);
+    expect(state.transitions).toEqual(["open"]);
+    expect(state.record).toMatchObject({ phase: "reopened" });
+  });
+
+  it("reports a refused recovery reopen per PR and settles it", async () => {
+    const { f, state, config } = await staleMergeRefFixture({ version: 1, pullRequestNumber: 321, phase: "closing",
+      target: { headSha: HEAD_SHA, mainSha: BASE_SHA, staleMergeSha: MERGE_SHA } });
+    f.pull.state = "closed";
+    state.patchError = new GitHubApiError(422, "PATCH", "/repos/lukemyself-hub/SayHear/pulls/321");
+    const results = await scanPullRequests(config, null, false);
+    expect(results).toEqual([expect.objectContaining({ pullRequest: 321, status: "merge_ref_rebuild_recovery_blocked", reason: expect.stringMatching(/^reopen_refused: .*HTTP 422/) })]);
+    expect(state.record).toMatchObject({ phase: "reopen_refused" });
+    expect(f.pull.state).toBe("closed");
+  });
+
+  it("hands a rebuilt merge ref to the ci-int refresh when the reopened run tested the old merge", async () => {
+    const { f, state, config } = await staleMergeRefFixture();
+    await scanPullRequests(config, null);
+    expect(state.transitions).toEqual(["closed", "open"]);
+    // GitHub rebuilt the ref, but the latest Validate run still checked out the old merge commit.
+    f.pull.merge_commit_sha = "7".repeat(40);
+    expect(await scanPullRequests(config, null)).toEqual([
+      expect.objectContaining({ pullRequest: 321, status: "waiting_for_validation" }),
+    ]);
+    expect(state.transitions).toEqual(["closed", "open"]);
+    expect(f.writes.filter((write) => write.endsWith("/issues/321/labels"))).toHaveLength(1);
+    expect(f.writes.some((write) => write.includes("/pulls/321/merge"))).toBe(false);
+  });
+
   it.each(["browser", "legacy-root"] as const)("requires a new review and human binding after material main movement for %s", async (channel) => {
     const f = await serializedControllerFixture(channel);
     f.advanceMain(true, true);
@@ -2700,6 +3066,7 @@ describe("guarded serialized controller completion", () => {
 
   it("rejects final main drift after successful CI and snapshot validation", async () => {
     const f = await serializedControllerFixture("browser");
+    f.pull.mergeable_state = "blocked";
     f.driftFinalMain();
     await expect(guardImmediateMerge(f.config, f.receipt.identity)).rejects.toThrow("integration_changed_before_merge");
     expect(f.writes.some((write) => write.includes("/pulls/321/merge"))).toBe(false);
@@ -2707,6 +3074,7 @@ describe("guarded serialized controller completion", () => {
 
   it("rejects current-target failed CI without dispatching or merging", async () => {
     const f = await serializedControllerFixture("browser");
+    f.pull.mergeable_state = "blocked";
     f.failValidation();
     await expect(guardImmediateMerge(f.config, f.receipt.identity)).rejects.toThrow("fresh_merge_gate_blocked");
     expect(f.writes.some((write) => write.includes("/pulls/321/merge") || write.includes("/labels"))).toBe(false);
@@ -2745,6 +3113,7 @@ describe("guarded serialized controller completion", () => {
 
   it("rejects a dismissed human review during guarded recovery", async () => {
     const f = await serializedControllerFixture("browser");
+    f.pull.mergeable_state = "blocked";
     const human = f.reviews.find((review) => review.id === 10);
     if (!human) throw new Error("human review missing");
     human.state = "DISMISSED";
@@ -2754,9 +3123,11 @@ describe("guarded serialized controller completion", () => {
 
   it("records definitive rejection and permits unrelated PRs after confirmed unmerged readback", async () => {
     const f = await serializedControllerFixture("legacy-root");
+    f.pull.mergeable_state = "blocked";
     f.failMerge(new GitHubApiError(409, "PUT", "/pulls/321/merge"));
     const failed = await recoverControllerCompletion(f.config, f.receipt, f.clock);
     expect(failed.mergeWriteState).toBe("rejected");
+    expect(f.stored()).toMatchObject({ phase: "merge_unconfirmed", mergeWriteState: "rejected" });
     await expect(completionBlockingScope(f.api, failed)).resolves.toBe("this-pr");
     expect(f.pull.merged).toBe(false);
     expect(f.issue.state).toBe("open");

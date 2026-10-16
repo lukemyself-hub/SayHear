@@ -22,8 +22,10 @@ published text, and opens that day's original Conversation.
 ## Driving it with Playwright
 
 Preconditions: healthy Owner instance. Delivery/copy/export/date-entry journeys
-need a real clock, so launch the `live` or `provider` profile; `local` has a fixed
-clock and no exchange ever ends there.
+need an exchange that ends, so launch the `live` or `provider` profile; `local`
+has a fixed clock and no exchange ever ends there. The `cross-date` journey
+launches `timeline` or `fault`: both carry the test-only file clock, and
+`fault`'s fault file stays empty unless a journey writes it.
 
 - Run `node scripts/verify-control.mjs drive "$VERIFY_RUN" journal` for the empty
   journey. It chooses the exact `日记` link and checks the real region's notice.
@@ -58,9 +60,23 @@ clock and no exchange ever ends there.
   ([#341](https://github.com/lukemyself-hub/SayHear/issues/341)). That attempt
   ran before the journey tolerated failed scans, so no `provider` Journal has
   been observed yet.
-- Second-date journey: one instance holds one date, so "this date's prose, not the
-  latest day's" needs a second Journal on another logical date. No journey
-  produces one yet.
+- Cross-date journey: run `... cross-date` on `timeline` with a fresh instance.
+  It sends a day-1 exchange, advances the controlled test clock two minutes, runs
+  the scheduled scan until the first Journal publishes, advances the clock 24
+  hours, sends a day-2 exchange, and publishes the second Journal. It then reads
+  each date through its module date entry and its URL, checks that each title
+  names the selected date, and compares rendered prose with that date's stored
+  statements. Copy must equal that prose byte-for-byte; export must equal the
+  selected date, two newlines, that prose and the final newline, with no text
+  from the other Journal. It follows `查看当天聊天` and requires each date's own
+  expression and not the other's. The clock file is re-read per request; no
+  session row or generation result is edited. Three 2026-10-13 attempts lost a
+  Journal workflow to the #340 deadlock (`dev-345-cross-date-1` and
+  `dev-345-cross-date-4` at day-1, `dev-345-cross-date-2` at day-2 after day-1
+  published). The prior passing run was `issue-345-cross-date-7`; the latest run
+  `issue-345-final-cross-date-1` passed on 2026-10-15 with the stricter title,
+  copy and export checks. Both run records are in
+  `docs/verification/evidence/coverage-completion-proof.json`.
 
 ## Gotchas
 
@@ -75,7 +91,9 @@ clock and no exchange ever ends there.
   transactions deadlock in most runs, and when the Journal path is the victim no
   Journal is published
   ([#340](https://github.com/lukemyself-hub/SayHear/issues/340); 3 of 13 runs).
-  The journey then fails and writes `delivery-unpublished.json`; confirm with
+  The journey then fails and writes `delivery-unpublished.json`; three 2026-10-13
+  `cross-date` attempts failed the same way and wrote
+  `cross-date-unpublished-<date>.json`. Confirm with
   `grep "deadlock detected" postgres.log` before suspecting the driver.
 - The `delivery` journey requires `todayShowsEndedExchange: true` and
   `sameDayFollowupWithoutRefresh: true`. It independently reads one Daily Session,

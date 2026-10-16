@@ -151,6 +151,7 @@ export function assertSafeRuntimeConfiguration(
     (environment.SAYHEAR_PROVIDER_ADAPTER === "deterministic" ||
       environment.SAYHEAR_TEST_PROVIDER_CHUNKS ||
       environment.SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS ||
+      environment.SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS_FILE ||
       environment.SAYHEAR_TEST_PROVIDER_FAIL_AFTER_COMPLETION ||
       environment.SAYHEAR_TEST_NOW ||
       environment.SAYHEAR_TEST_NOW_FILE ||
@@ -255,7 +256,11 @@ export function loadRuntimeConfiguration(environment: Environment) {
   // test composition (never a client parameter) and is re-read on every clock
   // call. The same test-only deployment guard as SAYHEAR_TEST_NOW applies, and
   // an unreadable instant throws instead of falling back to the wall clock.
-  const testNowFile = environment.SAYHEAR_TEST_NOW_FILE?.trim() || null;
+  const rawTestNowFile = environment.SAYHEAR_TEST_NOW_FILE;
+  if (rawTestNowFile !== undefined && rawTestNowFile.trim().length === 0) {
+    throw new Error("SAYHEAR_TEST_NOW_FILE must name a file.");
+  }
+  const testNowFile = rawTestNowFile?.trim() ?? null;
   if (testNowFile && testNow) {
     throw new Error(
       "SAYHEAR_TEST_NOW_FILE and SAYHEAR_TEST_NOW cannot both be set.",
@@ -287,9 +292,19 @@ export function loadRuntimeConfiguration(environment: Environment) {
           required(environment, "SAYHEAR_TEST_PROVIDER_CHUNKS"),
         )
       : [];
-  const failAfterChunks = environment.SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS
-    ? Number(environment.SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS)
-    : undefined;
+  const rawProviderFaultFile =
+    environment.SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS_FILE;
+  if (rawProviderFaultFile !== undefined && rawProviderFaultFile.trim().length === 0) {
+    throw new Error(
+      "SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS_FILE must name a file.",
+    );
+  }
+  const failAfterChunks =
+    rawProviderFaultFile === undefined
+      ? environment.SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS
+        ? Number(environment.SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS)
+        : undefined
+      : readProviderFaultChunksFile(rawProviderFaultFile);
   const failAfterCompletionValue =
     environment.SAYHEAR_TEST_PROVIDER_FAIL_AFTER_COMPLETION;
   if (
@@ -631,4 +646,42 @@ function boundedMilliseconds(
     );
   }
   return value;
+}
+
+/**
+ * The verify driver's toggleable deterministic fault: a missing or empty file
+ * means no fault, a non-negative integer is the chunk ceiling where the stream
+ * fails, and anything else fails loudly rather than silently faking a clean
+ * run. Test deployment only, enforced by assertSafeRuntimeConfiguration.
+ */
+function readProviderFaultChunksFile(path: string): number | undefined {
+  if (path.trim().length === 0) {
+    throw new Error("SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS_FILE must name a file.");
+  }
+  let content: string;
+  try {
+    const { readFileSync } = process.getBuiltinModule("node:fs");
+    content = readFileSync(path, "utf8");
+  } catch (error) {
+    // Only a missing file means "no fault". Anything else (unreadable file,
+    // directory path, permission error, ...) must fail loudly instead of
+    // silently running the interruption journey without a fault injected.
+    if ((error as NodeJS.ErrnoException)?.code === "ENOENT") {
+      return undefined;
+    }
+    throw new Error(
+      "SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS_FILE could not be read.",
+    );
+  }
+  const value = content.trim();
+  if (value.length === 0) {
+    return undefined;
+  }
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new Error(
+      "SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS_FILE must contain a non-negative integer.",
+    );
+  }
+  return parsed;
 }

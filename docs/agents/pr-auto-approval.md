@@ -10,15 +10,15 @@ base；审批绑定被审 head，main 前进本身不使批准失效。controlle
 验证可信 CI，真实代码冲突才交回原 PR 处理。
 
 判断能力是否生效只看固定 `pr-approval-status` 的回读结果，不看源码里写着什么版本号。
-2026-10-15 回读：
+2026-10-15 固定 status 回读快照，后续安装状态以最新回读为准：
 
 - `integrationMode=serialized-merge`，`branchProtection.requiresUpToDate=false`
 - `policyVersion=sayhear-pr-review-gate:v11`，`reportVersion=sayhear-pr-review-report:v4`
 - `diffCollectionVersion=sayhear-pr-diff:v2`，`baseSyncHandoffVersion=sayhear-pr-base-sync:v1`
 - `browserApprovalVersion=sayhear-pr-browser-approval:v1`，
   `build.completionVersion=sayhear-pr-completion:v1`
-- `controllerSha256=22e5616f67846fac68881679662f39c19e99f4ec79d3295c73352e2a19c9e97c`，
-  `build.sourceCommit=c05a4e339124fdfcd6abed11ac62cdfdf249a7b0`
+- `controllerSha256=da09b2402c5b409e125fbe8e05e977e8f24229c6c3ccdde033d233161b00baaa`，
+  `build.sourceCommit=a79788e802226e37d05553d6efb5d78536ea2cfd`
 - main 写入守卫：ruleset `25189203`，root-owned 见证指纹
   `63ba66c4d3acc4705cfda8b02912e80c72a016a97b92bcb52860954f57e026a9`，断言 bypass
   只有审批 App `5270295`。GitHub 不把 bypass 名单返回给 App token，因此
@@ -46,6 +46,9 @@ collector 从同一次可信 PR Validate 的 `vitest-report.json` 收集专项�
 覆盖不符都不能批准。证据绑定 repository、App、workflow 版本、head/base/merge SHA、
 run/attempt 与 artifact digest。缺少该证据时迁移 PR 保持待验证，协议回归测试不代表
 真实迁移兼容性已通过；破坏性迁移仍转人工。
+
+真实 PostgreSQL drill 须覆盖 base 迁移后升级 head、既有数据约束、升级后 schema 与
+fresh head 安装的比较，并说明新旧程序兼容和 forward-fix 边界。
 
 ### 可恢复合并收尾
 
@@ -111,25 +114,37 @@ PR 可以引用多个同仓库 Issue，合入后只关闭明确由该 PR 完成�
   不确定状态，丢失响应后不重复触发；GitHub 明确拒绝的请求可以重试。单个 PR 的刷新错误
   单独记录，扫描继续处理其他 PR；当前集成失败不盲目重跑。
 - `mergeable=false` 是真实冲突，交回原 PR 修复；未知状态继续等待。gate 不要求
-  `mergeable_state=clean`，因为它自己就是 required check；最终合入动作要求
-  `mergeable=true` 且状态为 `clean` 或 `behind`，不使用延后 auto-merge。
-- `serialized-merge` 要求关闭 `requiresUpToDate`，并由 active Branch ruleset 的 `update`
-  规则限制 main 写入，唯一 bypass 是审批 App `5270295`。controller 从
-  `/rulesets?includes_parents=true` 枚举编号再读详情；规则或目标读不全就阻断。bypass
-  名单能实时读到就按实时名单判（必须恰好等于 `[reviewAppId]`），读不到时看 root-owned
-  见证，指纹相符才放行，不等转人工。不能把不可见名单当成空名单。
-- controller 的仓库锁保护最终写入，main 写入守卫阻止外部写入者在验证后推进 main。
-  GitHub merge API 没有 expected-base 参数，两者缺一不可；所有使用同一 App 的 main 写入
-  程序都要遵守同一把锁。
-- 带未完成 pre-merge deferral 的合入被拒绝，两个人工通道都不能绕到延后 auto-merge。
-  签名 intent 保存原审查身份与请求结果；重试先确认实际合入，再对未合入操作重新读取
-  授权、需求、保护、当前集成与 CI，不能只凭旧 intent 重发。
-- 已确认合入但 Issue 收尾失败只保留本 PR 待办；能证明未合入且没有未决写入的拒绝只阻断
-  本 PR。写入响应丢失、可能仍在合入、签名或状态不可读仍阻断后续合并。逐个处理 Issue，
-  保留失败收据，不靠删收据解除占用。
-- `merge-queue` 只用于识别历史状态，禁止激活：即使 GitHub 报告存在原生队列，也返回
-  `merge_queue_not_supported`。当前 workflow 的 `merge_group` 只提供 `validate`，必需的
-  `pr-review-gate` 没有 merge-group producer。
+  `mergeable_state=clean`，因为它自己就是 required check，尚未变绿时 GitHub 可以
+  正常报告 `blocked`。`serialized-merge` 最终合入动作要求 `mergeable=true`，状态为
+  `clean`、`behind` 或 `blocked`，且新的 gate 与即时合入 guard 证明全部通过；
+  `blocked` 还须在最终 guard 重读全部 ruleset：每条适用的 active Branch ruleset
+  只允许 `update` 与 `non_fast_forward`，两者的参数只能缺省或为空对象，`update`
+  另可仅含 `update_allows_fetch_and_merge: false`；这同样适用于不含 `update` 的
+  第二条规则集。写入规则集指纹须与刚通过 gate 的守卫一致，实时可见的
+  bypass 仍须仅有审批 App；classic review 的 user/team/App bypass allowances
+  须省略或全部为空。规则详情、适用条件或 enforcement 不可读，或存在未知条件、
+  不支持的 glob、active push 等目标时均阻断；只有 disabled/evaluate、tag 或已证明
+  不覆盖 main 的规则集可忽略。其他 classic 保护继续由 GitHub 合入端点执行。
+  `mergeable` 未知或为 false 时不合入，不使用延后 auto-merge。
+- `serialized-merge` 必须关闭 `requiresUpToDate`，并以 active Branch ruleset 的
+  `update` 规则限制 main 写入，唯一 bypass 是审批 App `5270295`。controller 从
+  `/rulesets?includes_parents=true` 枚举编号，再读每条详情。规则、目标条件读不全
+  就阻断。bypass 名单能实时读到就按实时名单判（必须恰好等于 `[reviewAppId]`）；
+  读不到时看 root-owned 见证：实时指纹与见证指纹相等才放行，不等就转人工。
+  不能把不可见列表当成空列表。默认严格模式也拒绝不可读或格式错误的 bypass 列表。
+- controller 的仓库锁保护最终写入；main 写入守卫阻止外部写入者在验证后推进 main。
+  GitHub merge API 没有 expected-base 参数，所以两者缺一不可。所有使用同一 App
+  的 main 写入程序也必须遵守同一把锁。
+- 轻量模式拒绝带未完成 pre-merge deferral 的合入，两个人工通道都不能绕到延后
+  auto-merge。签名 intent 保存原审查身份与请求结果。重试先确认实际合入，再对
+  未合入操作重新读取授权、需求、保护、当前集成和 CI，不能只凭旧 intent 重发。
+- 已确认合入但 Issue 收尾失败只保留本 PR 的待办；能够证明未合入且没有未决写入
+  的拒绝只阻断本 PR。写入响应丢失、可能仍在合入、签名或状态不可读仍阻断后续
+  合并。逐个处理 Issue，保留失败收据，不能删除收据来解除占用。
+- `merge-queue` 配置仍能被解析以识别历史状态，但本交付禁止激活。即使 GitHub
+  报告存在原生队列，也返回 `merge_queue_not_supported`。当前 workflow 的
+  `merge_group` 只提供 `validate`，必需的 `pr-review-gate` 没有 merge-group producer，
+  不能把 enqueue 接口和一个 workflow trigger 当作完整队列支持。
 
 ### 启用或回退 serialized-merge
 
