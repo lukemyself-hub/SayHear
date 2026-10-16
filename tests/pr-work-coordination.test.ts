@@ -944,6 +944,99 @@ describe("overlapping runs", () => {
     if (blocked.ok) throw new Error("the surviving owner must block a new writer");
     expect(blocked.reason).toBe("occupied");
   });
+
+  it("a same-session re-attach between snapshot and probe blocks release", async () => {
+    const { store, token, sessionId } = await reserveAttached(69, "regen-rel");
+    // The probe runs outside the lock; a same-session resume landing there
+    // bumps generation without changing token/session/phase, so only the
+    // generation compare can refuse the stale stopped proof.
+    let reattachState: { result: Awaited<ReturnType<typeof attachSession>> | null } = { result: null };
+    let raced = false;
+    const probe: ProbeWorker = async () => {
+      if (!raced) {
+        raced = true;
+        reattachState.result = await attachSession(store, {
+          repositoryId: REPO,
+          pullRequestNumber: 69,
+          ownerToken: token,
+          startHead: HEAD_A,
+          scopeDigest: SCOPE_A,
+          role: "implementation",
+          sessionId,
+        });
+      }
+      return "stopped";
+    };
+    const released = await releaseWork(
+      store,
+      { repositoryId: REPO, pullRequestNumber: 69, ownerToken: token },
+      probe,
+    );
+    // resolveProbe swallows probe throws as unknown, so the attach must be
+    // asserted here: a failed re-attach would otherwise false-pass below.
+    const reattached = reattachState.result;
+    if (reattached === null) throw new Error("probe must run the re-attach");
+    if (!reattached.ok || !reattached.resumed) {
+      throw new Error("same-session re-attach must resume");
+    }
+    if (released.ok) throw new Error("stale stopped proof must not release a resumed writer");
+    expect(released.reason).toBe("worker_unknown");
+    expect(released.record?.owner?.token).toBe(token);
+    expect(released.record?.owner?.sessionId).toBe(sessionId);
+    const settled = await readWork(store, {
+      repositoryId: REPO,
+      pullRequestNumber: 69,
+    });
+    expect(settled?.owner?.token).toBe(token);
+    const blocked = await reserveWork(store, reserveArgs(69, "regen-rel-2"));
+    if (blocked.ok) throw new Error("the resumed owner must block a new writer");
+    expect(blocked.reason).toBe("occupied");
+  });
+
+  it("a same-session re-attach between snapshot and probe blocks accept", async () => {
+    const { store, token, sessionId } = await reserveAttached(70, "regen-acc");
+    let reattachState: { result: Awaited<ReturnType<typeof attachSession>> | null } = { result: null };
+    let raced = false;
+    const probe: ProbeWorker = async () => {
+      if (!raced) {
+        raced = true;
+        reattachState.result = await attachSession(store, {
+          repositoryId: REPO,
+          pullRequestNumber: 70,
+          ownerToken: token,
+          startHead: HEAD_A,
+          scopeDigest: SCOPE_A,
+          role: "implementation",
+          sessionId,
+        });
+      }
+      return "stopped";
+    };
+    const accepted = await acceptResult(
+      store,
+      {
+        repositoryId: REPO,
+        pullRequestNumber: 70,
+        ownerToken: token,
+        sessionId,
+        startHead: HEAD_A,
+        scopeDigest: SCOPE_A,
+        liveHead: HEAD_A,
+      },
+      probe,
+    );
+    // resolveProbe swallows probe throws as unknown, so the attach must be
+    // asserted here: a failed re-attach would otherwise false-pass below.
+    const reattached = reattachState.result;
+    if (reattached === null) throw new Error("probe must run the re-attach");
+    if (!reattached.ok || !reattached.resumed) {
+      throw new Error("same-session re-attach must resume");
+    }
+    if (accepted.ok) throw new Error("stale stopped proof must not accept for a resumed writer");
+    expect(accepted.reason).toBe("worker_unknown");
+    expect(accepted.record?.owner?.token).toBe(token);
+    expect(accepted.record?.phase).toBe("running");
+  });
 });
 
 describe("filesystem safety", () => {

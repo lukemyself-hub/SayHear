@@ -80,6 +80,8 @@ export interface WorkOwnerSnapshot {
   token: string;
   role: WorkRole;
   sessionId: string | null;
+  /** Fencing generation: 0 at reserve, +1 on every successful attach. */
+  generation: number;
   startHead: string;
   scopeDigest: string;
   changeDigest: string;
@@ -536,6 +538,14 @@ function parseOwner(value: unknown): WorkOwnerSnapshot | null {
       throw corrupt(`owner ${field} is malformed.`);
     }
   }
+  const generation = value.generation;
+  if (
+    typeof generation !== "number" ||
+    !Number.isSafeInteger(generation) ||
+    generation < 0
+  ) {
+    throw corrupt("owner generation is malformed.");
+  }
   const worktree = value.worktree;
   const taskFile = value.taskFile;
   if (
@@ -573,6 +583,7 @@ function parseOwner(value: unknown): WorkOwnerSnapshot | null {
     token,
     role,
     sessionId,
+    generation,
     startHead: value.startHead as string,
     scopeDigest: value.scopeDigest as string,
     changeDigest: value.changeDigest as string,
@@ -969,7 +980,9 @@ function maxOwnerBytes(): number {
     3 * PATH_MAX * 4 +
     SESSION_MAX * 4 +
     MODEL_MAX * 4 +
-    40 + 64 + 64 + 32 + 64
+    40 + 64 + 64 + 32 + 64 +
+    // `"generation":<max safe integer>` JSON overhead.
+    14 + 16
   );
 }
 
@@ -996,6 +1009,13 @@ async function withTooLarge<Result extends { record: WorkRecord | null }>(
 
 function randomOwnerToken(): string {
   return randomBytes(16).toString("hex");
+}
+
+/** Next fencing generation; null on overflow so the caller fails closed. */
+function nextGeneration(current: number): number | null {
+  if (!Number.isSafeInteger(current) || current < 0) return null;
+  if (current >= Number.MAX_SAFE_INTEGER) return null;
+  return current + 1;
 }
 
 async function resolveProbe(
@@ -1116,6 +1136,7 @@ export async function reserveWork(
           token: randomOwnerToken(),
           role,
           sessionId: null,
+          generation: 0,
           startHead,
           scopeDigest,
           changeDigest,
@@ -1145,6 +1166,14 @@ export async function reserveWork(
  * rebind its own original implementation session after release plus a new
  * reservation (head/scope still rechecked); review sessions are always fresh
  * and an implementation may never reuse a review-role session id.
+ *
+ * Protocol ordering (coordinator runner): attach is bookkeeping only and
+ * never by itself grants permission to start or resume a model. Before each
+ * new wrapper attempt or resume, the runner must first hold a fresh
+ * null-session reservation (new token) for this PR; a stopped old owner is
+ * released first. While the new reservation is still null-session/unbound,
+ * its probe reads unknown, so a second writer stays blocked until the
+ * wrapper confirms the session via attach.
  */
 export async function attachSession(
   store: PrWorkCoordinationStore,
@@ -1159,7 +1188,7 @@ export async function attachSession(
   try {
     return await withTooLarge<AttachResult>(null, () =>
       withRecord<AttachResult>(store, ids, async (current) => {
-      const refuse = (reason: "not_found" | "token_mismatch" | "head_mismatch" | "scope_mismatch" | "role_mismatch" | "state_mismatch" | "session_conflict" | "stale_review_session" | "history_full" | CorruptReason): { write: null; result: AttachResult } =>
+      const refuse = (reason: "not_found" | "token_mismatch" | "head_mismatch" | "scope_mismatch" | "role_mismatch" | "state_mismatch" | "session_conflict" | "stale_review_session" | "history_full" | "too_large" | CorruptReason): { write: null; result: AttachResult } =>
         ({ write: null, result: { ok: false, reason, record: current } });
       if (current === null || current.owner === null) return refuse("not_found");
       const owner = current.owner;
@@ -1174,8 +1203,18 @@ export async function attachSession(
       }
       if (owner.sessionId === sessionId) {
         // Same identity resuming. Refuse once the result was accepted.
+        // Every successful attach bumps the fencing generation, including
+        // this resumed branch, so a same-session re-attach landing between
+        // another caller's snapshot and probe still invalidates the stale
+        // stopped proof under the lock.
         if (current.phase === "verifying") return refuse("stale_review_session");
-        return { write: null, result: { ok: true as const, record: current, resumed: true } };
+        const resumedGeneration = nextGeneration(owner.generation);
+        if (resumedGeneration === null) return refuse("too_large");
+        const resumedRecord: WorkRecord = {
+          ...current,
+          owner: { ...owner, generation: resumedGeneration },
+        };
+        return { write: resumedRecord, result: { ok: true as const, record: resumedRecord, resumed: true } };
       }
       // Reuse rules: an implementation owner may rebind only a session id
       // previously used by the implementation role; any other seen id is
@@ -1186,9 +1225,11 @@ export async function attachSession(
       if (current.seenSessions.length >= MAX_SESSION_IDS && !mayReuse) {
         return refuse("history_full");
       }
+      const attachedGeneration = nextGeneration(owner.generation);
+      if (attachedGeneration === null) return refuse("too_large");
       const record: WorkRecord = {
         ...current,
-        owner: { ...owner, sessionId },
+        owner: { ...owner, sessionId, generation: attachedGeneration },
         phase: "running",
         seenSessions: mayReuse ? current.seenSessions : [...current.seenSessions, { id: sessionId, role }],
       };
@@ -1250,8 +1291,12 @@ export async function releaseWork(
       }
       // The probed owner must still be the one recorded: an attach that
       // landed after the probe means we stopped someone else's worker.
+      // Generation fences the same-session resumed branch too: any
+      // successful attach bumps it, so token/session/phase equality alone
+      // cannot clear a live writer re-attached after the snapshot.
       if (
         current.owner.sessionId !== probed.sessionId ||
+        current.owner.generation !== probed.generation ||
         current.phase !== probedPhase
       ) {
         return { write: null, result: { ok: false as const, reason: "worker_unknown" as const, record: current } };
@@ -1316,6 +1361,8 @@ export async function acceptResult(
       record: fresh.record,
     };
   }
+  const probedOwner = owner;
+  const probedPhase = snapshot.record.phase;
   try {
     return await withTooLarge<AcceptResult>(snapshot.record, () =>
       withRecord<AcceptResult>(store, ids, async (current) => {
@@ -1323,11 +1370,17 @@ export async function acceptResult(
         return { write: null, result: reject("not_found") };
       }
       const live = current.owner;
-      if (live.token !== owner.token) {
+      if (live.token !== probedOwner.token) {
         return { write: null, result: { ok: false as const, reason: "token_mismatch" as const, record: current } };
       }
       if (live.sessionId === null || live.sessionId !== sessionId) {
         return { write: null, result: { ok: false as const, reason: "session_mismatch" as const, record: current } };
+      }
+      if (
+        live.generation !== probedOwner.generation ||
+        current.phase !== probedPhase
+      ) {
+        return { write: null, result: { ok: false as const, reason: "worker_unknown" as const, record: current } };
       }
       // Only an accepted implementation fix arms the repeat signal; a
       // code-review accept never marked findings fixed (P2-2).
