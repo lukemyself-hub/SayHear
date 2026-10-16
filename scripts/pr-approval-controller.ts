@@ -4281,6 +4281,70 @@ function assertLiveBrowserApproval(reviews: readonly GitHubReview[], identity: C
   }
 }
 
+async function blockedMergeProtectionsAreSafe(
+  config: ControllerConfig,
+  guard: PrReviewGateInput["runtime"]["mainWriterGuard"],
+): Promise<boolean> {
+  if (!guard?.readable || !guard.restrictsDefaultBranchUpdates || !guard.rulesetFingerprints?.length) return false;
+  try {
+    const rulesets = await readRulesetDetails(config.api);
+    if (rulesets === null) return false;
+    const writers = new Map(guard.rulesetFingerprints.map(({ id, fingerprint }) => [id, fingerprint]));
+    const freshWriters = new Set<number>();
+    for (const ruleset of rulesets) {
+      if (ruleset.enforcement === "disabled" || ruleset.enforcement === "evaluate") continue;
+      if (ruleset.enforcement !== "active") return false;
+      if (ruleset.target === "tag") continue;
+      if (ruleset.target !== "branch") return false;
+      const applies = blockedMergeRulesetCoversMain(ruleset.conditions);
+      if (applies === null) return false;
+      if (!applies) continue;
+      // An App with always bypass could skip every rule here, including rules
+      // in a second applicable ruleset that does not restrict writers at all.
+      if (!Array.isArray(ruleset.rules) || ruleset.rules.some((rule) =>
+        !isRecord(rule) || (rule.type !== "update" && rule.type !== "non_fast_forward") ||
+        (rule.parameters !== undefined && (!isRecord(rule.parameters) || Object.keys(rule.parameters).length !== 0)))) return false;
+      if (!ruleset.rules.some((rule) => rule.type === "update")) continue;
+      const id = requiredPositiveInteger(ruleset.id, "rulesetId");
+      if (freshWriters.has(id) || writers.get(id) !== fingerprintRuleset(ruleset)) return false;
+      freshWriters.add(id);
+      if (Array.isArray(ruleset.bypass_actors)) {
+        const actor = ruleset.bypass_actors[0];
+        if (ruleset.bypass_actors.length !== 1 || !isRecord(actor) ||
+            actor.actor_id !== config.policy.reviewAppId || actor.actor_type !== "Integration" ||
+            !["always", "pull_request", "exempt"].includes(String(actor.bypass_mode))) return false;
+      } else if (ruleset.bypass_actors !== undefined || guard.bypassActorsEnumerated !== false) {
+        return false;
+      }
+    }
+    // The gate already validated the live enumeration or root attestation.
+    // Matching every writer fingerprint carries that proof to this final read.
+    if (freshWriters.size !== writers.size) return false;
+    const protection = await config.api.request<unknown>(repositoryPath("/branches/main/protection"));
+    if (!isRecord(protection) || !isRecord(protection.required_pull_request_reviews)) return false;
+    const allowances = protection.required_pull_request_reviews.bypass_pull_request_allowances;
+    if (allowances === undefined) return true;
+    return isRecord(allowances) && Object.keys(allowances).every((key) => ["users", "teams", "apps"].includes(key)) &&
+      ["users", "teams", "apps"].every((key) => Array.isArray(allowances[key]) && allowances[key].length === 0);
+  } catch {
+    return false;
+  }
+}
+
+function blockedMergeRulesetCoversMain(conditions: unknown): boolean | null {
+  if (!isRecord(conditions) || Object.keys(conditions).some((key) => key !== "ref_name") ||
+      !isRecord(conditions.ref_name)) return null;
+  const ref = conditions.ref_name;
+  if (Object.keys(ref).some((key) => key !== "include" && key !== "exclude") ||
+      !Array.isArray(ref.include) || ref.include.length === 0 || !Array.isArray(ref.exclude)) return null;
+  for (const pattern of [...ref.include, ...ref.exclude]) {
+    if (typeof pattern !== "string" ||
+        (pattern !== "~ALL" && pattern !== "~DEFAULT_BRANCH" &&
+          (!/^[A-Za-z0-9_./*-]+$/.test(pattern) || pattern.includes("**")))) return null;
+  }
+  return rulesetCoversBranch(conditions, "main");
+}
+
 export async function guardImmediateMerge(config: ControllerConfig, identity: CompletionIdentity): Promise<Readonly<{
   report: ModelReviewReport; repository: JsonRecord; pullRequest: GitHubPullRequest;
 }>> {
@@ -4324,6 +4388,10 @@ export async function guardImmediateMerge(config: ControllerConfig, identity: Co
       await readCurrentPullRequestMergeSha(config.api, pullRequest, snapshot.gateInput.repository.defaultBranchSha) !== snapshot.gateInput.pullRequest.mergeSha ||
       mergeActionFor(snapshot.humanBinding, pullRequest, integrationModeOf(snapshot.gateInput)) !== "merge-now") {
     throw new CompletionUnavailable("integration_changed_before_merge");
+  }
+  if (integrationModeOf(snapshot.gateInput) === "serialized-merge" && pullRequest.mergeable_state === "blocked" &&
+      !await blockedMergeProtectionsAreSafe(config, snapshot.gateInput.runtime.mainWriterGuard)) {
+    throw new CompletionUnavailable("blocked_merge_protections_unproven");
   }
   return { report, repository, pullRequest };
 }
