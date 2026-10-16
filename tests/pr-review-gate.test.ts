@@ -1690,8 +1690,8 @@ describe("PR review gate", () => {
       review: { policyVersion: `sayhear-pr-review-gate:${version}` },
     }), policy);
 
-    expect(PR_REVIEW_GATE_POLICY_VERSION).toBe("sayhear-pr-review-gate:v11");
-    expect(PR_REVIEW_REPORT_VERSION).toBe("sayhear-pr-review-report:v4");
+    expect(PR_REVIEW_GATE_POLICY_VERSION).toBe("sayhear-pr-review-gate:v12");
+    expect(PR_REVIEW_REPORT_VERSION).toBe("sayhear-pr-review-report:v5");
     expect(report.reasons[0]?.code).toBe("policy_version_mismatch");
   });
   const DEFERRABLE_CHECK_IDS = [
@@ -1982,6 +1982,9 @@ describe("PR review gate", () => {
     ["sayhear-pr-review-report:v4", "sayhear-pr-review-gate:v8"],
     ["sayhear-pr-review-report:v3", "sayhear-pr-review-gate:v10"],
     ["sayhear-pr-review-report:v4", "sayhear-pr-review-gate:v10"],
+    ["sayhear-pr-review-report:v4", "sayhear-pr-review-gate:v11"],
+    ["sayhear-pr-review-report:v4", "sayhear-pr-review-gate:v12"],
+    ["sayhear-pr-review-report:v5", "sayhear-pr-review-gate:v11"],
   ])("rejects a new report with incompatible identity %s / %s", (version, policyVersion) => {
     const report = evaluatePrReviewGate(
       input({
@@ -1990,8 +1993,8 @@ describe("PR review gate", () => {
       policy,
     );
 
-    expect(PR_REVIEW_GATE_POLICY_VERSION).toBe("sayhear-pr-review-gate:v11");
-    expect(PR_REVIEW_REPORT_VERSION).toBe("sayhear-pr-review-report:v4");
+    expect(PR_REVIEW_GATE_POLICY_VERSION).toBe("sayhear-pr-review-gate:v12");
+    expect(PR_REVIEW_REPORT_VERSION).toBe("sayhear-pr-review-report:v5");
     expect(report.outcome).toBe("awaiting_verification");
     expect(report.reasons[0]?.code).toBe("policy_version_mismatch");
   });

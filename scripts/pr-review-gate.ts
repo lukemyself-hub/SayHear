@@ -14,14 +14,17 @@ import {
 
 // Historical installed policies remain readable for signed completion receipts.
 // They do not acquire the head-bound review semantics introduced by v10.
-export const PR_REVIEW_GATE_POLICY_VERSION = "sayhear-pr-review-gate:v11";
+// v12 adds the complete human final-decision route (SPEC #362).
+export const PR_REVIEW_GATE_POLICY_VERSION = "sayhear-pr-review-gate:v12";
+export const PR_REVIEW_GATE_V11_POLICY_VERSION = "sayhear-pr-review-gate:v11";
 export const PR_REVIEW_GATE_V10_POLICY_VERSION = "sayhear-pr-review-gate:v10";
 export const PR_REVIEW_GATE_V9_POLICY_VERSION = "sayhear-pr-review-gate:v9";
 export const PR_REVIEW_GATE_LEGACY_POLICY_VERSION = "sayhear-pr-review-gate:v4";
 export const PR_REVIEW_GATE_PREVIOUS_POLICY_VERSION = "sayhear-pr-review-gate:v5";
 export const PR_REVIEW_GATE_INSTALLED_POLICY_VERSION = "sayhear-pr-review-gate:v8";
 export const PR_REVIEW_GATE_OLDER_INSTALLED_POLICY_VERSION = "sayhear-pr-review-gate:v6";
-export const PR_REVIEW_REPORT_VERSION = "sayhear-pr-review-report:v4";
+// v5 reports may carry the coordinator's scopeReconciliation.
+export const PR_REVIEW_REPORT_VERSION = "sayhear-pr-review-report:v5";
 export const SAYHEAR_REPOSITORY_ID = 1312399710;
 export const SAYHEAR_REPOSITORY_NAME = "lukemyself-hub/SayHear";
 export const PR_VALIDATE_WORKFLOW_PATH = ".github/workflows/pr-validate.yml";
