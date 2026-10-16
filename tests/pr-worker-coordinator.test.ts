@@ -860,3 +860,22 @@ describe("review binding and status findings (P2-1/P2-2)", () => {
     expect(status.output.findings).toEqual([{ key: "k1", status: "confirmed", repeatedAfterFix: false }]);
   });
 });
+
+describe("worker model forwarding (re-review follow-up)", () => {
+  it("attach pins the receipt model; a changed receipt model refuses the resume", async () => {
+    const env = await setupEnv({ pr: 730 });
+    const reserved = await runReserve(env.request, { stateDir: env.stateDir });
+    expect(reserved.exitCode).toBe(0);
+    const token = reserved.output.ownerToken as string;
+    const running = svc(env.cred, fakeFetch(infoRoutes({ data: { [SESSION]: { type: "running" } } })).fetchImpl);
+    await writeWrapper(env.wrapper, env.wt, "implementation", 1, "running", null, SESSION, env.taskSha256);
+    const attached = await runAttach(env.request, { stateDir: env.stateDir, ownerToken: token, serviceConfig: running });
+    expect(attached.exitCode).toBe(0);
+    // Same session resumes with a different worker model: refuse, record intact.
+    const changed = realReceipt(env.taskSha256, { agent: "implementation", directory: env.wt, status: "running", model: "magpie/group/other#low" });
+    await writeReceipts(env.wrapper, changed, changed, 1);
+    const refused = await runAttach(env.request, { stateDir: env.stateDir, ownerToken: token, serviceConfig: running });
+    expect(refused.exitCode).toBe(2);
+    expect(refused.output.reason).toBe("model_changed");
+  });
+});

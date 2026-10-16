@@ -192,7 +192,7 @@ function ownerTokenOf(options: RunOptions): string {
   return token;
 }
 function heldExit(reason: string): number {
-  return ["occupied", "worker_running", "worker_unknown", "session_unknown", "paused", "rounds_exhausted", "history_inconsistent", "review_not_recorded", "repeated_finding", "not_completed", "still_running", "awaiting_release"].includes(reason) ? 2 : 1;
+  return ["occupied", "worker_running", "worker_unknown", "session_unknown", "paused", "rounds_exhausted", "history_inconsistent", "review_not_recorded", "repeated_finding", "model_changed", "not_completed", "still_running", "awaiting_release"].includes(reason) ? 2 : 1;
 }
 async function git(worktree: string, argv: string[]): Promise<string> {
   const { stdout } = await runExec("git", argv, { cwd: worktree, timeout: 10_000, maxBuffer: 10 * 1024 * 1024 });
@@ -302,6 +302,7 @@ interface WrapperReceipt {
   worktree: string;
   attempt: number;
   taskSha256: string;
+  model: string | null;
   status: string;
   cliExitCode: number | null;
   errorCode: string | null;
@@ -316,6 +317,7 @@ function parseWrapperReceipt(v: Record<string, unknown>, what: string): WrapperR
   if (typeof v.attempt !== "number" || !Number.isSafeInteger(v.attempt) || v.attempt < 1) fail(`${what} is malformed.`);
   if (typeof v.status !== "string" || (v.status !== "running" && v.status !== "completed" && v.status !== "blocked" && v.status !== "timed_out" && v.status !== "interrupted")) fail(`${what} is malformed.`);
   if (v.model !== undefined && (typeof v.model !== "string" || v.model.length === 0 || v.model.length > 256)) fail(`${what} is malformed.`);
+  const model = typeof v.model === "string" ? v.model : null;
   if (v.service_version !== undefined && (typeof v.service_version !== "string" || v.service_version.length === 0 || v.service_version.length > 64)) fail(`${what} is malformed.`);
   if (typeof v.task_sha256 !== "string" || !HEX64.test((v.task_sha256 as string).toLowerCase())) fail(`${what} is malformed.`);
   let cliExitCode: number | null = null;
@@ -340,7 +342,7 @@ function parseWrapperReceipt(v: Record<string, unknown>, what: string): WrapperR
   }
   return {
     sessionId: v.session_id as string, role: v.agent as string, worktree: v.directory as string,
-    attempt: v.attempt as number, taskSha256: (v.task_sha256 as string).toLowerCase(),
+    attempt: v.attempt as number, taskSha256: (v.task_sha256 as string).toLowerCase(), model,
     status: v.status as string, cliExitCode, errorCode, errorMessage, finishedAt,
   };
 }
@@ -475,6 +477,7 @@ export async function runAttach(request: CoordinatorRequest, options: RunOptions
   const attached = await attachSession(storeFor(options.stateDir), {
     repositoryId: request.repositoryId, pullRequestNumber: request.pullRequestNumber, ownerToken: token,
     startHead: request.head, scopeDigest, role: request.role, sessionId: session.sessionId, workerStateDir,
+    model: session.model,
   });
   if (!attached.ok) return { exitCode: heldExit(attached.reason), output: { ok: false, reason: attached.reason } };
   return { exitCode: 0, output: { ok: true, sessionId: session.sessionId, resumed: attached.resumed, probe: probe.state } };
