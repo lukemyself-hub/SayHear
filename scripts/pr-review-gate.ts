@@ -1718,20 +1718,28 @@ function gateScopeResolution(
   );
 }
 
+/**
+ * The protected paths the current bound scope excuses, exactly as the gate's own
+ * human-review check computes them. The controller asks for this set instead of
+ * re-classifying protected paths, so the requirement it enforces before it
+ * publishes anything is the same single judgment the gate makes.
+ */
+export function gateScopeCoveredPaths(
+  input: PrReviewGateInput,
+): readonly string[] {
+  return gateScopeResolution(input).coveredPaths;
+}
+
 function gateScopeOutcome(
   input: PrReviewGateInput,
   resolution: BehaviorScopeResolution,
 ): PrReviewGateReport | null {
   if (resolution.verdict === "in-scope") {
-    // Both sides normalize: a reviewer may cite a Windows-style separator while
-    // GitHub reports the same path with forward slashes.
-    const covered = new Set(
-      resolution.coveredPaths.map((path) => path.replaceAll("\\", "/")),
-    );
+    // coveredPaths are the changed-file paths the resolver already matched by
+    // exact equality, so plain set membership is the whole coverage test.
+    const covered = new Set(resolution.coveredPaths);
     const fullyCovered = input.pullRequest.changedFiles.length > 0 &&
-      input.pullRequest.changedFiles.every(({ path }) =>
-        covered.has(path.replaceAll("\\", "/")),
-      );
+      input.pullRequest.changedFiles.every(({ path }) => covered.has(path));
     if (fullyCovered) return null;
     return outcome(input, "human_decision", {
       code: "behavior_scope_incomplete",
@@ -2137,10 +2145,11 @@ export function evaluatePrReviewGate(
       message: "Ordinary merges trigger production deployment, but that effect is not authorized.",
     });
   }
-  // Both judgments share one checked binding context. A providerContext that
-  // no longer names the current head and base is dropped here exactly as it is
-  // for the scope judgment, so a self-consistent but stale pair of context and
-  // assessment can never satisfy the provider judgment.
+  // Same checked context the scope judgment used. A context that no longer names
+  // the live head and base is dropped here too, so a self-consistent but stale
+  // pair of context and assessment can never reach the provider judgment. The
+  // scope check above already returns on that input; dropping it here as well
+  // keeps one rule instead of two that could drift.
   const boundContext = gateBindingContext(input);
   const providerInput: ProviderReviewInput | undefined =
     boundContext === undefined && input.review.providerBehavior === undefined

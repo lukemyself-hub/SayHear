@@ -2726,21 +2726,34 @@ describe("PR review gate", () => {
         providerBehavior: { ...candidate.review.providerBehavior!, diffDigest: "8".repeat(64) },
       },
     };
-    expect(evaluatePrReviewGate(drifted, policy).reasons[0]?.code).toBe("provider_behavior_unknown");
+    expect(evaluatePrReviewGate(drifted, policy).reasons.map((reason) => reason.code))
+      .toEqual(["provider_behavior_unknown"]);
+
+    // Reached through the provider stage itself: an assessment bound to this
+    // exact context that declares provider impact, so the plan derived from that
+    // same pair demands targeted provider evidence the snapshot does not carry.
+    const affected = input({ review: { declaredImpacts: ["provider-migration"] } });
+    const staged = evaluatePrReviewGate(affected, policy);
+    expect(staged.reasons.map((reason) => reason.code)).toEqual(["required_evidence_missing"]);
+    expect(staged.deferredEvidence).toEqual([]);
+    expect(staged.reasons[0]?.message).toContain("provider");
 
     // A context that no longer names the live head drops out of both judgments
-    // at once, so it fails closed instead of binding to itself.
+    // at once, so it fails closed instead of binding to itself. The reported
+    // reason is the scope judgment's, because the dropped context is what the
+    // scope resolution reads first.
     const staleContext = {
       ...candidate,
       providerContext: { ...candidate.providerContext!, headSha: "7".repeat(40) },
       review: {
         ...candidate.review,
         providerBehavior: { ...candidate.review.providerBehavior!, headSha: "7".repeat(40) },
+        behaviorScope: { ...candidate.review.behaviorScope!, headSha: "7".repeat(40) },
       },
     };
     const staleReport = evaluatePrReviewGate(staleContext, policy);
-    expect(staleReport.outcome).not.toBe("merge_candidate");
-    expect(staleReport.reasons.map((reason) => reason.code)).not.toContain("all_required_evidence_verified");
+    expect(staleReport.outcome).toBe("awaiting_verification");
+    expect(staleReport.reasons.map((reason) => reason.code)).toEqual(["behavior_scope_incomplete"]);
   });
 
   it("keeps provider evidence bound to the PR base while main moves under a serialized merge", () => {

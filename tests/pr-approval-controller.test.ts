@@ -3483,6 +3483,76 @@ describe("guarded serialized controller completion", () => {
     expect(f.writes.some((write) => write.includes("/issues/42"))).toBe(false);
   });
 
+  /**
+   * Drops Luke's approval from a browser fixture so the PR is agent-authored
+   * with no human approval at all: no decisive review of his own remains, and the
+   * signed receipt is cleared with it.
+   */
+  function withoutLukeApproval(f: Awaited<ReturnType<typeof serializedControllerFixture>>) {
+    const review = f.reviews.findIndex((entry) => entry.id === 10);
+    if (review < 0) throw new Error("Expected Luke's approval");
+    f.reviews.splice(review, 1);
+    const state = f.browserApprovalStore.value;
+    if (!state) throw new Error("Expected a browser challenge");
+    const { scopeRequirementDigest: _scope, ...rest } = state;
+    f.browserApprovalStore.value = { ...rest, receipt: null };
+  }
+
+  /** Every check-run body this scan published, so a summary can be asserted. */
+  function captureCheckRunWrites(f: Awaited<ReturnType<typeof serializedControllerFixture>>) {
+    const summaries: string[] = [];
+    const request = f.api.request.bind(f.api);
+    f.api.request = async <T>(path: string, options?: StubRequestOptions): Promise<T> => {
+      if (options?.method === "PATCH" && path.endsWith("/check-runs/9002")) {
+        summaries.push(JSON.stringify(options.body));
+        return {} as T;
+      }
+      if (options?.method === "POST" && path.endsWith("/check-runs")) {
+        summaries.push(JSON.stringify(options.body));
+        return { id: 9004 } as T;
+      }
+      return request<T>(path, options);
+    };
+    return summaries;
+  }
+
+  it("merges a protected controller repair the current scope covers, with no approval of its own", async () => {
+    const f = await serializedControllerFixture("browser", { linkedIssue: false });
+    withoutLukeApproval(f);
+    acceptCheckRunWrites(f);
+    // The only excuse for the protected path is the current bound scope. The
+    // controller and the gate must agree on it: the gate merges, so the
+    // controller cannot then stop and call the same PR unauthorized.
+    const results = await scanPullRequests(f.config, 321);
+    expect(results).toEqual([expect.objectContaining({ pullRequest: 321, outcome: "merge_candidate" })]);
+    expect(f.stored()).toMatchObject({ phase: "complete", identity: { humanChannel: "app" } });
+    expect(f.pull.merged).toBe(true);
+  });
+
+  it("publishes no App approval and no merge candidate while a protected path is unauthorized", async () => {
+    const f = await serializedControllerFixture("browser", { linkedIssue: false });
+    withoutLukeApproval(f);
+    // Same diff, but the current scope cites no observation for any changed
+    // path, so it covers nothing and must not excuse the protected path.
+    withSavedReport(f, (report) => ({
+      ...report,
+      behaviorScope: {
+        ...report.behaviorScope!,
+        evidence: report.behaviorScope!.evidence.map((observation) => ({ ...observation, file: "docs/agents/pr-auto-approval.md" })),
+      },
+    }));
+    const summaries = captureCheckRunWrites(f);
+    const results = await scanPullRequests(f.config, 321);
+    expect(results).toEqual([expect.objectContaining({ pullRequest: 321, outcome: "awaiting_verification" })]);
+    // The App must never approve a PR it is about to refuse, and no
+    // merge_candidate check run may claim this head is mergeable.
+    expect(f.writes.some((write) => write.includes("/pulls/321/reviews"))).toBe(false);
+    expect(f.writes.some((write) => write.includes("/pulls/321/merge"))).toBe(false);
+    expect(summaries.join("\n")).toContain("outcome=human_decision");
+    expect(summaries.join("\n")).not.toContain("outcome=merge_candidate");
+    expect(f.stored()).toBeNull();
+  });
+
   it("merges a zero-Issue PR on the automatic route without Issue writes", async () => {
     const f = await serializedControllerFixture("browser", { linkedIssue: false });
     asLegacyBrowserApproval(f);
@@ -3700,10 +3770,47 @@ describe("guarded serialized controller completion", () => {
     const human = f.reviews.find((review) => review.id === 10);
     if (!human) throw new Error("human review missing");
     human.state = "DISMISSED";
-    // The dismissal invalidates the bound browser receipt, so the guard stops on
-    // the human binding itself rather than reaching the gate.
-    await expect(guardImmediateMerge(f.config, f.receipt.identity)).rejects.toThrow("human_review_binding_changed");
+    // A dismissal is a decisive Luke call that the current approval does not
+    // answer, so the gate itself refuses the PR. The saved report's behavior
+    // scope covers the protected path, and that fresh positive evidence must not
+    // carry a PR Luke has already taken back.
+    await expect(guardImmediateMerge(f.config, f.receipt.identity)).rejects.toThrow("fresh_merge_gate_blocked");
     expect(f.writes.some((write) => write.includes("/pulls/321/merge"))).toBe(false);
+  });
+
+  it("blocks a dismissed review on the scan route even with a covering scope", async () => {
+    const f = await serializedControllerFixture("browser");
+    const dismissed = f.reviews.find((review) => review.id === 10);
+    if (!dismissed) throw new Error("human review missing");
+    dismissed.state = "DISMISSED";
+    acceptCheckRunWrites(f);
+    const results = await scanPullRequests(f.config, 321);
+    expect(results[0]?.outcome).not.toBe("merge_candidate");
+    expect(f.writes.some((write) => write.includes("/pulls/321/reviews"))).toBe(false);
+    expect(f.browserApprovalStore.value?.receipt).toBeNull();
+    expect(f.writes.some((write) => write.includes("/pulls/321/merge"))).toBe(false);
+    expect(f.stored()).toBeNull();
+  });
+
+  it("treats a comment-only Luke trail as no takeover", async () => {
+    const f = await serializedControllerFixture("browser", { linkedIssue: false });
+    withoutLukeApproval(f);
+    f.reviews.push({ id: 11, state: "COMMENTED", body: "Note", commit_id: HEAD_SHA, user: LUKE_IDENTITY,
+      submitted_at: "2026-10-14T00:00:05Z" });
+    // Luke commented but never decided, so the automatic route stays open.
+    const snapshot = await readSnapshot(f.config, 321);
+    expect(snapshot.humanBinding.receipt).toBeNull();
+    expect(snapshot.humanBinding.humanDecisionRequired).toBeUndefined();
+  });
+
+  it("treats an approval on an older head as a takeover the current approval does not answer", async () => {
+    const f = await serializedControllerFixture("browser");
+    const approval = f.reviews.find((review) => review.id === 10);
+    if (!approval) throw new Error("human review missing");
+    approval.commit_id = "7".repeat(40);
+    const snapshot = await readSnapshot(f.config, 321);
+    expect(snapshot.humanBinding.receipt).toBeNull();
+    expect(snapshot.humanBinding.humanDecisionRequired).toBe(true);
   });
 
   it("records definitive rejection and permits unrelated PRs after confirmed unmerged readback", async () => {
