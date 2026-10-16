@@ -2712,6 +2712,166 @@ describe("PR review gate", () => {
     expect(report.reasons[0]?.code).toBe("human_review_required");
   });
 
+  it("records an actionable request_changes past an unresolved external thread", () => {
+    const candidate = input({
+      pullRequest: { externalReviewState: "needs-human" },
+      review: {
+        decision: "request_changes",
+        findings: [{
+          severity: "P2",
+          file: "packages/application/src/server/fix.ts",
+          line: 12,
+          trigger: "retry with an expired record",
+          userImpact: "the request returns stale data",
+          evidence: "the retry path skips the version check",
+        }],
+      },
+    });
+    const report = evaluatePrReviewGate(candidate, policy);
+
+    expect(report.outcome).toBe("request_changes");
+    expect(report.reasons[0]?.code).toBe("review_request_changes");
+  });
+
+  it("keeps fail-closed routing for non-actionable and higher-priority blocks", () => {
+    const actionableFinding = {
+      severity: "P2" as const,
+      file: "packages/application/src/server/fix.ts",
+      line: 12,
+      trigger: "retry with an expired record",
+      userImpact: "the request returns stale data",
+      evidence: "the retry path skips the version check",
+    };
+    const p3Finding = { ...actionableFinding, severity: "P3" as const };
+    const withReboundDigest = (candidate: PrReviewGateInput): PrReviewGateInput => ({
+      ...candidate,
+      review: {
+        ...candidate.review,
+        requirementDigest: requirementDigest(candidate.issues, candidate.pullRequest),
+      },
+    });
+    const cases: ReadonlyArray<Readonly<{
+      name: string;
+      candidate: PrReviewGateInput;
+      policyOverride?: TrustedPrReviewPolicy;
+      outcome: string;
+      code: string;
+    }>> = [
+      {
+        name: "approve stays human-routed",
+        candidate: input({ pullRequest: { externalReviewState: "needs-human" } }),
+        outcome: "human_decision",
+        code: "human_review_required",
+      },
+      {
+        name: "P3-only negative stays human-routed",
+        candidate: input({
+          pullRequest: { externalReviewState: "needs-human" },
+          review: { decision: "request_changes", findings: [p3Finding] },
+        }),
+        outcome: "human_decision",
+        code: "human_review_required",
+      },
+      {
+        name: "finding-free negative stays human-routed",
+        candidate: input({
+          pullRequest: { externalReviewState: "needs-human" },
+          review: { decision: "request_changes", findings: [] },
+        }),
+        outcome: "human_decision",
+        code: "human_review_required",
+      },
+      {
+        name: "protected path still needs a human despite an actionable negative",
+        candidate: withReboundDigest(input({
+          pullRequest: {
+            externalReviewState: "needs-human",
+            changedFiles: [{ path: "docs/adr/0151-platform.md", status: "modified" }],
+          },
+          review: {
+            decision: "request_changes",
+            findings: [actionableFinding],
+            behaviorScope: {
+              headSha: HEAD_SHA,
+              baseSha: BASE_SHA,
+              diffDigest: SYNTHETIC_DIFF_DIGEST,
+              verdict: "in-scope",
+              runtimeImpact: "none",
+              rationale: "The scope assessment does not cover the protected path.",
+              evidence: [],
+              contractRefs: [],
+              missingEvidence: [],
+            },
+          },
+        })),
+        outcome: "human_decision",
+        code: "human_review_required",
+      },
+      {
+        name: "trusted human-decision requirement outranks the bypass",
+        candidate: input({
+          pullRequest: { externalReviewState: "needs-human" },
+          review: { decision: "request_changes", findings: [actionableFinding] },
+        }),
+        policyOverride: { ...policy, humanDecisionRequired: true },
+        outcome: "human_decision",
+        code: "human_decision_required",
+      },
+      {
+        name: "explicit hold still blocks an actionable negative",
+        candidate: withReboundDigest(input({
+          pullRequest: {
+            externalReviewState: "needs-human",
+            title: "Fix the ordinary server path",
+            body: "Do not merge until Luke confirms",
+          },
+          review: { decision: "request_changes", findings: [actionableFinding] },
+        })),
+        outcome: "human_decision",
+        code: "human_review_required",
+      },
+      {
+        name: "stale head still waits for a fresh review",
+        candidate: input({
+          pullRequest: { externalReviewState: "needs-human", headSha: "f".repeat(40) },
+          review: { decision: "request_changes", findings: [actionableFinding] },
+        }),
+        outcome: "awaiting_verification",
+        code: "stale_review",
+      },
+      {
+        name: "changed requirement still needs rebinding",
+        candidate: input({
+          pullRequest: { externalReviewState: "needs-human", body: "Changed requirement" },
+          review: { decision: "request_changes", findings: [actionableFinding] },
+        }),
+        outcome: "human_decision",
+        code: "requirements_changed",
+      },
+    ];
+    for (const entry of cases) {
+      const report = evaluatePrReviewGate(entry.candidate, entry.policyOverride ?? policy);
+      expect(`${entry.name}: ${report.outcome}`).toBe(`${entry.name}: ${entry.outcome}`);
+      expect(`${entry.name}: ${report.reasons[0]?.code}`).toBe(`${entry.name}: ${entry.code}`);
+    }
+
+    // A stale scope still fails closed after the bypass instead of recording.
+    const scoped = input({
+      pullRequest: { externalReviewState: "needs-human" },
+      review: { decision: "request_changes", findings: [actionableFinding] },
+    });
+    const staleScope = {
+      ...scoped.review.behaviorScope!,
+      headSha: "f".repeat(40),
+    };
+    const staleReport = evaluatePrReviewGate({
+      ...scoped,
+      review: { ...scoped.review, behaviorScope: staleScope },
+    }, policy);
+    expect(staleReport.outcome).toBe("awaiting_verification");
+    expect(staleReport.reasons[0]?.code).toBe("behavior_scope_stale");
+  });
+
   it("allows a valid manual unknown assessment but keeps hard CI blocking", () => {
     const { candidate, bound } = manualSetup({
       review: {

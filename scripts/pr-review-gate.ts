@@ -1479,7 +1479,22 @@ function requiresHumanReview(
   scopeCoveredPaths: readonly string[] = [],
 ): Readonly<{ code: string; message: string }> | null {
   if (input.pullRequest.externalReviewState === "needs-human") {
-    return { code: "human_review_required", message: "A human review or review thread needs attention." };
+    // An unresolved external thread stays human-routed, except for one narrow
+    // case: a concrete actionable request_changes (decision plus at least one
+    // P0/P1/P2 finding). That report still needs the same downstream checks,
+    // which record it as merge-blocking request_changes instead of minting a
+    // generic human decision and hiding the repair signal.
+    const actionableRequestChanges =
+      input.review.decision === "request_changes" &&
+      input.review.findings.some(
+        (finding) =>
+          finding.severity === "P0" ||
+          finding.severity === "P1" ||
+          finding.severity === "P2",
+      );
+    if (!actionableRequestChanges) {
+      return { code: "human_review_required", message: "A human review or review thread needs attention." };
+    }
   }
   if (
     /\b(?:do not merge|do not auto[- ]merge|not for merge|not to be merged)\b|不要(?:自动)?合入|暂停自动审批/i.test(
