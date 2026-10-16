@@ -11,6 +11,20 @@ import {
   type PreMergeImpossibleReason,
   type ReleaseImpactKind,
 } from "./daily-release-validation.ts";
+import {
+  parseProviderBehaviorReview,
+  parseProviderReviewContext,
+  resolveProviderBehavior,
+  type ProviderBehaviorReview,
+  type ProviderReviewContext,
+  type ProviderReviewInput,
+} from "./provider-behavior-review.ts";
+import {
+  parseBehaviorScopeReview,
+  resolveBehaviorScope,
+  type BehaviorScopeResolution,
+  type BehaviorScopeReview,
+} from "./pr-approval/behavior-scope.ts";
 
 // Historical installed policies remain readable for signed completion receipts.
 // They do not acquire the head-bound review semantics introduced by v10.
@@ -326,6 +340,7 @@ export type PrReviewGateInput = Readonly<{
     }>[];
   }>;
   issues: readonly PrReviewIssue[];
+  providerContext?: ProviderReviewContext;
   review: Readonly<{
     version: string;
     repositoryId: number;
@@ -349,6 +364,16 @@ export type PrReviewGateInput = Readonly<{
       externalMvpRelease: boolean;
     }>;
     riskFlags: Readonly<Record<(typeof REQUIRED_REVIEW_FLAGS)[number], boolean>>;
+    /**
+     * Model provider-behavior evidence bound to providerContext by the shared
+     * parser. Optional so snapshots that predate the binding still parse.
+     */
+    providerBehavior?: ProviderBehaviorReview;
+    /**
+     * Model behavior-scope evidence bound to the same providerContext by the
+     * shared parser. Optional so snapshots that predate the binding still parse.
+     */
+    behaviorScope?: BehaviorScopeReview;
     findings: readonly Readonly<{
       severity: "P0" | "P1" | "P2" | "P3";
       file: string;
@@ -419,6 +444,12 @@ export type TrustedPrReviewPolicy = Readonly<{
   humanApprovedPaths?: readonly string[];
   humanApprovedNoRuntimeImpact?: boolean;
   humanApprovalChannel?: "browser" | "legacy-root" | "unknown";
+  /**
+   * Trusted controller revocation: when true the automatic route is closed and
+   * a current human final decision is required. Set only by the trusted
+   * controller, never parsed from a model review.
+   */
+  humanDecisionRequired?: boolean;
   /**
    * Versioned complete-human-final-decision binding supplied by the
    * controller from a live verified BrowserReceipt. Absent keeps the exact
@@ -1057,8 +1088,17 @@ export function parsePrReviewGateInput(value: unknown): PrReviewGateInput {
         ),
       },
       riskFlags: parsedRiskFlags,
+      ...(review.providerBehavior === undefined
+        ? {}
+        : { providerBehavior: parseProviderBehaviorReview(review.providerBehavior) }),
+      ...(review.behaviorScope === undefined
+        ? {}
+        : { behaviorScope: parseBehaviorScopeReview(review.behaviorScope) }),
       findings: review.findings.map(parseFinding),
     },
+    ...(value.providerContext === undefined
+      ? {}
+      : { providerContext: parseProviderReviewContext(value.providerContext) }),
     evidence: evidence.map(parseEvidence),
     branchProtection,
     runtime: {
@@ -1422,7 +1462,11 @@ export function protectedReviewPaths(
   });
 }
 
-function requiresHumanReview(input: PrReviewGateInput, policy: TrustedPrReviewPolicy): Readonly<{ code: string; message: string }> | null {
+function requiresHumanReview(
+  input: PrReviewGateInput,
+  policy: TrustedPrReviewPolicy,
+  scopeCoveredPaths: readonly string[] = [],
+): Readonly<{ code: string; message: string }> | null {
   if (input.pullRequest.externalReviewState === "needs-human") {
     return { code: "human_review_required", message: "A human review or review thread needs attention." };
   }
@@ -1440,10 +1484,20 @@ function requiresHumanReview(input: PrReviewGateInput, policy: TrustedPrReviewPo
   // reason the browser channel treats as "wait for Luke", so letting it mask a
   // pause, a triage label, or a dependency would turn a real blocker into a wait
   // and hide that blocker from the check run.
+  //
+  // A current positive scope may excuse exactly the protected paths its
+  // coveredPaths contain. Coverage is derived proof of locations, never an
+  // authorization grant, and it must never rewrite humanApprovedPaths or mint a
+  // human receipt: only the same current positive scope excuses, nothing else.
+  const scopeCovered = new Set(scopeCoveredPaths.map((path) => path.replaceAll("\\", "/")));
   let protectedReason: Readonly<{ code: string; message: string }> | null = null;
   for (const { path, status } of input.pullRequest.changedFiles) {
     const normalized = path.replaceAll("\\", "/");
-    if (protectedReason === null && unreviewedProtectedPaths.has(normalized)) {
+    if (
+      protectedReason === null &&
+      unreviewedProtectedPaths.has(normalized) &&
+      !scopeCovered.has(normalized)
+    ) {
       protectedReason = {
         code: policy.humanApprovalChannel === "browser" ? "browser_human_approval_required" : "human_review_required",
         message: `The change touches protected review or product policy path ${normalized}.`,
@@ -1628,6 +1682,86 @@ function verifyEvidence(
   return { accepted, deferred, blocker: null };
 }
 
+/**
+ * The controller-owned binding context both judgments share. The actual base
+ * is the serialized default-branch tip in `serialized-merge` mode, else the
+ * PR base: a self-bound assessment on the wrong head or base fails here, so it
+ * can never satisfy either judgment.
+ */
+function gateBindingContext(
+  input: PrReviewGateInput,
+): ProviderReviewContext | undefined {
+  const context = input.providerContext;
+  if (context === undefined) return undefined;
+  const expectedBase = integrationModeOf(input) === "serialized-merge"
+    ? input.repository.defaultBranchSha
+    : input.pullRequest.baseSha;
+  if (context.headSha !== input.pullRequest.headSha) return undefined;
+  if (context.baseSha !== expectedBase) return undefined;
+  return context;
+}
+
+/**
+ * Current scope judgment for the automatic route. Missing, stale, or
+ * incomplete evidence resolves through the shared resolver, and the gate maps
+ * that resolution to an explicit outcome without inferring semantics.
+ */
+function gateScopeResolution(
+  input: PrReviewGateInput,
+): BehaviorScopeResolution {
+  return resolveBehaviorScope(
+    input.review.behaviorScope,
+    gateBindingContext(input),
+    input.pullRequest.changedFiles,
+  );
+}
+
+function gateScopeOutcome(
+  input: PrReviewGateInput,
+): PrReviewGateReport | null {
+  const resolution = gateScopeResolution(input);
+  if (resolution.verdict === "in-scope") {
+    const covered = new Set(resolution.coveredPaths);
+    const fullyCovered = input.pullRequest.changedFiles.length > 0 &&
+      input.pullRequest.changedFiles.every(({ path }) =>
+        covered.has(path.replaceAll("\\", "/")),
+      );
+    if (fullyCovered) return null;
+    return outcome(input, "human_decision", {
+      code: "behavior_scope_incomplete",
+      message:
+        `The current behavior scope does not cover every changed path${resolution.reason.length > 0 ? `: ${resolution.reason}` : "."}`,
+    });
+  }
+  if (resolution.verdict === "needs-human") {
+    return outcome(input, "human_decision", {
+      code: "behavior_scope_needs_human",
+      message: `The current behavior scope requires a human decision: ${resolution.reason}`,
+    });
+  }
+  const stale = resolution.missingEvidence.some((entry) =>
+    entry === "matching-head-sha" ||
+    entry === "matching-base-sha" ||
+    entry === "matching-diff-digest",
+  );
+  const incomplete = resolution.missingEvidence.some((entry) =>
+    entry === "complete-diff" ||
+    entry === "behavior-scope-context" ||
+    entry === "behavior-scope-assessment",
+  );
+  if (stale || incomplete) {
+    return outcome(input, "awaiting_verification", {
+      code: stale ? "behavior_scope_stale" : "behavior_scope_incomplete",
+      message:
+        `The current behavior scope evidence is not bound to this diff: ${resolution.reason}`,
+    });
+  }
+  return outcome(input, "human_decision", {
+    code: "behavior_scope_needs_human",
+    message: `The current behavior scope requires a human decision: ${resolution.reason}`,
+  });
+}
+
 export function evaluatePrReviewGate(
   input: PrReviewGateInput,
   policy: TrustedPrReviewPolicy,
@@ -1687,7 +1821,21 @@ export function evaluatePrReviewGate(
       });
     }
 
-    const humanReason = requiresHumanReview(input, policy);
+    // A revoked automatic route stays revoked: a dismissed or old-head human
+    // approval cannot fall back to auto, and a fresh positive scope cannot
+    // excuse the trusted controller's explicit human requirement.
+    if (policy.humanDecisionRequired === true) {
+      return outcome(input, "human_decision", {
+        code: "human_decision_required",
+        message: "The trusted controller requires a current human final decision for this PR.",
+      });
+    }
+
+    const scopeBlocker = gateScopeOutcome(input);
+    if (scopeBlocker) return scopeBlocker;
+    const scopeCoveredPaths = gateScopeResolution(input).coveredPaths;
+
+    const humanReason = requiresHumanReview(input, policy, scopeCoveredPaths);
     if (humanReason) {
       return outcome(input, "human_decision", {
         code: humanReason.code,
@@ -1974,6 +2122,17 @@ export function evaluatePrReviewGate(
       message: "Ordinary merges trigger production deployment, but that effect is not authorized.",
     });
   }
+  const providerInput: ProviderReviewInput | undefined =
+    input.providerContext === undefined && input.review.providerBehavior === undefined
+      ? undefined
+      : {
+          ...(input.providerContext === undefined
+            ? {}
+            : { context: input.providerContext }),
+          ...(input.review.providerBehavior === undefined
+            ? {}
+            : { assessment: input.review.providerBehavior }),
+        };
   const plan = planDailyReleaseValidation({
     version: DAILY_RELEASE_VALIDATION_REQUEST_VERSION,
     change: {
@@ -1982,7 +2141,18 @@ export function evaluatePrReviewGate(
       changedPaths: input.pullRequest.changedFiles.map(({ path }) => path),
     },
     capability: input.review.capability,
+    ...(providerInput === undefined ? {} : { provider: providerInput }),
   });
+  // Automated Provider unknown blocks before any owner-located tooling excuse:
+  // other known impacts or capability state cannot mask a missing binding.
+  const providerResolution = resolveProviderBehavior(providerInput);
+  const providerUnknown = providerResolution.verdict === "unknown";
+  if (!manual && providerUnknown) {
+    return outcome(input, "awaiting_verification", {
+      code: "provider_behavior_unknown",
+      message: `The provider behavior for this diff is unknown: ${providerResolution.reason}`,
+    });
+  }
   if (!manual && plan.fullAcceptance.required) {
     return outcome(input, "human_decision", {
       code: "full_acceptance_required",
@@ -2006,6 +2176,24 @@ export function evaluatePrReviewGate(
       code: "impact_not_located",
       message: "The change impact is unknown and must be classified before approval.",
     });
+  }
+  // A current full-coverage no-runtime scope resolves only the unrelated
+  // unlocated-other-impact gap: it never excuses Provider unknown (handled
+  // above) and never drops targeted checks. An unaffected Provider verdict is
+  // not general scope or no-runtime proof on its own.
+  if (!manual && plan.requiresImpactLocation && ownerLocatedTooling) {
+    const scopeResolution = gateScopeResolution(input);
+    const hasTargeted = plan.targeted.length > 0 || plan.reused.length > 0;
+    const scopeExcuse = !providerUnknown &&
+      !hasTargeted &&
+      scopeResolution.verdict === "in-scope" &&
+      scopeResolution.noRuntimeImpact;
+    if (!scopeExcuse) {
+      return outcome(input, "awaiting_verification", {
+        code: "impact_not_located",
+        message: "The change impact is unknown and must be classified before approval.",
+      });
+    }
   }
 
   const requiredEvidenceIds = manual
