@@ -1823,6 +1823,32 @@ describe("PR review gate", () => {
     expect(parsed.pullRequest.closingIssueNumbers).toBeNull();
   });
 
+  it("ignores foreign-repo closing references with the same number", () => {
+    expect(
+      closingKeywordIssueNumbers("See #42 for context. Fixes other/repo#42."),
+    ).toEqual([]);
+    expect(
+      closingKeywordIssueNumbers("Fixes other/repo#42 Fixes OTHER/REPO#43"),
+    ).toEqual([]);
+    expect(
+      closingKeywordIssueNumbers(
+        "Fixes https://github.com/other/repo/issues/42",
+      ),
+    ).toEqual([]);
+  });
+
+  it("accepts local qualified closing references case-insensitively", () => {
+    expect(
+      closingKeywordIssueNumbers("Fixes LUKEMyself-hub/SayHear#42"),
+    ).toEqual([42]);
+    expect(
+      closingKeywordIssueNumbers(
+        "Fixes https://github.com/LukeMyself-Hub/SayHear/issues/43",
+      ),
+    ).toEqual([43]);
+    expect(closingKeywordIssueNumbers("Fixes #44")).toEqual([44]);
+  });
+
   it("finds every GitHub closing keyword form, including negated text", () => {
     expect(
       closingKeywordIssueNumbers(
