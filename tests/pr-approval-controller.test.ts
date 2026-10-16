@@ -3019,24 +3019,38 @@ describe("guarded serialized controller completion", () => {
     expect(state.record).toBeNull();
   });
 
-  it("reopens a PR left closed by an interrupted rebuild before scanning", async () => {
+  it("reopens a PR left closed by an interrupted rebuild before scanning, without a second cycle", async () => {
     const { f, state, config } = await staleMergeRefFixture({ version: 1, pullRequestNumber: 321, phase: "closing",
-      target: { headSha: HEAD_SHA, mainSha: BASE_SHA, staleMergeSha: MERGE_SHA } });
+      target: { headSha: HEAD_SHA, mainSha: "9".repeat(40), staleMergeSha: MERGE_SHA } });
     f.pull.state = "closed";
     await scanPullRequests(config, null, false);
-    expect(state.transitions[0]).toBe("open");
+    expect(state.transitions).toEqual(["open"]);
     expect(state.record).toMatchObject({ phase: "reopened" });
   });
 
-  it("reports a failed recovery reopen per PR, keeps the intent, and still scans", async () => {
+  it("reports a refused recovery reopen per PR and settles it", async () => {
     const { f, state, config } = await staleMergeRefFixture({ version: 1, pullRequestNumber: 321, phase: "closing",
       target: { headSha: HEAD_SHA, mainSha: BASE_SHA, staleMergeSha: MERGE_SHA } });
     f.pull.state = "closed";
     state.patchError = new GitHubApiError(422, "PATCH", "/repos/lukemyself-hub/SayHear/pulls/321");
     const results = await scanPullRequests(config, null, false);
-    expect(results).toEqual([expect.objectContaining({ pullRequest: 321, status: "merge_ref_rebuild_recovery_blocked", reason: expect.stringContaining("HTTP 422") })]);
-    expect(state.record).toMatchObject({ phase: "closing" });
+    expect(results).toEqual([expect.objectContaining({ pullRequest: 321, status: "merge_ref_rebuild_recovery_blocked", reason: expect.stringMatching(/^reopen_refused: .*HTTP 422/) })]);
+    expect(state.record).toMatchObject({ phase: "reopen_refused" });
     expect(f.pull.state).toBe("closed");
+  });
+
+  it("hands a rebuilt merge ref to the ci-int refresh when the reopened run tested the old merge", async () => {
+    const { f, state, config } = await staleMergeRefFixture();
+    await scanPullRequests(config, null);
+    expect(state.transitions).toEqual(["closed", "open"]);
+    // GitHub rebuilt the ref, but the latest Validate run still checked out the old merge commit.
+    f.pull.merge_commit_sha = "7".repeat(40);
+    expect(await scanPullRequests(config, null)).toEqual([
+      expect.objectContaining({ pullRequest: 321, status: "waiting_for_validation" }),
+    ]);
+    expect(state.transitions).toEqual(["closed", "open"]);
+    expect(f.writes.filter((write) => write.endsWith("/issues/321/labels"))).toHaveLength(1);
+    expect(f.writes.some((write) => write.includes("/pulls/321/merge"))).toBe(false);
   });
 
   it.each(["browser", "legacy-root"] as const)("requires a new review and human binding after material main movement for %s", async (channel) => {

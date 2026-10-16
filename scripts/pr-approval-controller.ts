@@ -5065,6 +5065,7 @@ export async function scanPullRequests(
         reopen: async (number) => {
           await config.api.request(repositoryPath(`/pulls/${number}`), { method: "PATCH", body: { state: "open" } });
         },
+        definitiveRejection: (error) => error instanceof GitHubApiError && [404, 410, 422].includes(error.status),
       });
       for (const failure of recovery.failures) {
         recoveryResults.push({ pullRequest: failure.pullRequestNumber, status: "merge_ref_rebuild_recovery_blocked", reason: failure.reason });
