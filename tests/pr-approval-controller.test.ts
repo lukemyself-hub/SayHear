@@ -2371,6 +2371,9 @@ describe("pre-merge deferral evidence collection", () => {
   });
 
   it("reads the Issues GitHub would close on merge and fails closed when it cannot", async () => {
+    const localRepo = "lukemyself-hub/SayHear";
+    const local = (number: number, nameWithOwner: unknown = localRepo) =>
+      ({ number, repository: { nameWithOwner } });
     const graph = (closing: unknown) =>
       new StubApi((path) => {
         if (path !== "/graphql") throw new Error(`Unexpected request ${path}`);
@@ -2378,19 +2381,64 @@ describe("pre-merge deferral evidence collection", () => {
       });
 
     await expect(readClosingIssueReferences(
-      graph({ nodes: [{ number: 301 }, { number: 322 }], pageInfo: { hasNextPage: false } }), 333,
+      graph({ nodes: [local(301), local(322)], pageInfo: { hasNextPage: false } }), 333,
     )).resolves.toEqual([301, 322]);
     await expect(readClosingIssueReferences(
       graph({ nodes: [], pageInfo: { hasNextPage: false } }), 333,
     )).resolves.toEqual([]);
     await expect(readClosingIssueReferences(
-      graph({ nodes: [{ number: 301 }], pageInfo: { hasNextPage: true } }), 333,
+      graph({ nodes: [local(301)], pageInfo: { hasNextPage: true } }), 333,
     )).resolves.toBeNull();
     await expect(readClosingIssueReferences(graph({ nodes: [{}] }), 333)).resolves.toBeNull();
     await expect(readClosingIssueReferences(graph(undefined), 333)).resolves.toBeNull();
     await expect(readClosingIssueReferences(
       new StubApi(() => ({ errors: [{ message: "denied" }] })), 333,
     )).resolves.toBeNull();
+  });
+
+  it("keeps only same-repository native closing references", async () => {
+    const localRepo = "lukemyself-hub/SayHear";
+    const local = (number: number, nameWithOwner: unknown = localRepo) =>
+      ({ number, repository: { nameWithOwner } });
+    const foreign = (number: number) =>
+      ({ number, repository: { nameWithOwner: "other/repo" } });
+    const graph = (closing: unknown) =>
+      new StubApi((path) => {
+        if (path !== "/graphql") throw new Error(`Unexpected request ${path}`);
+        return { data: { repository: { pullRequest: { closingIssuesReferences: closing } } } };
+      });
+
+    // A foreign node with the same number must not leak into the local set.
+    await expect(readClosingIssueReferences(
+      graph({ nodes: [local(42), foreign(42), foreign(99)], pageInfo: { hasNextPage: false } }), 333,
+    )).resolves.toEqual([42]);
+    // All foreign means an empty local set, not unknown.
+    await expect(readClosingIssueReferences(
+      graph({ nodes: [foreign(42)], pageInfo: { hasNextPage: false } }), 333,
+    )).resolves.toEqual([]);
+    // Repository matching is case-insensitive.
+    await expect(readClosingIssueReferences(
+      graph({ nodes: [local(301, "LUKEMyself-HUB/sayhear")], pageInfo: { hasNextPage: false } }), 333,
+    )).resolves.toEqual([301]);
+    // Missing or malformed repository metadata is unknown, never trusted.
+    for (const node of [{ number: 301 }, { number: 301, repository: null },
+      { number: 301, repository: {} }, { number: 301, repository: { nameWithOwner: null } },
+      { number: 301, repository: { nameWithOwner: "" } },
+      { number: 301, repository: { nameWithOwner: "   " } },
+      { number: 301, repository: { nameWithOwner: "SayHear" } },
+      { number: 301, repository: { nameWithOwner: "lukemyself-hub/SayHear/extra" } },
+      { number: 301, repository: { nameWithOwner: "luke myself/SayHear" } },
+      { number: 301, repository: { nameWithOwner: 42 } }]) {
+      await expect(readClosingIssueReferences(
+        graph({ nodes: [node], pageInfo: { hasNextPage: false } }), 333,
+      )).resolves.toBeNull();
+    }
+    // A same-repository invalid number is still unknown.
+    for (const node of [local(0), local(-3), { number: "301", repository: { nameWithOwner: localRepo } }]) {
+      await expect(readClosingIssueReferences(
+        graph({ nodes: [node], pageInfo: { hasNextPage: false } }), 333,
+      )).resolves.toBeNull();
+    }
   });
 
   it.each([AGENT_IDENTITY, { id: 1, login: "unknown", type: "User" }])(
@@ -2525,7 +2573,7 @@ async function serializedControllerFixture(channel: "browser" | "legacy-root", o
     }
     if (url === "/graphql") return { data: { repository: {
       autoMergeAllowed: true, mergeCommitAllowed: true, squashMergeAllowed: false, rebaseMergeAllowed: false,
-      pullRequest: { reviewThreads: { nodes: [], pageInfo: { hasNextPage: false } }, closingIssuesReferences: { nodes: linkedIssue && !backgroundOnly ? [{ number: 42 }, ...(deliversSecondIssue ? [{ number: 43 }] : [])] : [], pageInfo: { hasNextPage: false } } },
+      pullRequest: { reviewThreads: { nodes: [], pageInfo: { hasNextPage: false } }, closingIssuesReferences: { nodes: linkedIssue && !backgroundOnly ? [{ number: 42, repository: { nameWithOwner: "lukemyself-hub/SayHear" } }, ...(deliversSecondIssue ? [{ number: 43, repository: { nameWithOwner: "lukemyself-hub/SayHear" } }] : [])] : [], pageInfo: { hasNextPage: false } } },
       issue: { blockedBy: { nodes: [], pageInfo: { hasNextPage: false } } },
     } } };
     if (url === "/repos/lukemyself-hub/SayHear") return structuredClone(repository);
@@ -3383,6 +3431,29 @@ describe("guarded serialized controller completion", () => {
     const results = await scanPullRequests(f.config, 321);
     // #42 is referenced but not delivered, so the merge completes with no
     // lifecycle writes and the Issue stays open.
+    expect(results).toEqual([expect.objectContaining({ pullRequest: 321, outcome: "merge_candidate" })]);
+    expect(f.stored()).toMatchObject({ version: 2, phase: "complete", identity: { issueNumbers: [] } });
+    expect(f.pull.merged).toBe(true);
+    expect(f.issue.state).toBe("open");
+    expect(f.writes.some((write) => write.includes("/issues/42"))).toBe(false);
+  });
+
+  it("leaves local #42 untouched when only a foreign repository natively closes #42", async () => {
+    const f = await serializedControllerFixture("browser", { backgroundOnly: true });
+    acceptCheckRunWrites(f);
+    const request = f.api.request.bind(f.api);
+    f.api.request = async <T>(path: string, options?: StubRequestOptions): Promise<T> => {
+      if (path === "/graphql" && options?.method === "POST" &&
+        requestBody<{ query: string }>(options).query.includes("closingIssuesReferences")) {
+        return { data: { repository: { pullRequest: { closingIssuesReferences: {
+          nodes: [{ number: 42, repository: { nameWithOwner: "other/repo" } }],
+          pageInfo: { hasNextPage: false } } } } } } as T;
+      }
+      return request<T>(path, options);
+    };
+    const results = await scanPullRequests(f.config, 321);
+    // The foreign native #42 must not deliver the local background-only #42,
+    // so the merge completes with no lifecycle writes and the Issue stays open.
     expect(results).toEqual([expect.objectContaining({ pullRequest: 321, outcome: "merge_candidate" })]);
     expect(f.stored()).toMatchObject({ version: 2, phase: "complete", identity: { issueNumbers: [] } });
     expect(f.pull.merged).toBe(true);
