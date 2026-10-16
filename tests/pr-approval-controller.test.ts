@@ -3483,6 +3483,56 @@ describe("guarded serialized controller completion", () => {
     expect(f.pull.merged).toBe(true);
   });
 
+  it("migrates the App's own approve_deferred to approve under Luke's valid final decision", async () => {
+    const f = await serializedControllerFixture("browser");
+    acceptCheckRunWrites(f);
+    // The App posted approve_deferred for this exact identity before Luke's
+    // valid final-decision approval made the gate a plain merge_candidate.
+    const prior = f.reviews.find((review) => review.id === 20);
+    if (!prior) throw new Error("App review missing");
+    prior.body = `<!-- sayhear-pr-auto-approval-review:v2 pr=321 head=${HEAD_SHA} base=${BASE_SHA} requirement=${f.receipt.identity.requirementDigest} outcome=approve_deferred -->`;
+    const posted: string[] = [];
+    const request = f.api.request.bind(f.api);
+    f.api.request = async <T>(path: string, options?: StubRequestOptions): Promise<T> => {
+      if (options?.method === "POST" && path.endsWith("/pulls/321/reviews")) {
+        const body = requestBody<{ event: string; body: string; commit_id: string }>(options);
+        posted.push(body.event);
+        const review = { id: 21, state: body.event === "APPROVE" ? "APPROVED" : "CHANGES_REQUESTED", commit_id: body.commit_id,
+          body: body.body, user: { id: REVIEW_BOT_ACTOR_ID, login: "sayhear-pr-review-gate[bot]" } };
+        f.reviews.push(review);
+        return structuredClone(review) as T;
+      }
+      return request<T>(path, options);
+    };
+    const results = await scanPullRequests(f.config, 321);
+    expect(posted).toEqual(["APPROVE"]);
+    expect(results).toEqual([expect.objectContaining({ pullRequest: 321, outcome: "merge_candidate" })]);
+    expect(f.pull.merged).toBe(true);
+    expect(f.issue).toMatchObject({ state: "closed", labels: [] });
+    expect(f.writes.filter((write) => write.includes("/pulls/321/merge"))).toHaveLength(1);
+  });
+
+  it("does not migrate approve_deferred to approve without Luke's valid final decision", async () => {
+    const f = await serializedControllerFixture("legacy-root");
+    acceptCheckRunWrites(f);
+    const prior = f.reviews.find((review) => review.id === 20);
+    if (!prior) throw new Error("App review missing");
+    prior.body = `<!-- sayhear-pr-auto-approval-review:v2 pr=321 head=${HEAD_SHA} base=${BASE_SHA} requirement=${f.receipt.identity.requirementDigest} outcome=approve_deferred -->`;
+    const posted: string[] = [];
+    const request = f.api.request.bind(f.api);
+    f.api.request = async <T>(path: string, options?: StubRequestOptions): Promise<T> => {
+      if (options?.method === "POST" && path.endsWith("/pulls/321/reviews")) {
+        posted.push(path);
+      }
+      return request<T>(path, options);
+    };
+    const results = await scanPullRequests(f.config, 321);
+    expect(results).toEqual([expect.objectContaining({ pullRequest: 321, outcome: "blocked" })]);
+    expect(posted).toEqual([]);
+    expect(f.pull.merged).toBe(false);
+    expect(f.writes.some((write) => write.includes("/pulls/321/merge"))).toBe(false);
+  });
+
   it("never lets a final decision override a pause in a linked Issue title", async () => {
     const f = await serializedControllerFixture("browser", { issueTitle: "暂停自动审批: controller safety repair" });
     acceptCheckRunWrites(f);

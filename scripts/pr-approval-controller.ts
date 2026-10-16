@@ -42,6 +42,7 @@ import { pathToFileURL } from "node:url";
 import {
   evaluatePrReviewGate,
   HUMAN_FINAL_DECISION_VERSION,
+  hasHumanFinalDecision,
   type HumanFinalDecisionBinding,
   integrationModeOf,
   PR_REVIEW_GATE_CHECK_NAME,
@@ -2832,7 +2833,7 @@ function evaluateSnapshot(
   config: ControllerConfig,
   snapshot: Snapshot,
   report: ModelReviewReport,
-): Readonly<{ input: PrReviewGateInput; gate: PrReviewGateReport }> {
+): Readonly<{ input: PrReviewGateInput; gate: PrReviewGateReport; manualRoute: boolean }> {
   const input = parsePrReviewGateInput(
     createModelReviewInput(config, snapshot, report),
   );
@@ -2860,7 +2861,7 @@ function evaluateSnapshot(
     humanApprovalChannel: snapshot.humanBinding.channel,
     ...(humanFinalDecision ? { humanFinalDecision } : {}),
   };
-  return { input, gate: evaluatePrReviewGate(input, policy) };
+  return { input, gate: evaluatePrReviewGate(input, policy), manualRoute: hasHumanFinalDecision(input, policy) };
 }
 
 function reviewPacket(
@@ -3543,6 +3544,7 @@ async function submitPullRequestReview(
   report: ModelReviewReport,
   gateOutcome: PrReviewGateReport["outcome"],
   deferred: PrReviewGateReport["deferredEvidence"],
+  options: Readonly<{ manualRoute?: boolean }> = {},
 ): Promise<GitHubReview> {
   const existing = await findExistingAppReview(
     config,
@@ -3559,11 +3561,17 @@ async function submitPullRequestReview(
     if (existingOutcome === desired) return existing;
     // The App may supersede its own earlier request_changes with an approval
     // once the gate reaches merge_candidate: Luke's final decision can flip
-    // the outcome without changing the v5 requirement digest. Completion still
+    // the outcome without changing the v5 requirement digest. It may also
+    // migrate its own earlier approve_deferred to a plain approve, but only
+    // under the live validated manual route: the current snapshot proved
+    // Luke's final decision covers this exact head and requirement, so the
+    // deferred pre-merge checks no longer apply. Completion still
     // rejects a CHANGES_REQUESTED posted after the recorded approval, so the
     // direction stays one-way and a maintainer conflict still throws below.
     if ((desired === "approve" || desired === "approve_deferred") && existingOutcome === "request_changes") {
       // Fall through to post the new approval review.
+    } else if (desired === "approve" && existingOutcome === "approve_deferred" && options.manualRoute === true) {
+      // Fall through to post the migrated plain approval review.
     } else {
       throw new Error(
         "This head already has a different review from the App; a maintainer must resolve it.",
@@ -4803,7 +4811,7 @@ export async function reportReviewResult(
   if (await refreshStaleIntegration(config, snapshot, { rebuildMergeRef: true })) {
     return { outcome: "awaiting_verification", message: "Waiting for current-main integration Validate; no Issue handoff was created." };
   }
-  const { gate } = evaluateSnapshot(config, snapshot, report);
+  const { gate, manualRoute } = evaluateSnapshot(config, snapshot, report);
   await upsertCheckRun(config, snapshot, report, gate);
 
   if (gate.reasons.some((reason) => reason.code === "pull_request_conflict")) {
@@ -4863,6 +4871,7 @@ export async function reportReviewResult(
     report,
     gate.outcome,
     gate.deferredEvidence,
+    { manualRoute },
   );
   if (
     approval.state !== "APPROVED" ||
