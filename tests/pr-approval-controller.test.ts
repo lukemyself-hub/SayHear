@@ -38,6 +38,7 @@ import {
   matchHumanReviewAuthorization,
   isTrustedWorkflowVersion,
   isVercelDeploymentStatus,
+  digestDiscussion,
   isReviewStillPending,
   parseModelReviewReport,
   parsePauseState,
@@ -1005,6 +1006,23 @@ describe("PR approval controller", () => {
     expect(isVercelDeploymentStatus({ ...comment, performed_via_github_app: { id: 123 } })).toBe(false);
     expect(isVercelDeploymentStatus({ ...comment, body: "Change the product requirement" })).toBe(false);
     expect(isVercelDeploymentStatus({ ...comment, performed_via_github_app: null })).toBe(false);
+  });
+  it("keeps the requirement digest stable across non-requirement comment bytes", () => {
+    const human: GitHubComment = { id: 1, body: "Requirement detail", created_at: "t1",
+      updated_at: "t1", user: { id: 777, login: "someone", type: "User" } };
+    const base = digestDiscussion([human], [], "review-exclusive-v5");
+    expect(digestDiscussion([{ ...human, created_at: "t2", updated_at: "t3" }], [], "review-exclusive-v5")).toBe(base);
+    const agent: GitHubComment = { id: 2, body: "handling record", created_at: "t1", updated_at: "t1", user: { ...AGENT_IDENTITY } };
+    const bot: GitHubComment = { id: 3, body: "bot output", created_at: "t1", updated_at: "t1",
+      user: { id: 999, login: "some-app[bot]", type: "Bot" } };
+    expect(digestDiscussion([human, agent, bot], [], "review-exclusive-v5")).toBe(base);
+    expect(digestDiscussion([human, { ...agent, body: "edited" }, { ...bot, body: "edited" }], [], "review-exclusive-v5")).toBe(base);
+    expect(digestDiscussion([{ ...human, body: "Changed requirement" }], [], "review-exclusive-v5")).not.toBe(base);
+    const luke: GitHubComment = { id: 4, body: "LGTM", created_at: "t1", updated_at: "t1", user: { ...LUKE_IDENTITY } };
+    expect(digestDiscussion([human, luke], [], "review-exclusive-v5")).not.toBe(base);
+    // The gate's requirement digest is a pure function of the discussion digest, so the controller and gate agree.
+    const gateDigest = (discussionDigest: string) => requirementDigest([], { number: 1, title: "t", body: "b", updatedAt: "t1", discussionDigest });
+    expect(gateDigest(digestDiscussion([human, agent, bot], [], "review-exclusive-v5"))).toBe(gateDigest(base));
   });
   it("binds protected human authorization to a complete exact diff and requirement", () => {
     const raw = { pullRequestNumber: 311, approvedHeadSha: HEAD_SHA,

@@ -921,6 +921,14 @@ export function isVercelDeploymentStatus(comment: GitHubComment): boolean {
     (comment.body ?? "").startsWith("[vc]: #");
 }
 
+// Comments from the coordinator identity and from any bot (Vercel, the App, other
+// integrations) are status or handling records, not requirement text. Posting one
+// must not move the requirement digest, or approval would be revoked and a fresh
+// review started by the record that reports the previous one.
+export function isNonRequirementComment(comment: GitHubComment): boolean {
+  return comment.user.id === AGENT_IDENTITY.id || comment.user.type === "Bot";
+}
+
 export function digestDiscussion(
   comments: readonly GitHubComment[],
   reviews: readonly GitHubReview[],
@@ -928,12 +936,10 @@ export function digestDiscussion(
 ): string {
   const includedReviews = projection === "review-exclusive-v5" ? [] : reviews;
   const entries = [
-    ...comments.map((comment) => ({
+    ...comments.filter((comment) => !isNonRequirementComment(comment)).map((comment) => ({
       id: comment.id,
       actor: comment.user.id,
       body: comment.body ?? "",
-      createdAt: comment.created_at,
-      updatedAt: comment.updated_at,
     })),
     ...includedReviews.map((review) => ({
       id: review.id,
