@@ -34,11 +34,13 @@ v11 保留在已签发收据的恢复允许列表中。候选不等于安装，�
 - 最新 main 组合证明：实际合入绑定通过验证的 PR 与 main 组合；main 再变化时重新
   验证，不沿用旧组合成功；旧 CI 成功不用于新结果。每次发出合入前，完成记录写入
   已测 merge ref 的 tree（`testedTreeSha`）；确认合入后实际合入提交的 tree 必须相同。
-  不一致记为 `merged_tree_mismatch`，未经本控制器发出、无法证明的合入记为
-  `merged_tree_unproven`，两者都进入 `needs_attention`，不关闭 Issue，并阻断仓库内
+  不一致记为 `merged_tree_mismatch`；已合入但完成记录缺少 `testedTreeSha`、无法证明
+  合入树时记为 `merged_tree_unproven`，这包括旧构建在该字段引入前写入的意图，不只
+  是从未发出的合入。两者都进入 `needs_attention`，不关闭 Issue，并阻断仓库内
   后续自动合入，等待人工处理。旧策略签名的意图按原语义恢复。
-- 人工通路刷新组合 CI：有 final-decision 回执时，`ongoing`、分诊标签和依赖不再挡住
-  集成刷新；显式暂停、Issue 暂停与关闭声明歧义仍会挡住。
+- 人工通路刷新组合 CI：final-decision 回执覆盖实时需求范围时，`ongoing`、分诊标签
+  和依赖不再挡住集成刷新；范围未经重新确认时仍按自动通路检查，显式暂停、Issue
+  暂停与关闭声明歧义仍会挡住。
 - 有界 OpenCode 修复：Codex 协调 OpenCode V2 implementation / code-review worker，
   同一 PR 单一写入者，独立工作树与明确范围，修复者不自批；implementation 完成声明
   须经实际 diff 与验证结果核验；review 每轮独立新会话；最多三轮自动整改，轮次跨
