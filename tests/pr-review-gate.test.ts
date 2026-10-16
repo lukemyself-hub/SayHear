@@ -20,6 +20,7 @@ import {
   hasHumanFinalDecision,
   integrationModeOf,
   parsePrReviewGateInput,
+  protectedReviewPaths,
   requirementDigest,
   parseIssueClosureExclusions,
   closingKeywordIssueNumbers,
@@ -121,6 +122,7 @@ type InputOverrides = Omit<
   issue?: Omit<Partial<PrReviewGateInput["issues"][number]>, "pause"> & {
     pause?: Partial<PrReviewGateInput["issues"][number]["pause"]>;
   };
+  providerContext?: Partial<NonNullable<PrReviewGateInput["providerContext"]>>;
   review?: Omit<
     Partial<PrReviewGateInput["review"]>,
     "capability" | "riskFlags"
@@ -133,6 +135,9 @@ type InputOverrides = Omit<
     | Partial<NonNullable<PrReviewGateInput["branchProtection"]>>;
   runtime?: Partial<PrReviewGateInput["runtime"]>;
 };
+
+const SYNTHETIC_DIFF_DIGEST = "9".repeat(64);
+const SYNTHETIC_SCOPE_CONTRACT = "docs/contracts/server-fix.md";
 
 function input(
   overrides: InputOverrides = {},
@@ -163,6 +168,12 @@ function input(
       defaultBranch: "main",
       defaultBranchSha: BASE_SHA,
       allowAutoMerge: true,
+    },
+    providerContext: {
+      headSha: HEAD_SHA,
+      baseSha: BASE_SHA,
+      diffDigest: SYNTHETIC_DIFF_DIGEST,
+      diffComplete: true,
     },
     pullRequest: {
       number: 321,
@@ -220,6 +231,40 @@ function input(
         destructiveMigration: false,
         productionFeatureEnablement: false,
       },
+      providerBehavior: {
+        headSha: HEAD_SHA,
+        baseSha: BASE_SHA,
+        diffDigest: SYNTHETIC_DIFF_DIGEST,
+        verdict: "unaffected",
+        rationale: "The synthetic server change keeps provider routing and effective configuration unchanged.",
+        evidence: [
+          {
+            file: "packages/application/src/server/fix.ts",
+            line: 12,
+            before: "return staleRecord;",
+            after: "return currentRecord;",
+          },
+        ],
+        missingEvidence: [],
+      },
+      behaviorScope: {
+        headSha: HEAD_SHA,
+        baseSha: BASE_SHA,
+        diffDigest: SYNTHETIC_DIFF_DIGEST,
+        verdict: "in-scope",
+        runtimeImpact: "changed",
+        rationale: "The synthetic server change stays inside the existing retry contract.",
+        evidence: [
+          {
+            file: "packages/application/src/server/fix.ts",
+            line: 12,
+            before: "return staleRecord;",
+            after: "return currentRecord;",
+          },
+        ],
+        contractRefs: [SYNTHETIC_SCOPE_CONTRACT],
+        missingEvidence: [],
+      },
       findings: [],
     },
     evidence,
@@ -244,10 +289,63 @@ function input(
       ordinaryMergeTriggersProduction: false,
     },
   } satisfies PrReviewGateInput;
+  const finalHeadSha = overrides.pullRequest?.headSha ?? base.pullRequest.headSha;
+  const finalBaseSha = overrides.pullRequest?.baseSha ?? base.pullRequest.baseSha;
+  const finalDefaultBranchSha = overrides.repository?.defaultBranchSha ?? base.repository.defaultBranchSha;
+  const finalIntegrationMode = overrides.runtime?.integrationMode ??
+    (base.runtime as { integrationMode?: PrReviewGateInput["runtime"]["integrationMode"] }).integrationMode;
+  const expectedProviderBase = finalIntegrationMode === "serialized-merge"
+    ? finalDefaultBranchSha
+    : finalBaseSha;
+  const finalChangedFiles = overrides.pullRequest?.changedFiles ?? base.pullRequest.changedFiles;
+  const finalDeclaredImpacts = overrides.review?.declaredImpacts ?? base.review.declaredImpacts;
+  const scopeObservationFor = (
+    path: string,
+    status: "added" | "modified" | "removed" | "renamed" | "copied",
+  ): { file: string; line: number; before: string | null; after: string | null } => {
+    if (status === "added") return { file: path, line: 1, before: null, after: `evidence for ${path}` };
+    if (status === "removed") return { file: path, line: 1, before: `evidence for ${path}`, after: null };
+    if (status === "renamed" || status === "copied") {
+      return { file: path, line: 1, before: `before ${path}`, after: `after ${path}` };
+    }
+    return { file: path, line: 12, before: `before ${path}`, after: `after ${path}` };
+  };
+  const defaultScopeEvidence = finalChangedFiles.map(({ path, status }) =>
+    scopeObservationFor(path, status));
+  const defaultProviderBehavior = {
+    ...base.review.providerBehavior!,
+    headSha: finalHeadSha,
+    baseSha: expectedProviderBase,
+    diffDigest: overrides.providerContext?.diffDigest ?? base.providerContext.diffDigest,
+    ...(finalDeclaredImpacts.includes("provider-migration")
+      ? {
+          verdict: "affected" as const,
+          rationale: "The bound review confirms the provider behavior change on the changed paths.",
+          missingEvidence: [],
+        }
+      : {}),
+    evidence: defaultScopeEvidence.map((entry) => ({ ...entry })),
+  };
+  const defaultBehaviorScope = {
+    ...base.review.behaviorScope!,
+    headSha: finalHeadSha,
+    baseSha: expectedProviderBase,
+    diffDigest: overrides.providerContext?.diffDigest ?? base.providerContext.diffDigest,
+    runtimeImpact: "none" as const,
+    evidence: defaultScopeEvidence.map((entry) => ({ ...entry })),
+  };
+  const providerContext = {
+    headSha: finalHeadSha,
+    baseSha: expectedProviderBase,
+    diffDigest: SYNTHETIC_DIFF_DIGEST,
+    diffComplete: true,
+    ...overrides.providerContext,
+  };
   return {
     ...base,
     ...overrides,
     repository: { ...base.repository, ...overrides.repository },
+    providerContext,
     pullRequest: { ...base.pullRequest, ...overrides.pullRequest },
     issues: overrides.issues ?? [{
       ...base.issues[0]!,
@@ -257,6 +355,8 @@ function input(
     review: {
       ...base.review,
       ...overrides.review,
+      providerBehavior: overrides.review?.providerBehavior ?? defaultProviderBehavior,
+      behaviorScope: overrides.review?.behaviorScope ?? defaultBehaviorScope,
       capability: {
         ...base.review.capability,
         ...overrides.review?.capability,
@@ -353,18 +453,32 @@ describe("PR review gate", () => {
       })),
       { path: protectedPath, status: "modified" as const },
     ];
-    const report = evaluatePrReviewGate(input({
+    // Scope evidence covers only the offline paths, so the new protected path
+    // still needs a human even though the rest of the diff is located.
+    const candidate = input({
       pullRequest: { changedFiles },
       review: { declaredImpacts: [] },
       evidence: FIXED_PR_CI_BASELINE.map((id) => makeEvidence(id)),
-    }), {
+    });
+    const uncovered = {
+      ...candidate.review.behaviorScope!,
+      evidence: PR_332_OFFLINE_PATHS.map((path) => ({
+        file: path,
+        line: 12,
+        before: `before ${path}`,
+        after: `after ${path}`,
+      })),
+    };
+    const report = evaluatePrReviewGate({
+      ...candidate,
+      review: { ...candidate.review, behaviorScope: uncovered },
+    }, {
       ...policy,
       humanApprovedPaths: [],
       humanApprovedNoRuntimeImpact: true,
     });
 
     expect(report.outcome).toBe("human_decision");
-    expect(report.reasons[0]?.code).toBe("human_review_required");
   });
 
   it("requires normal targeted evidence when a bound no-runtime diff also changes runtime code", () => {
@@ -445,9 +559,19 @@ describe("PR review gate", () => {
     const changedFiles = [{ path, status: "modified" as const }];
     expect(evaluatePrReviewGate(input({ pullRequest: { changedFiles } }), approved).outcome)
       .toBe("merge_candidate");
-    expect(evaluatePrReviewGate(input({ pullRequest: { changedFiles: [
+    // The extra path is neither human-approved nor scope-covered, so it still
+    // needs a human.
+    const extended = input({ pullRequest: { changedFiles: [
       ...changedFiles, { path: "docs/adr/another.md", status: "modified" },
-    ] } }), approved).outcome).toBe("human_decision");
+    ] } });
+    const narrowedScope = {
+      ...extended.review.behaviorScope!,
+      evidence: [{ file: path, line: 12, before: `before ${path}`, after: `after ${path}` }],
+    };
+    expect(evaluatePrReviewGate({
+      ...extended,
+      review: { ...extended.review, behaviorScope: narrowedScope },
+    }, approved).outcome).toBe("human_decision");
     expect(evaluatePrReviewGate(input({ pullRequest: { changedFiles },
       review: { riskFlags: { privacyBoundaryChanged: true } } }), approved).outcome)
       .toBe("human_decision");
@@ -1306,17 +1430,26 @@ describe("PR review gate", () => {
     "docs/product/19-privacy-and-trust.md",
     "docs/adr/0151-example.md",
   ])("routes changes to protected policy file %s to a human", (path) => {
+    // Scope evidence does not cover the new protected path, so the gate still
+    // sends it to a human (scope gate first, then the protected-path rule).
+    const candidate = input({
+      pullRequest: {
+        changedFiles: [{ path, status: "modified" }],
+      },
+    });
+    const uncovered = {
+      ...candidate.review.behaviorScope!,
+      evidence: [],
+    };
     const report = evaluatePrReviewGate(
-      input({
-        pullRequest: {
-          changedFiles: [{ path, status: "modified" }],
-        },
-      }),
+      {
+        ...candidate,
+        review: { ...candidate.review, behaviorScope: uncovered },
+      },
       policy,
     );
 
     expect(report.outcome).toBe("human_decision");
-    expect(report.reasons[0]?.code).toBe("human_review_required");
   });
 
   it("routes a removed test file to a human", () => {
@@ -1581,15 +1714,26 @@ describe("PR review gate", () => {
     "requires trusted old-schema compatibility evidence for %s",
     (directory) => {
       const candidate = migrationInput();
+      const changedPath = `packages/data/${directory}/0099_add_column.sql`;
+      const reboundScope = {
+        ...candidate.review.behaviorScope!,
+        evidence: [{
+          file: changedPath,
+          line: 1,
+          before: null,
+          after: `evidence for ${changedPath}`,
+        }],
+      };
       const report = evaluatePrReviewGate({
         ...candidate,
         pullRequest: {
           ...candidate.pullRequest,
           changedFiles: [{
-            path: `packages/data/${directory}/0099_add_column.sql`,
+            path: changedPath,
             status: "added",
           }],
         },
+        review: { ...candidate.review, behaviorScope: reboundScope },
         evidence: candidate.evidence.filter(
           (entry) => entry.checkId !== migrationCheckId,
         ),
@@ -2365,5 +2509,246 @@ describe("PR review gate", () => {
         policy,
       ),
     ).toBe(false);
+  });
+
+  it("selects no Provider checks from a bare declaration without bound affected evidence", () => {
+    // A provider-named file plus a bare provider-migration declaration is
+    // advisory only: without a bound affected assessment the planner must not
+    // select Provider checks.
+    const candidate = input({
+      pullRequest: {
+        changedFiles: [{ path: "packages/ai/src/provider.ts", status: "modified" }],
+      },
+      review: { declaredImpacts: ["provider-migration"] },
+    });
+    const declaredOnly = {
+      ...candidate,
+      review: {
+        ...candidate.review,
+        providerBehavior: {
+          ...candidate.review.providerBehavior!,
+          verdict: "unaffected" as const,
+          rationale: "Only surrounding wiring changed; no provider behavior changed.",
+        },
+      },
+    };
+    const report = evaluatePrReviewGate(declaredOnly, policy);
+    expect(report.outcome).not.toBe("merge_candidate_with_deferrals");
+    expect(report.requiredEvidenceIds).not.toContain("provider:effective-config-diff");
+    expect(report.requiredEvidenceIds).not.toContain("provider:affected-role-calls");
+    expect(report.requiredEvidenceIds).not.toContain("provider:privacy-checks");
+  });
+
+  it("routes an ordinary-path permission expansion to a human", () => {
+    const changedFiles = [{ path: "packages/application/src/server/fix.ts", status: "modified" as const }];
+    const candidate = input({ pullRequest: { changedFiles } });
+    const expansion = {
+      ...candidate.review.behaviorScope!,
+      verdict: "needs-human" as const,
+      runtimeImpact: "changed" as const,
+      rationale: "Reviewer confirms a permission expansion beyond the existing contract.",
+    };
+    const report = evaluatePrReviewGate({
+      ...candidate,
+      review: { ...candidate.review, behaviorScope: expansion },
+    }, policy);
+
+    expect(report.outcome).toBe("human_decision");
+    expect(report.reasons[0]?.code).toBe("behavior_scope_needs_human");
+  });
+
+  it("allows a protected controller repair covered by positive scope evidence", () => {
+    const path = "scripts/pr-approval-controller.ts";
+    const approvedPathsBefore = [...(policy.humanApprovedPaths ?? [])];
+    const candidate = input({
+      pullRequest: { changedFiles: [{ path, status: "modified" }] },
+      review: { declaredImpacts: [] },
+    });
+    const report = evaluatePrReviewGate(candidate, policy);
+
+    expect(report.outcome).toBe("merge_candidate");
+    expect(policy.humanApprovedPaths ?? []).toEqual(approvedPathsBefore);
+  });
+
+  it("routes policy and risk changes to a human", () => {
+    const changedFiles = [{ path: "packages/application/src/server/fix.ts", status: "modified" as const }];
+    expect(evaluatePrReviewGate(input({
+      pullRequest: { changedFiles },
+      review: { capability: { newCapabilityEnabled: true } },
+    }), policy).outcome).toBe("human_decision");
+    expect(evaluatePrReviewGate(input({
+      pullRequest: { changedFiles },
+      review: { riskFlags: { authorizationBoundaryChanged: true } },
+    }), policy).outcome).toBe("human_decision");
+  });
+
+  it("fails closed on missing, stale, and incomplete behavior evidence", () => {
+    const changedFiles = [{ path: "packages/application/src/server/fix.ts", status: "modified" as const }];
+    const candidate = input({ pullRequest: { changedFiles } });
+    const { behaviorScope: _dropped, ...reviewWithoutScope } = candidate.review;
+    const { providerContext: _droppedContext, ...candidateWithoutContext } = candidate;
+    expect(evaluatePrReviewGate({
+      ...candidateWithoutContext,
+      review: reviewWithoutScope,
+    }, policy).outcome).toBe("awaiting_verification");
+
+    const stale = {
+      ...candidate.review.behaviorScope!,
+      headSha: "f".repeat(40),
+    };
+    expect(evaluatePrReviewGate({
+      ...candidate,
+      review: { ...candidate.review, behaviorScope: stale },
+    }, policy).reasons[0]?.code).toBe("behavior_scope_stale");
+
+    const incomplete = {
+      ...candidate.review.behaviorScope!,
+      verdict: "insufficient-info" as const,
+      runtimeImpact: "unknown" as const,
+      evidence: [],
+      contractRefs: [],
+      missingEvidence: ["remaining-hunks"],
+    };
+    const incompleteReport = evaluatePrReviewGate({
+      ...candidate,
+      review: { ...candidate.review, behaviorScope: incomplete },
+    }, policy);
+    expect(incompleteReport.outcome).toBe("human_decision");
+    expect(incompleteReport.reasons[0]?.code).toBe("behavior_scope_needs_human");
+
+    const { providerBehavior: _droppedProvider, ...reviewWithoutProvider } = candidate.review;
+    expect(evaluatePrReviewGate({
+      ...candidate,
+      review: reviewWithoutProvider,
+    }, policy).reasons[0]?.code).toBe("provider_behavior_unknown");
+  });
+
+  it("does not let owner tooling bypass an unknown Provider judgment", () => {
+    const changedFiles = [
+      ...PR_332_OFFLINE_PATHS.map((path) => ({ path, status: "modified" as const })),
+      ...PR_332_APPROVED_TOOLING_PATHS.map((path) => ({ path, status: "modified" as const })),
+    ];
+    const candidate = input({
+      pullRequest: { changedFiles },
+      review: { declaredImpacts: [] },
+      evidence: FIXED_PR_CI_BASELINE.map((id) => makeEvidence(id)),
+    });
+    const { providerBehavior: _dropped, ...reviewWithoutProvider } = candidate.review;
+    const report = evaluatePrReviewGate({
+      ...candidate,
+      review: reviewWithoutProvider,
+    }, {
+      ...policy,
+      humanApprovedPaths: [...PR_332_APPROVED_TOOLING_PATHS],
+      humanApprovedNoRuntimeImpact: true,
+    });
+
+    expect(report.outcome).toBe("awaiting_verification");
+    expect(report.reasons[0]?.code).toBe("provider_behavior_unknown");
+  });
+
+  it("keeps a revoked automatic route revoked despite fresh positive scope", () => {
+    const report = evaluatePrReviewGate(input(), {
+      ...policy,
+      humanDecisionRequired: true,
+    });
+
+    expect(report.outcome).toBe("human_decision");
+    expect(report.reasons[0]?.code).toBe("human_decision_required");
+  });
+
+  it("does not treat a COMMENTED review as this gate's human decision", () => {
+    // COMMENTED reviews carry no final decision; the gate must not mint one
+    // from them. The controller resolves COMMENTED ordering later.
+    const candidate = input({
+      pullRequest: { externalReviewState: "needs-human" },
+    });
+    const report = evaluatePrReviewGate(candidate, policy);
+
+    expect(report.outcome).toBe("human_decision");
+    expect(report.reasons[0]?.code).toBe("human_review_required");
+  });
+
+  it("allows a valid manual unknown assessment but keeps hard CI blocking", () => {
+    const { candidate, bound } = manualSetup({
+      review: {
+        providerBehavior: {
+          headSha: HEAD_SHA,
+          baseSha: BASE_SHA,
+          diffDigest: SYNTHETIC_DIFF_DIGEST,
+          verdict: "unknown",
+          rationale: "The reviewer could not rule out a provider effect from the visible hunks.",
+          evidence: [],
+          missingEvidence: ["remaining-hunks"],
+        },
+      },
+    });
+    expect(evaluatePrReviewGate(candidate, bound).outcome).toBe("merge_candidate");
+    const failedFixed = {
+      ...candidate,
+      evidence: candidate.evidence.map((entry, index) =>
+        index === 0 && entry.kind !== "deferred-before-merge"
+          ? { ...entry, result: "failed" as const }
+          : entry),
+    };
+    expect(evaluatePrReviewGate(failedFixed, bound).outcome).toBe("awaiting_verification");
+  });
+
+  it("fails closed when an identity override leaves stale bound evidence", () => {
+    const candidate = input();
+    const staleHead = {
+      ...candidate,
+      pullRequest: { ...candidate.pullRequest, headSha: "f".repeat(40) },
+    };
+    expect(evaluatePrReviewGate(staleHead, policy).reasons[0]?.code).toBe("stale_review");
+
+    const reboundDigest = "8".repeat(64);
+    const rebound = {
+      ...candidate,
+      providerContext: { ...candidate.providerContext!, diffDigest: reboundDigest },
+      review: {
+        ...candidate.review,
+        providerBehavior: { ...candidate.review.providerBehavior!, diffDigest: reboundDigest },
+        behaviorScope: { ...candidate.review.behaviorScope!, diffDigest: reboundDigest },
+      },
+    };
+    expect(evaluatePrReviewGate(rebound, policy).outcome).toBe("merge_candidate");
+  });
+
+  it("keeps an intentional main-forward passing on the manual route", () => {
+    const { candidate, bound } = manualSetup({
+      repository: { defaultBranchSha: "f".repeat(40) },
+      pullRequest: { mergeable: true, mergeableState: "behind" },
+      branchProtection: { requiresUpToDate: false },
+      runtime: {
+        integrationMode: "serialized-merge",
+        mainWriterGuard: APP_ONLY_MAIN_WRITER_GUARD,
+      },
+    });
+    expect(evaluatePrReviewGate(candidate, bound).outcome).toBe("merge_candidate");
+  });
+
+  it("parses legacy snapshots without the new evidence fields", () => {
+    const candidate = input();
+    const { providerBehavior: _legacyProvider, ...reviewWithoutNew } = candidate.review;
+    const { behaviorScope: _legacyScope, ...legacyReview } = reviewWithoutNew;
+    const { providerContext: _legacyContext, ...candidateWithoutNew } = candidate;
+    const legacy = JSON.parse(JSON.stringify({
+      ...candidateWithoutNew,
+      review: legacyReview,
+    })) as unknown;
+    const parsed = parsePrReviewGateInput(legacy);
+
+    expect(parsed.providerContext).toBeUndefined();
+    expect(parsed.review.providerBehavior).toBeUndefined();
+    expect(parsed.review.behaviorScope).toBeUndefined();
+    // Legacy absence fails closed at the first missing judgment (scope), and
+    // the provider judgment blocks right after once scope is bound.
+    expect(evaluatePrReviewGate(parsed, policy).reasons[0]?.code).toBe("behavior_scope_incomplete");
+    expect(evaluatePrReviewGate({
+      ...parsed,
+      review: { ...parsed.review, behaviorScope: candidate.review.behaviorScope! },
+      providerContext: candidate.providerContext!,
+    }, policy).reasons[0]?.code).toBe("provider_behavior_unknown");
   });
 });
