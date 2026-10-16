@@ -2492,14 +2492,15 @@ class ControllerBrowserStore implements BrowserApprovalStore {
   async save(value: BrowserState) { this.value = structuredClone(value); }
 }
 
-async function serializedControllerFixture(channel: "browser" | "legacy-root") {
+async function serializedControllerFixture(channel: "browser" | "legacy-root", options: Readonly<{ linkedIssue?: boolean; bodySuffix?: string }> = {}) {
+  const linkedIssue = options.linkedIssue !== false;
   const workflow = "f".repeat(40);
   const path = "scripts/pr-approval-controller.ts";
   const diff = `diff --git a/${path} b/${path}\nindex 1111111..2222222 100644\n--- a/${path}\n+++ b/${path}\n@@ -1 +1 @@\n-old\n+new\n`;
   const changedFile = { filename: path, sha: "2".repeat(40), status: "modified", additions: 1, deletions: 1 };
   const pull = {
     number: 321, node_id: "PR_321", state: "open" as "open" | "closed", merged: false, draft: false,
-    title: "Controller safety repair", body: "Fixes #42", updated_at: "2026-10-14T00:00:00Z",
+    title: "Controller safety repair", body: `${linkedIssue ? "Fixes #42" : "Tidy controller wording."}${options.bodySuffix ?? ""}`, updated_at: "2026-10-14T00:00:00Z",
     head: { sha: HEAD_SHA, repo: { id: SAYHEAR_REPOSITORY_ID } },
     base: { sha: BASE_SHA, ref: "main", repo: { id: SAYHEAR_REPOSITORY_ID } },
     user: channel === "browser" ? AGENT_IDENTITY : LUKE_IDENTITY,
@@ -2545,7 +2546,7 @@ async function serializedControllerFixture(channel: "browser" | "legacy-root") {
     }
     if (url === "/graphql") return { data: { repository: {
       autoMergeAllowed: true, mergeCommitAllowed: true, squashMergeAllowed: false, rebaseMergeAllowed: false,
-      pullRequest: { reviewThreads: { nodes: [], pageInfo: { hasNextPage: false } }, closingIssuesReferences: { nodes: [{ number: 42 }], pageInfo: { hasNextPage: false } } },
+      pullRequest: { reviewThreads: { nodes: [], pageInfo: { hasNextPage: false } }, closingIssuesReferences: { nodes: linkedIssue ? [{ number: 42 }] : [], pageInfo: { hasNextPage: false } } },
       issue: { blockedBy: { nodes: [], pageInfo: { hasNextPage: false } } },
     } } };
     if (url === "/repos/lukemyself-hub/SayHear") return structuredClone(repository);
@@ -2646,10 +2647,10 @@ async function serializedControllerFixture(channel: "browser" | "legacy-root") {
     body: `<!-- sayhear-pr-auto-approval-review:v2 pr=321 head=${HEAD_SHA} base=${BASE_SHA} requirement=${digest} outcome=approve -->` });
   // Materializing the receipt uses the same live browser binding as submission.
   const bound = await readSnapshot(activeConfig, 321);
-  const receipt: CompletionRecord = { version: 1, phase: "merge_unconfirmed", attempts: 0, nextRetryAt: 0, reason: null, mergeSha: null, mergeWriteState: "not-sent",
+  const receipt: CompletionRecord = { version: linkedIssue ? 1 : 2, phase: "merge_unconfirmed", attempts: 0, nextRetryAt: 0, reason: null, mergeSha: null, mergeWriteState: "not-sent",
     identity: { repositoryId: SAYHEAR_REPOSITORY_ID, pullRequestNumber: 321, pullRequestNodeId: "PR_321", headSha: HEAD_SHA,
       approvedBaseSha: BASE_SHA, requirementDigest: digest, baseRepositoryId: SAYHEAR_REPOSITORY_ID, baseRef: "main", botActorId: REVIEW_BOT_ACTOR_ID,
-      reviewId: 20, appId: 98765, policyVersion: PR_REVIEW_GATE_POLICY_VERSION, issueNumbers: [42], integrationMode: "serialized-merge",
+      reviewId: 20, appId: 98765, policyVersion: PR_REVIEW_GATE_POLICY_VERSION, issueNumbers: linkedIssue ? [42] : [], integrationMode: "serialized-merge",
       humanChannel: channel === "browser" ? "browser" : "app", humanReviewId: channel === "browser" ? 10 : 20,
       ...(bound.humanBinding.receipt?.challenge.context.liveness ? { humanLiveness: bound.humanBinding.receipt.challenge.context.liveness } : {}),
       epoch: bound.humanBinding.receipt?.challenge.epoch ?? null, mergeAction: "merge-now",
@@ -3293,6 +3294,45 @@ describe("guarded serialized controller completion", () => {
     expect(f.writes.some((write) => write.includes("/pulls/321/merge"))).toBe(false);
     expect(f.stored()).toBeNull();
     expect(f.browserApprovalStore.value?.receipt ?? null).toBeNull();
+  });
+
+  function acceptCheckRunWrites(f: Awaited<ReturnType<typeof serializedControllerFixture>>) {
+    const request = f.api.request.bind(f.api);
+    f.api.request = async <T>(path: string, options?: StubRequestOptions): Promise<T> => {
+      if (options?.method === "PATCH" && path.endsWith("/check-runs/9002")) return {} as T;
+      if (options?.method === "POST" && path.endsWith("/check-runs")) return { id: 9004 } as T;
+      return request<T>(path, options);
+    };
+  }
+
+  it("merges a zero-Issue PR through Luke's final decision and completes without Issue writes", async () => {
+    const f = await serializedControllerFixture("browser", { linkedIssue: false });
+    acceptCheckRunWrites(f);
+    const results = await scanPullRequests(f.config, 321);
+    expect(results).toEqual([expect.objectContaining({ pullRequest: 321, outcome: "merge_candidate" })]);
+    expect(f.stored()).toMatchObject({ version: 2, phase: "complete", identity: { issueNumbers: [] } });
+    expect(f.pull.merged).toBe(true);
+    expect(f.writes.some((write) => write.includes("/issues/42"))).toBe(false);
+  });
+
+  it("leaves a zero-Issue PR without a final decision to a human", async () => {
+    const f = await serializedControllerFixture("browser", { linkedIssue: false });
+    asLegacyBrowserApproval(f);
+    acceptCheckRunWrites(f);
+    const results = await scanPullRequests(f.config, 321);
+    // Automatic no-Issue eligibility belongs to #367; until then it waits for a human.
+    expect(results[0]?.outcome).toBe("human_decision");
+    expect(f.writes.some((write) => write.includes("/pulls/321/merge"))).toBe(false);
+  });
+
+  it("never lets a final decision override an explicit merge pause", async () => {
+    const f = await serializedControllerFixture("browser", { bodySuffix: "\n\n暂停自动审批" });
+    acceptCheckRunWrites(f);
+    expect(f.browserApprovalStore.value?.receipt?.challenge.context.liveness).toBe("final-decision-v1");
+    const results = await scanPullRequests(f.config, 321);
+    expect(results[0]?.outcome).not.toBe("merge_candidate");
+    expect(f.writes.some((write) => write.includes("/pulls/321/merge"))).toBe(false);
+    expect(f.stored()).toBeNull();
   });
 
   it("rejects a dismissed human review during guarded recovery", async () => {
