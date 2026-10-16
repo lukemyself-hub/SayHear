@@ -1,4 +1,6 @@
-import { readFile } from "node:fs/promises";
+import { readFile, mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
@@ -17,6 +19,7 @@ import {
   type ReleaseImpactKind,
   type ReleaseValidationRequest,
 } from "../scripts/daily-release-validation.ts";
+import type { ProviderResolution, ProviderReviewContext, ProviderReviewInput } from "../scripts/provider-behavior-review.ts";
 
 const repositoryRoot = new URL("../", import.meta.url);
 
@@ -43,6 +46,71 @@ const IMPACT_CHECKS: Readonly<Record<ReleaseImpactKind, readonly string[]>> = {
 
 const FULL_ACCEPTANCE_CHECK = "capability:full-acceptance";
 const FULL_PRODUCER_COMMAND = "pnpm release:g1:produce";
+
+const PROVIDER_HEAD = "a".repeat(40);
+const PROVIDER_BASE = "b".repeat(40);
+const PROVIDER_DIGEST = "c".repeat(64);
+
+function providerContext(): ProviderReviewContext {
+  return {
+    headSha: PROVIDER_HEAD,
+    baseSha: PROVIDER_BASE,
+    diffDigest: PROVIDER_DIGEST,
+    diffComplete: true,
+  };
+}
+
+function providerInput(
+  overrides: Partial<ProviderReviewInput> = {},
+): ProviderReviewInput {
+  return {
+    context: {
+      headSha: PROVIDER_HEAD,
+      baseSha: PROVIDER_BASE,
+      diffDigest: PROVIDER_DIGEST,
+      diffComplete: true,
+    },
+    assessment: {
+      headSha: PROVIDER_HEAD,
+      baseSha: PROVIDER_BASE,
+      diffDigest: PROVIDER_DIGEST,
+      verdict: "affected",
+      rationale: "The caller now routes to a different provider model.",
+      evidence: [
+        { file: "packages/app/src/caller.ts", line: 8, before: "oldCall()", after: "newProviderCall()" },
+      ],
+      missingEvidence: [],
+    },
+    ...overrides,
+  };
+}
+
+function unaffectedProviderInput(): ProviderReviewInput {
+  return {
+    context: providerContext(),
+    assessment: {
+      headSha: PROVIDER_HEAD,
+      baseSha: PROVIDER_BASE,
+      diffDigest: PROVIDER_DIGEST,
+      verdict: "unaffected",
+      rationale: "A minimal schema contract change with no provider call, routing or effective config effect.",
+      evidence: [
+        { file: "packages/ai/src/provider-migration-shim.ts", line: 3, before: "type Old = { a: string };", after: "type Old = { a: string };" },
+      ],
+      missingEvidence: [],
+    },
+  };
+}
+
+function unaffectedProviderContext(): ProviderReviewContext {
+  return providerContext();
+}
+
+function unaffectedProviderAssessment(): NonNullable<ProviderReviewInput["assessment"]> {
+  const assessment = unaffectedProviderInput().assessment;
+  if (assessment === undefined) throw new Error("unaffected provider assessment missing");
+  return assessment;
+}
 
 function request(
   overrides: Partial<ReleaseValidationRequest["change"]> = {},
@@ -99,13 +167,14 @@ describe("fixed PR CI baseline", () => {
 });
 
 describe("per-impact check selection", () => {
-  for (const [impact, expected] of Object.entries(IMPACT_CHECKS) as [
-    ReleaseImpactKind,
-    readonly string[],
-  ][]) {
+  const NON_PROVIDER_IMPACTS = (
+    Object.entries(IMPACT_CHECKS) as [ReleaseImpactKind, readonly string[]][]
+  ).filter(([impact]) => impact !== "provider-migration");
+  for (const [impact, expected] of NON_PROVIDER_IMPACTS) {
     it(`selects the targeted checks for a ${impact} change and never the full producer`, () => {
+      const provider = unaffectedProviderInput();
       const plan = planDailyReleaseValidation(
-        request({ declaredImpacts: [impact], summary: `${impact} change` }),
+        request({ declaredImpacts: [impact], summary: `${impact} change` }, { provider }),
       );
 
       const ids = selectedIds(plan);
@@ -116,6 +185,25 @@ describe("per-impact check selection", () => {
       expect(plan.producerInvocations).toEqual([]);
     });
   }
+
+  it("selects the provider checks only for a bound affected assessment and never the full producer", () => {
+    const plan = planDailyReleaseValidation(
+      request({ declaredImpacts: [], summary: "provider change", changedPaths: ["packages/app/src/caller.ts"] }, { provider: providerInput() }),
+    );
+
+    const ids = selectedIds(plan);
+    for (const id of IMPACT_CHECKS["provider-migration"]) expect(ids).toContain(id);
+    expect(plan.impact.provider.verdict).toBe("affected");
+    expect(plan.impact.effective).toContain("provider-migration");
+    for (const entry of plan.targeted) {
+      if ((IMPACT_CHECKS["provider-migration"] as readonly string[]).includes(entry.check.id)) {
+        expect(entry.source).toBe("provider-assessment");
+      }
+    }
+    expect(ids).not.toContain(FULL_ACCEPTANCE_CHECK);
+    expect(plan.fullAcceptance.required).toBe(false);
+    expect(plan.producerInvocations).toEqual([]);
+  });
 
   it("adds a boundary change's targeted check from a path hint so a narrow declaration cannot miss it", () => {
     const plan = planDailyReleaseValidation(
@@ -178,7 +266,82 @@ describe("per-impact check selection", () => {
 
     expect(impact.declared).toEqual(["ui"]);
     expect(impact.hinted).toContain("provider-migration");
-    expect(impact.effective).toContain("provider-migration");
+    expect(impact.effective).not.toContain("provider-migration");
+    expect(impact.provider.verdict).toBe("unknown");
+  });
+
+  it("treats a provider-matching filename as advisory when the bound review is unaffected", () => {
+    const impact = classifyReleaseImpact(
+      [],
+      ["packages/ai/src/provider-migration-shim.ts"],
+      unaffectedProviderInput(),
+    );
+
+    expect(impact.hinted).toContain("provider-migration");
+    expect(impact.effective).not.toContain("provider-migration");
+    expect(impact.effective).not.toContain("provider:effective-config-diff" as never);
+    expect(impact.provider.verdict).toBe("unaffected");
+    const plan = planDailyReleaseValidation(
+      request(
+        { declaredImpacts: [], changedPaths: ["packages/ai/src/provider-migration-shim.ts"] },
+        { provider: unaffectedProviderInput() },
+      ),
+    );
+    expect(selectedIds(plan)).not.toContain("provider:effective-config-diff");
+    expect(selectedIds(plan)).not.toContain("provider:affected-role-calls");
+  });
+
+  it("does not activate provider checks for an unrelated assertion in a provider-named file", () => {
+    const plan = planDailyReleaseValidation(
+      request(
+        { declaredImpacts: [], changedPaths: ["packages/ai/src/provider-migration-shim.ts"] },
+        {
+          provider: {
+            context: unaffectedProviderContext(),
+            assessment: {
+              headSha: PROVIDER_HEAD,
+              baseSha: PROVIDER_BASE,
+              diffDigest: PROVIDER_DIGEST,
+              verdict: "unaffected",
+              rationale: "Only an unrelated test assertion changed; no provider behavior changed.",
+              evidence: [
+                { file: "packages/ai/src/provider-migration-shim.ts", line: 41, before: "expect(x).toBe(1)", after: "expect(x).toBe(2)" },
+              ],
+              missingEvidence: [],
+            },
+          },
+        },
+      ),
+    );
+    expect(selectedIds(plan)).not.toContain("provider:effective-config-diff");
+    expect(selectedIds(plan)).not.toContain("provider:affected-role-calls");
+  });
+
+  it("selects provider checks for a keyword-free behavioral change bound by an affected assessment", () => {
+    const provider = providerInput({
+      assessment: {
+        headSha: PROVIDER_HEAD,
+        baseSha: PROVIDER_BASE,
+        diffDigest: PROVIDER_DIGEST,
+        verdict: "affected",
+        rationale: "The caller now selects a different execution path with new effective configuration.",
+        evidence: [
+          { file: "packages/app/src/caller.ts", line: 8, before: "oldCall()", after: null },
+        ],
+        missingEvidence: [],
+      },
+    });
+    const plan = planDailyReleaseValidation(
+      request(
+        { declaredImpacts: [], changedPaths: ["packages/app/src/caller.ts"] },
+        { provider },
+      ),
+    );
+    expect(selectedIds(plan)).toContain("provider:effective-config-diff");
+    expect(selectedIds(plan)).toContain("provider:affected-role-calls");
+    const providerEntries = plan.targeted.filter((entry) => entry.check.id.startsWith("provider:"));
+    expect(providerEntries.length).toBeGreaterThan(0);
+    for (const entry of providerEntries) expect(entry.source).toBe("provider-assessment");
   });
 });
 
@@ -265,24 +428,28 @@ describe("unknown impact is located, never escalated", () => {
       "scripts/capture-g1-role-provider-calls.ts",
       "tests/g1-capture-provider-adapters.test.ts",
     ];
-    const tools = planDailyReleaseValidation(request({ changedPaths: paths }));
+    const provider = unaffectedProviderInput();
+    const tools = planDailyReleaseValidation(request({ changedPaths: paths }, { provider }));
     expect(tools.requiresImpactLocation).toBe(false);
     expect(selectedIds(tools)).toEqual(FIXED_PR_CI_BASELINE);
-    expect(classifyReleaseImpact([], [...paths, "packages/ai/src/provider.ts"]).effective)
+    expect(classifyReleaseImpact([], [...paths, "packages/ai/src/provider.ts"], provider).effective)
+      .not.toContain("provider-migration");
+    expect(classifyReleaseImpact([], [...paths, "packages/ai/src/provider.ts"], provider).hinted)
       .toContain("provider-migration");
-    expect(classifyReleaseImpact(["provider-migration"], paths).effective)
+    expect(classifyReleaseImpact([], [...paths, "packages/app/src/caller.ts"], providerInput()).effective)
       .toContain("provider-migration");
-    expect(classifyReleaseImpact([], [...paths, "unknown/tool.ts"]).located).toBe(false);
-    expect(classifyReleaseImpact([], ["eval/unknown-provider.ts"]).effective)
-      .toContain("provider-migration");
+    expect(classifyReleaseImpact([], [...paths, "unknown/tool.ts"], provider).located).toBe(false);
+    expect(classifyReleaseImpact([], ["eval/unknown-provider.ts"], provider).effective)
+      .not.toContain("provider-migration");
   });
 
   it("asks for the impact location instead of starting the full acceptance", () => {
     const plan = planDailyReleaseValidation(
-      request({ changedPaths: ["docs/notes.md"] }),
+      request({ changedPaths: ["docs/notes.md"] }, { provider: {} }),
     );
 
     expect(plan.requiresImpactLocation).toBe(true);
+    expect(plan.impact.provider.verdict).toBe("unknown");
     expect(plan.impact.effective).toEqual([]);
     expect(plan.fullAcceptance.required).toBe(false);
     expect(selectedIds(plan)).not.toContain(FULL_ACCEPTANCE_CHECK);
@@ -302,12 +469,17 @@ describe("unknown impact is located, never escalated", () => {
       "tests/pr-review-gate.test.ts",
     ];
     const plan = planDailyReleaseValidation(request({ changedPaths: paths }));
-
-    expect(plan.requiresImpactLocation).toBe(false);
-    expect(selectedIds(plan)).toEqual(FIXED_PR_CI_BASELINE);
-    expect(classifyReleaseImpact([], [...paths, "unknown/tool.ts"]).located).toBe(false);
-    expect(classifyReleaseImpact([], [...paths, "packages/ai/src/provider.ts"]).effective)
-      .toContain("provider-migration");
+    expect(plan.impact.provider.verdict).toBe("unknown");
+    expect(plan.requiresImpactLocation).toBe(true);
+    const located = planDailyReleaseValidation(
+      request({ changedPaths: paths }, { provider: unaffectedProviderInput() }),
+    );
+    expect(located.requiresImpactLocation).toBe(false);
+    expect(selectedIds(located)).toEqual(FIXED_PR_CI_BASELINE);
+    expect(classifyReleaseImpact([], [...paths, "unknown/tool.ts"], unaffectedProviderInput()).located).toBe(false);
+    expect(classifyReleaseImpact([], [...paths, "unknown/tool.ts"], unaffectedProviderInput()).provider.verdict).toBe("unaffected");
+    expect(classifyReleaseImpact([], [...paths, "packages/ai/src/provider.ts"], unaffectedProviderInput()).effective)
+      .not.toContain("provider-migration");
   });
 });
 
@@ -324,7 +496,7 @@ describe("full capability acceptance triggers", () => {
   for (const [trigger, capability] of triggers) {
     it(`requires the 12-item producer only for ${trigger}`, () => {
       const plan = planDailyReleaseValidation(
-        request({ declaredImpacts: ["ui"] }, { capability }),
+        request({ declaredImpacts: ["ui"] }, { capability, provider: unaffectedProviderInput() }),
       );
 
       expect(plan.fullAcceptance).toEqual({ required: true, trigger });
@@ -337,7 +509,7 @@ describe("full capability acceptance triggers", () => {
     const plan = planDailyReleaseValidation(
       request(
         { declaredImpacts: ["reflection-journal"] },
-        { capability: { majorContractChange: true } },
+        { capability: { majorContractChange: true }, provider: unaffectedProviderInput() },
       ),
     );
 
@@ -351,7 +523,7 @@ describe("same-configuration UI and ordinary server commits", () => {
   for (const impact of ["ui", "server-business"] as const) {
     it(`requires no F3/Provider/hosted/Purge evidence, no pin update and no label rewrite for ${impact}`, () => {
       const plan = planDailyReleaseValidation(
-        request({ declaredImpacts: [impact], summary: `${impact} only` }),
+        request({ declaredImpacts: [impact], summary: `${impact} only` }, { provider: unaffectedProviderInput() }),
       );
 
       expect(plan.producerInvocations).toEqual([]);
@@ -373,7 +545,7 @@ describe("same-configuration UI and ordinary server commits", () => {
 describe("specialized verification behavior", () => {
   it("checks reflection lineage, idempotency and CAS/epoch/freshness without model calls", () => {
     const plan = planDailyReleaseValidation(
-      request({ declaredImpacts: ["reflection-journal"] }),
+      request({ declaredImpacts: ["reflection-journal"] }, { provider: unaffectedProviderInput() }),
     );
 
     const checks = plan.targeted.map((entry) => entry.check);
@@ -392,7 +564,7 @@ describe("specialized verification behavior", () => {
 
   it("uses small fixed synthetic prompt/budget samples with no model calls and no new hard threshold", () => {
     const plan = planDailyReleaseValidation(
-      request({ declaredImpacts: ["prompt-budget"] }),
+      request({ declaredImpacts: ["prompt-budget"] }, { provider: unaffectedProviderInput() }),
     );
 
     const samples = plan.targeted.find(
@@ -408,19 +580,19 @@ describe("specialized verification behavior", () => {
 
   it("checks owner/permission isolation and races, purge drill and provider role/privacy checks", () => {
     const permission = planDailyReleaseValidation(
-      request({ declaredImpacts: ["owner-permission"] }),
+      request({ declaredImpacts: ["owner-permission"] }, { provider: unaffectedProviderInput() }),
     );
     expect(selectedIds(permission)).toEqual(
       expect.arrayContaining(["permission:isolation", "permission:race"]),
     );
 
     const purge = planDailyReleaseValidation(
-      request({ declaredImpacts: ["purge-coverage"] }),
+      request({ declaredImpacts: ["purge-coverage"] }, { provider: unaffectedProviderInput() }),
     );
     expect(selectedIds(purge)).toContain("purge:full-restore-drill");
 
     const provider = planDailyReleaseValidation(
-      request({ declaredImpacts: ["provider-migration"] }),
+      request({ declaredImpacts: [] }, { provider: providerInput() }),
     );
     expect(selectedIds(provider)).toEqual(
       expect.arrayContaining([
@@ -437,6 +609,7 @@ describe("content identity, retention and affected-only rerun", () => {
       request(
         { declaredImpacts: ["ui"] },
         {
+          provider: unaffectedProviderInput(),
           previousArtifacts: [
             { checkId: "baseline:typecheck", contentSha256: "a".repeat(64), result: "passed" },
           ],
@@ -457,6 +630,7 @@ describe("content identity, retention and affected-only rerun", () => {
       request(
         { declaredImpacts: ["ui"] },
         {
+          provider: unaffectedProviderInput(),
           previousArtifacts: [
             {
               checkId: "ui:portal-smoke",
@@ -497,7 +671,7 @@ describe("content identity, retention and affected-only rerun", () => {
     const plan = planDailyReleaseValidation(
       request(
         { declaredImpacts: ["prompt-budget"] },
-        { effectiveConfig: { baseline, candidate } },
+        { provider: unaffectedProviderInput(), effectiveConfig: { baseline, candidate } },
       ),
     );
 
@@ -514,6 +688,7 @@ describe("summary output", () => {
       request(
         { declaredImpacts: ["ui"] },
         {
+          provider: unaffectedProviderInput(),
           previousArtifacts: [
             { checkId: "baseline:check-runtime", contentSha256: "e".repeat(64), result: "passed" },
             {
@@ -695,12 +870,12 @@ describe("promotion stage integration", () => {
 
   it("selects the promotion config report only at the promotion stage", () => {
     const acceptance = planDailyReleaseValidation(
-      request({ declaredImpacts: ["ui"] }),
+      request({ declaredImpacts: ["ui"] }, { provider: unaffectedProviderInput() }),
     );
     expect(selectedIds(acceptance)).not.toContain("promotion:effective-config-diff");
 
     const promotion = planDailyReleaseValidation({
-      ...request({ declaredImpacts: ["ui"] }),
+      ...request({ declaredImpacts: ["ui"] }, { provider: unaffectedProviderInput() }),
       releaseStage: "promotion",
     });
     expect(promotion.releaseStage).toBe("promotion");
@@ -710,7 +885,7 @@ describe("promotion stage integration", () => {
 
   it("surfaces a blocked promotion report in the plan and summary", () => {
     const plan = planDailyReleaseValidation({
-      ...request({ declaredImpacts: ["ui"] }),
+      ...request({ declaredImpacts: ["ui"] }, { provider: unaffectedProviderInput() }),
       releaseStage: "promotion",
       promotionConfig: {
         isolatedAcceptance: isolated,
@@ -731,7 +906,7 @@ describe("promotion stage integration", () => {
 
   it("reports a clean promotion when the candidate matches production", () => {
     const plan = planDailyReleaseValidation({
-      ...request({ declaredImpacts: ["ui"] }),
+      ...request({ declaredImpacts: ["ui"] }, { provider: unaffectedProviderInput() }),
       releaseStage: "promotion",
       promotionConfig: {
         isolatedAcceptance: isolated,
@@ -747,7 +922,7 @@ describe("promotion stage integration", () => {
 
   it("exits non-zero while the promotion is blocked", () => {
     const plan = planDailyReleaseValidation({
-      ...request({ declaredImpacts: ["ui"] }),
+      ...request({ declaredImpacts: ["ui"] }, { provider: unaffectedProviderInput() }),
       releaseStage: "promotion",
       promotionConfig: {
         isolatedAcceptance: isolated,
@@ -765,6 +940,7 @@ describe("promotion stage integration", () => {
       request(
         { declaredImpacts: ["prompt-budget"] },
         {
+          provider: unaffectedProviderInput(),
           effectiveConfig: {
             baseline: snapshot("a".repeat(40), "dpl_baseline", [...sharedProvider]),
             candidate: snapshot("b".repeat(40), "dpl_candidate", [
@@ -790,6 +966,84 @@ describe("promotion stage integration", () => {
   });
 });
 
+describe("provider behavior resolution", () => {
+  it("reports unknown and requires location when context or assessment is missing", () => {
+    const missing = planDailyReleaseValidation(request({ declaredImpacts: ["ui"] }));
+    expect(missing.impact.provider.verdict).toBe("unknown");
+    expect(missing.impact.provider.missingEvidence).toContain("provider-review-context");
+    expect(missing.requiresImpactLocation).toBe(true);
+
+    const noAssessment = planDailyReleaseValidation(
+      request({ declaredImpacts: ["ui"] }, { provider: { context: unaffectedProviderContext() } }),
+    );
+    expect(noAssessment.impact.provider.verdict).toBe("unknown");
+    expect(noAssessment.impact.provider.missingEvidence).toContain("provider-behavior-assessment");
+    expect(noAssessment.requiresImpactLocation).toBe(true);
+  });
+
+  it("reports unknown and requires location for stale identity or incomplete diff", () => {
+    const stale = planDailyReleaseValidation(
+      request({ declaredImpacts: ["ui"] }, {
+        provider: {
+          context: unaffectedProviderContext(),
+          assessment: { ...unaffectedProviderAssessment(), headSha: "d".repeat(40) },
+        },
+      }),
+    );
+    expect(stale.impact.provider.verdict).toBe("unknown");
+    expect(stale.impact.provider.missingEvidence).toContain("matching-head-sha");
+    expect(stale.requiresImpactLocation).toBe(true);
+
+    const incomplete = planDailyReleaseValidation(
+      request({ declaredImpacts: ["ui"] }, {
+        provider: {
+          context: { ...unaffectedProviderContext(), diffComplete: false },
+          assessment: unaffectedProviderAssessment(),
+        },
+      }),
+    );
+    expect(incomplete.impact.provider.verdict).toBe("unknown");
+    expect(incomplete.impact.provider.missingEvidence).toContain("complete-diff");
+    expect(incomplete.requiresImpactLocation).toBe(true);
+  });
+
+  it("keeps provider unknown blocking even with a capability trigger or other known effects", () => {
+    const plan = planDailyReleaseValidation(
+      request(
+        { declaredImpacts: ["ui"], changedPaths: ["apps/web/app/page.tsx"] },
+        { capability: { newCapabilityEnabled: true } },
+      ),
+    );
+    expect(plan.impact.provider.verdict).toBe("unknown");
+    expect(plan.requiresImpactLocation).toBe(true);
+    expect(plan.fullAcceptance.required).toBe(true);
+  });
+
+  it("does not let unaffected authorize an unrelated unknown file", () => {
+    const plan = planDailyReleaseValidation(
+      request(
+        { declaredImpacts: [], changedPaths: ["packages/app/src/caller.ts", "unknown/tool.ts"] },
+        { provider: unaffectedProviderInput() },
+      ),
+    );
+    expect(plan.impact.provider.verdict).toBe("unaffected");
+    expect(plan.impact.located).toBe(false);
+    expect(plan.requiresImpactLocation).toBe(true);
+    expect(selectedIds(plan)).not.toContain("provider:effective-config-diff");
+  });
+
+  it("reports the provider verdict, reason and missing evidence in the summary", () => {
+    const unknownPlan = planDailyReleaseValidation(request({ declaredImpacts: ["ui"] }));
+    expect(formatDailyReleaseValidationSummary(unknownPlan)).toContain("provider=verdict:unknown");
+    const affectedPlan = planDailyReleaseValidation(
+      request({ declaredImpacts: [] }, { provider: providerInput() }),
+    );
+    const summary = formatDailyReleaseValidationSummary(affectedPlan);
+    expect(summary).toContain("provider=verdict:affected");
+    expect(summary).toContain("The caller now routes");
+  });
+});
+
 describe("request parsing", () => {
   it("rejects an unknown request version", () => {
     expect(() =>
@@ -807,5 +1061,86 @@ describe("request parsing", () => {
         change: { summary: "x", declaredImpacts: ["magic"], changedPaths: [] },
       }),
     ).toThrow(/impact/);
+  });
+
+  it("strictly parses and preserves provider fields", () => {
+    const parsed = parseDailyReleaseValidationRequest({
+      version: DAILY_RELEASE_VALIDATION_REQUEST_VERSION,
+      change: { summary: "provider change", declaredImpacts: [], changedPaths: ["packages/app/src/caller.ts"] },
+      provider: {
+        context: {
+          headSha: PROVIDER_HEAD,
+          baseSha: PROVIDER_BASE,
+          diffDigest: PROVIDER_DIGEST,
+          diffComplete: true,
+        },
+        assessment: {
+          headSha: PROVIDER_HEAD,
+          baseSha: PROVIDER_BASE,
+          diffDigest: PROVIDER_DIGEST,
+          verdict: "affected",
+          rationale: "The caller now routes to a different provider model.",
+          evidence: [{ file: "packages/app/src/caller.ts", line: 8, before: "oldCall()", after: "newProviderCall()" }],
+          missingEvidence: [],
+        },
+      },
+    });
+    expect(parsed.provider?.context?.headSha).toBe(PROVIDER_HEAD);
+    expect(parsed.provider?.assessment?.verdict).toBe("affected");
+    const roundTripped = parseDailyReleaseValidationRequest(
+      JSON.parse(JSON.stringify(parsed)) as unknown,
+    );
+    expect(roundTripped).toEqual(parsed);
+  });
+
+  it("rejects malformed provider fields", () => {
+    expect(() =>
+      parseDailyReleaseValidationRequest({
+        version: DAILY_RELEASE_VALIDATION_REQUEST_VERSION,
+        change: { summary: "x", declaredImpacts: [], changedPaths: [] },
+        provider: { context: { headSha: "bad", baseSha: PROVIDER_BASE, diffDigest: PROVIDER_DIGEST, diffComplete: true } },
+      }),
+    ).toThrow(/headSha/);
+    expect(() =>
+      parseDailyReleaseValidationRequest({
+        version: DAILY_RELEASE_VALIDATION_REQUEST_VERSION,
+        change: { summary: "x", declaredImpacts: [], changedPaths: [] },
+        provider: { extra: true },
+      }),
+    ).toThrow(/not known/);
+  });
+
+  it("round-trips provider fields through the CLI", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "daily-release-provider-"));
+    const requestPath = join(dir, "request.json");
+    const { writeFile } = await import("node:fs/promises");
+    const raw = {
+      version: DAILY_RELEASE_VALIDATION_REQUEST_VERSION,
+      change: { summary: "provider change", declaredImpacts: [], changedPaths: ["packages/app/src/caller.ts"] },
+      provider: {
+        context: { headSha: PROVIDER_HEAD, baseSha: PROVIDER_BASE, diffDigest: PROVIDER_DIGEST, diffComplete: true },
+        assessment: {
+          headSha: PROVIDER_HEAD,
+          baseSha: PROVIDER_BASE,
+          diffDigest: PROVIDER_DIGEST,
+          verdict: "affected",
+          rationale: "The caller now routes to a different provider model.",
+          evidence: [{ file: "packages/app/src/caller.ts", line: 8, before: "oldCall()", after: "newProviderCall()" }],
+          missingEvidence: [],
+        },
+      },
+    };
+    await writeFile(requestPath, JSON.stringify(raw), "utf8");
+    const parsed = parseDailyReleaseValidationRequest(JSON.parse(JSON.stringify(raw)) as unknown);
+    const plan = planDailyReleaseValidation(parsed);
+    expect(plan.impact.provider.verdict).toBe("affected");
+    const lines: string[] = [];
+    const code = await runDailyReleaseValidation(["--request", requestPath], {
+      stdout: (line) => lines.push(line),
+    });
+    const output = lines.join("\n");
+    expect(code).toBe(0);
+    expect(output).toContain("provider=verdict:affected");
+    expect(output).toContain("provider:effective-config-diff");
   });
 });
