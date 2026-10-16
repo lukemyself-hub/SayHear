@@ -2538,7 +2538,8 @@ async function serializedControllerFixture(channel: "browser" | "legacy-root", o
       if (mainReads === 3) beforeFinalMainRead?.();
       return { object: { sha: finalMainDrift && mainReads > 2 ? "8".repeat(40) : main } };
     }
-    if (url.endsWith("/git/ref/pull/321/merge")) return { ref: "refs/pull/321/merge", object: { type: "commit", sha: pull.merge_commit_sha } };
+    // The merge ref exists even when the PR payload omits merge_commit_sha.
+    if (url.endsWith("/git/ref/pull/321/merge")) return { ref: "refs/pull/321/merge", object: { type: "commit", sha: pull.merge_commit_sha ?? MERGE_SHA } };
     if (url.includes("/git/commits/")) {
       const sha = url.split("/").at(-1) ?? "";
       return { sha, tree: { sha: trees.get(sha) ?? "e".repeat(40) },
@@ -2950,6 +2951,19 @@ describe("guarded serialized controller completion", () => {
     expect(f.writes.filter((write) => write.includes("/pulls/321/merge"))).toHaveLength(1);
   });
 
+  it("merges when the open PR omits merge_commit_sha", async () => {
+    const f = await serializedControllerFixture("browser");
+    // The pinned API version can omit the field on an open PR; the guard must
+    // use the verified merge ref instead.
+    (f.pull as { merge_commit_sha: string | null }).merge_commit_sha = null;
+    const guarded = await guardImmediateMerge(f.config, f.receipt.identity);
+    expect(guarded.mergeSha).toBe(MERGE_SHA);
+    f.mergeAs("8".repeat(40));
+    const completed = await recoverControllerCompletion(f.config, f.receipt, f.clock);
+    expect(completed).toMatchObject({ phase: "complete", mergeSha: "8".repeat(40), testedTreeSha: "e".repeat(40) });
+    expect(f.writes.filter((write) => write.includes("/pulls/321/merge"))).toHaveLength(1);
+  });
+
   it("integrates two PRs from the same original base in sequence while preserving their reviewed bases", async () => {
     const first = await serializedControllerFixture("browser");
     const firstResult = await recoverControllerCompletion(first.config, first.receipt, first.clock);
@@ -3047,6 +3061,18 @@ describe("guarded serialized controller completion", () => {
     f.issue.labels = ["ready-for-agent", "needs-info"];
     expect(await refreshStaleIntegration(config, await readSnapshot(config, 321), { rebuildMergeRef: true })).toBe(true);
     expect(state.transitions).toEqual(["closed", "open"]);
+  });
+
+  it("withholds the human route when the final decision does not cover the live scope", async () => {
+    const { f, state, config } = await staleMergeRefFixture();
+    f.issue.labels = ["ready-for-agent", "needs-info"];
+    const snapshot = await readSnapshot(config, 321);
+    // A requirement change after the Approve without a new reconciliation
+    // leaves the receipt on a stale digest, so triage labels still stop here.
+    const unreconciled = { ...snapshot,
+      humanBinding: { ...snapshot.humanBinding, coveredRequirementDigest: "0".repeat(64) } };
+    expect(await refreshStaleIntegration(config, unreconciled, { rebuildMergeRef: true })).toBe(false);
+    expect(state.transitions).toEqual([]);
   });
 
   it("never refreshes through an explicit Issue pause on the human route", async () => {
@@ -3353,6 +3379,37 @@ describe("guarded serialized controller completion", () => {
       file: "scripts/pr-approval-controller.ts", line: 1, trigger: "retry", userImpact: "stale", evidence: "skip" }] }));
     // No App review exists yet, so submission has to choose the event.
     f.reviews.splice(f.reviews.findIndex((review) => review.id === 20), 1);
+    const posted: string[] = [];
+    const request = f.api.request.bind(f.api);
+    f.api.request = async <T>(path: string, options?: StubRequestOptions): Promise<T> => {
+      if (options?.method === "POST" && path.endsWith("/pulls/321/reviews")) {
+        const body = requestBody<{ event: string; body: string; commit_id: string }>(options);
+        posted.push(body.event);
+        const review = { id: 21, state: body.event === "APPROVE" ? "APPROVED" : "CHANGES_REQUESTED", commit_id: body.commit_id,
+          body: body.body, user: { id: REVIEW_BOT_ACTOR_ID, login: "sayhear-pr-review-gate[bot]" } };
+        f.reviews.push(review);
+        return structuredClone(review) as T;
+      }
+      return request<T>(path, options);
+    };
+    const results = await scanPullRequests(f.config, 321);
+    expect(posted).toEqual(["APPROVE"]);
+    expect(results).toEqual([expect.objectContaining({ pullRequest: 321, outcome: "merge_candidate" })]);
+    expect(f.pull.merged).toBe(true);
+  });
+
+  it("supersedes the App's own request_changes with an approval on the same head", async () => {
+    const f = await serializedControllerFixture("browser");
+    acceptCheckRunWrites(f);
+    withSavedReport(f, (report) => ({ ...report, decision: "request_changes", findings: [{ severity: "P2",
+      file: "scripts/pr-approval-controller.ts", line: 1, trigger: "retry", userImpact: "stale", evidence: "skip" }] }));
+    // The App posted CHANGES_REQUESTED for this exact identity before Luke's
+    // final decision flipped the gate to merge_candidate; the digest is
+    // unchanged because the v5 projection excludes reviews.
+    const prior = f.reviews.find((review) => review.id === 20);
+    if (!prior) throw new Error("App review missing");
+    prior.state = "CHANGES_REQUESTED";
+    prior.body = `<!-- sayhear-pr-auto-approval-review:v2 pr=321 head=${HEAD_SHA} base=${BASE_SHA} requirement=${f.receipt.identity.requirementDigest} outcome=request_changes -->`;
     const posted: string[] = [];
     const request = f.api.request.bind(f.api);
     f.api.request = async <T>(path: string, options?: StubRequestOptions): Promise<T> => {

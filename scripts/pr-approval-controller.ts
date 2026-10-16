@@ -3554,12 +3554,20 @@ async function submitPullRequestReview(
         ? "approve_deferred"
         : "approve";
   if (existing) {
-    if (appReviewOutcomeForIdentity(existing.body, report) !== desired) {
+    const existingOutcome = appReviewOutcomeForIdentity(existing.body, report);
+    if (existingOutcome === desired) return existing;
+    // The App may supersede its own earlier request_changes with an approval
+    // once the gate reaches merge_candidate: Luke's final decision can flip
+    // the outcome without changing the v5 requirement digest. Completion still
+    // rejects a CHANGES_REQUESTED posted after the recorded approval, so the
+    // direction stays one-way and a maintainer conflict still throws below.
+    if ((desired === "approve" || desired === "approve_deferred") && existingOutcome === "request_changes") {
+      // Fall through to post the new approval review.
+    } else {
       throw new Error(
         "This head already has a different review from the App; a maintainer must resolve it.",
       );
     }
-    return existing;
   }
 
   const reviewMarker =
@@ -4390,7 +4398,7 @@ function blockedMergeRulesetCoversMain(conditions: unknown): boolean | null {
 }
 
 export async function guardImmediateMerge(config: ControllerConfig, identity: CompletionIdentity): Promise<Readonly<{
-  report: ModelReviewReport; repository: JsonRecord; pullRequest: GitHubPullRequest;
+  report: ModelReviewReport; repository: JsonRecord; pullRequest: GitHubPullRequest; mergeSha: string | null;
 }>> {
   if (identity.policyVersion !== PR_REVIEW_GATE_POLICY_VERSION || !identity.reviewIdentity || identity.mergeAction !== "merge-now" ||
       parseIntegrationMode(config.app.integrationMode) !== (identity.integrationMode ?? "up-to-date-base")) {
@@ -4439,7 +4447,11 @@ export async function guardImmediateMerge(config: ControllerConfig, identity: Co
       !await blockedMergeProtectionsAreSafe(config, snapshot.gateInput.runtime.mainWriterGuard)) {
     throw new CompletionUnavailable("blocked_merge_protections_unproven");
   }
-  return { report, repository, pullRequest };
+  // The tested tree is read from the snapshot merge ref, not from the PR
+  // payload: the pinned API version can omit merge_commit_sha on an open PR,
+  // while this ref was just re-verified live above and is the exact ref the
+  // Validate evidence is bound to.
+  return { report, repository, pullRequest, mergeSha: snapshot.gateInput.pullRequest.mergeSha };
 }
 
 export async function confirmCompletionMerge(api: GitHubApi, identity: CompletionIdentity): Promise<string | null> {
@@ -4554,7 +4566,7 @@ export async function recoverControllerCompletion(config: ControllerConfig, rece
       // rejection or an intent never sent is eligible for a new guarded write.
       if (latest.mergeWriteState !== "not-sent" && latest.mergeWriteState !== "rejected") return null;
       const guarded = await guardImmediateMerge(config, identity);
-      const testedMergeSha = guarded.pullRequest.merge_commit_sha;
+      const testedMergeSha = guarded.mergeSha;
       if (typeof testedMergeSha !== "string") throw new CompletionUnavailable("merge_tree_unavailable");
       latest = { ...latest, mergeWriteState: "uncertain", testedTreeSha: await readCommitTreeSha(config.api, testedMergeSha) };
       await store.save(latest);
@@ -4658,7 +4670,10 @@ export async function refreshStaleIntegration(
   if (staleMergeRefSha !== null && options.rebuildMergeRef !== true) return true;
   // After Luke's final decision, Issue labels and dependencies are his call;
   // only explicit pauses and closure ambiguity still stop the shared refresh.
-  const humanRoute = snapshot.humanBinding.receipt?.challenge.context.liveness === "final-decision-v1";
+  // The receipt must also cover the live requirements: an unreconciled scope
+  // withholds the human route, so its labels and dependencies still stop here.
+  const humanRoute = snapshot.humanBinding.receipt?.challenge.context.liveness === "final-decision-v1" &&
+    snapshot.humanBinding.coveredRequirementDigest === requirementDigest(snapshot.gateInput.issues, snapshot.gateInput.pullRequest);
   if (pull.mergeable !== true || containsExplicitMergeHold(snapshot) || pull.issueClosureAmbiguous ||
       snapshot.gateInput.issues.some((issue) => !pull.keepOpenIssueNumbers.includes(issue.number) && issue.state === "open" &&
         (issue.pause.active || issue.pause.source === "unknown" || (!humanRoute && (!issue.labels.includes("ongoing") ||
