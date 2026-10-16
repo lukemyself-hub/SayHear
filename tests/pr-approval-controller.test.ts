@@ -4,7 +4,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   appReviewOutcomeForIdentity,
-  baseReviewRiskSafe,
   completionBlockingScope,
   definitiveMergeRejection,
   guardImmediateMerge,
@@ -57,6 +56,7 @@ import {
   MAIN_WRITER_ATTESTATION_VERSION,
   PR_VALIDATE_WORKFLOW_PATH,
   PR_REVIEW_GATE_POLICY_VERSION,
+  PR_REVIEW_GATE_V11_POLICY_VERSION,
   PR_REVIEW_REPORT_VERSION,
   SAYHEAR_REPOSITORY_ID,
   requirementDigest,
@@ -2457,35 +2457,6 @@ describe("pre-merge deferral evidence collection", () => {
   );
 });
 
-describe("serialized review base risk", () => {
-  const main = "9".repeat(40);
-  const comparison = (files: unknown[]) => ({ base_commit: { sha: BASE_SHA }, merge_base_commit: { sha: BASE_SHA },
-    status: "ahead", total_commits: 1, commits: [{ sha: main }], files });
-  it("accepts unchanged main without a network assumption", async () => {
-    await expect(baseReviewRiskSafe(new StubApi(() => { throw new Error("must not read"); }), BASE_SHA, BASE_SHA, ["src/a.ts"])).resolves.toBe(true);
-  });
-  it("accepts a complete forward comparison of independent ordinary files", async () => {
-    await expect(baseReviewRiskSafe(new StubApi(() => comparison([{ filename: "src/b.ts", status: "modified" }])), BASE_SHA, main, ["src/a.ts"])).resolves.toBe(true);
-  });
-  it.each([
-    "src/a.ts", "src/contracts/types.ts", "packages/shared/src/record.ts", "packages/ai/src/provider.ts",
-    "packages/core/src/auth/access.ts", "src/security.ts", "package.json", "pnpm-lock.yaml",
-    ".github/workflows/pr-validate.yml", "packages/data/migrations/0042.sql", "scripts/pr-review-gate.ts",
-  ])("rejects overlapping or shared policy/dependency risk in %s", async (path) => {
-    await expect(baseReviewRiskSafe(new StubApi(() => comparison([{ filename: path, status: "modified" }])), BASE_SHA, main, ["src/a.ts"])).resolves.toBe(false);
-  });
-  it("includes rename sources in overlap checks", async () => {
-    await expect(baseReviewRiskSafe(new StubApi(() => comparison([{ filename: "src/b.ts", previous_filename: "src/a.ts", status: "renamed" }])), BASE_SHA, main, ["src/a.ts"])).resolves.toBe(false);
-  });
-  it.each([
-    { status: "diverged" }, { base_commit: { sha: HEAD_SHA } }, { merge_base_commit: { sha: HEAD_SHA } },
-    { total_commits: 2 }, { commits: [{ sha: HEAD_SHA }] }, { files: Array.from({ length: 300 }, () => ({ filename: "src/b.ts", status: "modified" })) },
-    { files: [{ filename: "src/b.ts", status: "renamed" }] },
-  ])("rejects unverified or potentially truncated comparisons %#", async (override) => {
-    await expect(baseReviewRiskSafe(new StubApi(() => ({ ...comparison([{ filename: "src/b.ts", status: "modified" }]), ...override })), BASE_SHA, main, ["src/a.ts"])).resolves.toBe(false);
-  });
-});
-
 class ControllerBrowserStore implements BrowserApprovalStore {
   value: BrowserState | null = null;
   async read() { return this.value; }
@@ -2520,8 +2491,9 @@ async function serializedControllerFixture(channel: "browser" | "legacy-root", o
   let validatedMain = BASE_SHA;
   let validatedMerge = MERGE_SHA;
   let validationConclusion = "success";
-  let material = false;
   let mergeError: unknown;
+  let mergedCommitSha: string | null = null;
+  const trees = new Map<string, string>();
   let finalMainDrift = false;
   let mainReads = 0;
   let beforeFinalMainRead: (() => void) | undefined;
@@ -2566,7 +2538,11 @@ async function serializedControllerFixture(channel: "browser" | "legacy-root", o
       return { object: { sha: finalMainDrift && mainReads > 2 ? "8".repeat(40) : main } };
     }
     if (url.endsWith("/git/ref/pull/321/merge")) return { ref: "refs/pull/321/merge", object: { type: "commit", sha: pull.merge_commit_sha } };
-    if (url.includes("/git/commits/")) return { sha: url.split("/").at(-1), parents: [{ sha: url.endsWith(validatedMerge) ? validatedMain : main }, { sha: HEAD_SHA }] };
+    if (url.includes("/git/commits/")) {
+      const sha = url.split("/").at(-1) ?? "";
+      return { sha, tree: { sha: trees.get(sha) ?? "e".repeat(40) },
+        parents: [{ sha: url.endsWith(validatedMerge) ? validatedMain : main }, { sha: HEAD_SHA }] };
+    }
     if (url.includes("/contents/")) return { sha: workflow };
     if (url.includes("/check-runs?")) return { check_runs: [
       { id: 9001, name: "validate", app: { id: ACTIONS_APP_ID }, head_sha: HEAD_SHA,
@@ -2593,6 +2569,7 @@ async function serializedControllerFixture(channel: "browser" | "legacy-root", o
       if (mergeError) throw mergeError;
       expect(options?.body).toEqual({ sha: HEAD_SHA, merge_method: "merge" });
       pull.state = "closed"; pull.merged = true;
+      if (mergedCommitSha) pull.merge_commit_sha = mergedCommitSha;
       return { merged: true };
     }
     if (url.endsWith("/pulls/321")) return structuredClone(pull);
@@ -2601,8 +2578,6 @@ async function serializedControllerFixture(channel: "browser" | "legacy-root", o
       if (options?.method === "PATCH") issue.state = "closed";
       return structuredClone(issue);
     }
-    if (url.includes("/compare/")) return { base_commit: { sha: BASE_SHA }, merge_base_commit: { sha: BASE_SHA }, status: "ahead",
-      total_commits: 1, commits: [{ sha: main }], files: [{ filename: material ? "packages/shared/src/types.ts" : "src/unrelated.ts", status: "modified" }] };
     throw new Error(`Unexpected controller request ${url}`);
   }, (url) => {
     if (url.includes("/rulesets?")) return [{ id: 9 }, ...additionalRulesets.map(({ id }) => ({ id }))];
@@ -2664,7 +2639,7 @@ async function serializedControllerFixture(channel: "browser" | "legacy-root", o
         attestedAt: "2026-10-15T00:00:00.000Z", attestedBy: "test" };
     },
     stored: () => stored,
-    advanceMain: (freshCi = true, risky = false, nextMain = "9".repeat(40)) => { main = nextMain; pull.merge_commit_sha = "7".repeat(40); material = risky;
+    advanceMain: (freshCi = true, nextMain = "9".repeat(40)) => { main = nextMain; pull.merge_commit_sha = "7".repeat(40);
       if (freshCi) { validatedMain = main; validatedMerge = pull.merge_commit_sha; } },
     failValidation: () => { validationConclusion = "failure"; },
     queueNewerValidation: () => { newerQueued = true; reviewChecks.push({ id: 9003, name: "validate", app: { id: ACTIONS_APP_ID }, head_sha: HEAD_SHA,
@@ -2672,6 +2647,8 @@ async function serializedControllerFixture(channel: "browser" | "legacy-root", o
     driftFinalMain: () => { mainReads = 0; finalMainDrift = true; },
     beforeFinalRead: (change: () => void) => { mainReads = 0; beforeFinalMainRead = change; },
     failMerge: (error: unknown) => { mergeError = error; },
+    trees,
+    mergeAs: (sha: string) => { mergedCommitSha = sha; },
   };
 }
 
@@ -2977,7 +2954,7 @@ describe("guarded serialized controller completion", () => {
     const firstResult = await recoverControllerCompletion(first.config, first.receipt, first.clock);
     expect(firstResult.mergeSha).toBe(MERGE_SHA);
     const second = await serializedControllerFixture("legacy-root");
-    second.advanceMain(true, false, MERGE_SHA);
+    second.advanceMain(true, MERGE_SHA);
     const guarded = await guardImmediateMerge(second.config, second.receipt.identity);
     expect(guarded.report.baseSha).toBe(BASE_SHA);
     const secondResult = await recoverControllerCompletion(second.config, second.receipt, second.clock);
@@ -3051,17 +3028,40 @@ describe("guarded serialized controller completion", () => {
     expect(state.transitions).toEqual([]);
   });
 
-  it("lets an ineligible stale PR continue to its normal review path without closing it", async () => {
+  it("lets an ineligible stale PR on the automatic route continue to its normal review path without closing it", async () => {
     const { f, state, config } = await staleMergeRefFixture();
     f.issue.labels = ["ready-for-agent"];
+    // A stored pre-final-decision approval keeps the automatic route.
+    const current = f.browserApprovalStore.value;
+    if (!current?.challenge || !current.receipt) throw new Error("Expected a bound browser approval");
+    const { liveness: _liveness, ...context } = current.challenge.context;
+    const challenge = { ...current.challenge, context };
+    f.browserApprovalStore.value = { ...current, challenge, receipt: { ...current.receipt, challenge } };
     expect(await refreshStaleIntegration(config, await readSnapshot(config, 321), { rebuildMergeRef: true })).toBe(false);
+    expect(state.transitions).toEqual([]);
+  });
+
+  it("refreshes the combination for Luke's final decision despite old Issue triage labels", async () => {
+    const { f, state, config } = await staleMergeRefFixture();
+    f.issue.labels = ["ready-for-agent", "needs-info"];
+    expect(await refreshStaleIntegration(config, await readSnapshot(config, 321), { rebuildMergeRef: true })).toBe(true);
+    expect(state.transitions).toEqual(["closed", "open"]);
+  });
+
+  it("never refreshes through an explicit Issue pause on the human route", async () => {
+    const { f, state, config } = await staleMergeRefFixture();
+    f.issue.labels = ["ready-for-agent"];
+    const snapshot = await readSnapshot(config, 321);
+    const paused = { ...snapshot, gateInput: { ...snapshot.gateInput, issues: snapshot.gateInput.issues.map((issue) =>
+      ({ ...issue, pause: { active: true, source: "maintainer" as const } })) } };
+    expect(await refreshStaleIntegration(config, paused, { rebuildMergeRef: true })).toBe(false);
     expect(state.transitions).toEqual([]);
   });
 
   it("does not close the PR when main moved again under the lock", async () => {
     const { f, state, config } = await staleMergeRefFixture();
     const snapshot = await readSnapshot(config, 321);
-    f.advanceMain(false, false, "6".repeat(40));
+    f.advanceMain(false, "6".repeat(40));
     f.pull.merge_commit_sha = MERGE_SHA;
     expect(await refreshStaleIntegration(config, snapshot, { rebuildMergeRef: true })).toBe(true);
     expect(state.transitions).toEqual([]);
@@ -3102,14 +3102,24 @@ describe("guarded serialized controller completion", () => {
     expect(f.writes.some((write) => write.includes("/pulls/321/merge"))).toBe(false);
   });
 
-  it.each(["browser", "legacy-root"] as const)("requires a new review and human binding after material main movement for %s", async (channel) => {
+  // The fixture API has no /compare/ route: main movement is never inspected
+  // for path overlap or config-like files. Only combined Validate decides.
+  it.each(["browser", "legacy-root"] as const)("keeps the review and human binding when main moves without a sync commit for %s", async (channel) => {
     const f = await serializedControllerFixture(channel);
-    f.advanceMain(true, true);
+    f.advanceMain(true);
     const snapshot = await readSnapshot(f.config, 321);
-    await expect(readSavedReviewReport(f.config, snapshot)).resolves.toBeNull();
-    expect(snapshot.humanBinding.paths).toEqual([]);
-    if (channel === "browser") expect(f.browserApprovalStore.value?.challenge).toBeNull();
-    await expect(guardImmediateMerge(f.config, f.receipt.identity)).rejects.toThrow("saved_review_identity_mismatch");
+    await expect(readSavedReviewReport(f.config, snapshot)).resolves.not.toBeNull();
+    expect(snapshot.humanBinding.paths).not.toEqual([]);
+    if (channel === "browser") expect(f.browserApprovalStore.value?.receipt).not.toBeNull();
+    await expect(guardImmediateMerge(f.config, f.receipt.identity)).resolves.toMatchObject({ report: { baseSha: BASE_SHA } });
+  });
+
+  it("stops on failed combined Validate after main moves without re-requesting human review", async () => {
+    const f = await serializedControllerFixture("browser");
+    f.advanceMain(true);
+    f.failValidation();
+    await expect(guardImmediateMerge(f.config, f.receipt.identity)).rejects.toThrow("fresh_merge_gate_blocked");
+    expect(f.browserApprovalStore.value?.receipt).not.toBeNull();
     expect(f.writes.some((write) => write.includes("/pulls/321/merge"))).toBe(false);
   });
 
@@ -3364,6 +3374,62 @@ describe("guarded serialized controller completion", () => {
     expect(pending.mergeWriteState).toBe("uncertain");
     await expect(completionBlockingScope(f.api, pending)).resolves.toBe("repository");
     expect(f.writes.filter((write) => write.includes("/pulls/321/merge"))).toHaveLength(1);
+  });
+
+  it("records the tested merge tree and completes when the merge commit carries it", async () => {
+    const f = await serializedControllerFixture("browser");
+    f.mergeAs("8".repeat(40));
+    const completed = await recoverControllerCompletion(f.config, f.receipt, f.clock);
+    expect(completed).toMatchObject({ phase: "complete", mergeSha: "8".repeat(40), testedTreeSha: "e".repeat(40) });
+    expect(f.stored()).toMatchObject({ phase: "complete", testedTreeSha: "e".repeat(40) });
+  });
+
+  it("stops without reporting success when the merge tree differs from the tested combination", async () => {
+    const f = await serializedControllerFixture("browser");
+    f.mergeAs("8".repeat(40));
+    f.trees.set("8".repeat(40), "d".repeat(40));
+    const stopped = await recoverControllerCompletion(f.config, f.receipt, f.clock);
+    expect(stopped).toMatchObject({ phase: "needs_attention", reason: "merged_tree_mismatch", mergeSha: null });
+    expect(f.issue.state).toBe("open");
+    await expect(completionBlockingScope(f.api, stopped)).resolves.toBe("repository");
+    // A restart keeps the recorded fact instead of retrying into success.
+    await expect(recoverControllerCompletion(f.config, stopped, f.clock)).resolves.toEqual(stopped);
+  });
+
+  it("proves the tree after a lost merge response without a second merge write", async () => {
+    const f = await serializedControllerFixture("browser");
+    f.mergeAs("8".repeat(40));
+    const request = f.api.request.bind(f.api);
+    let lose = true;
+    f.api.request = async <T>(path: string, options?: StubRequestOptions): Promise<T> => {
+      const result = await request<T>(path, options);
+      if (lose && path.endsWith("/pulls/321/merge")) { lose = false; throw new Error("socket lost after merge"); }
+      return result;
+    };
+    const pending = await recoverControllerCompletion(f.config, f.receipt, f.clock);
+    expect(pending).toMatchObject({ mergeWriteState: "uncertain", testedTreeSha: "e".repeat(40) });
+    const recovered = await recoverControllerCompletion(f.config, { ...pending, nextRetryAt: 0 }, f.clock);
+    expect(recovered).toMatchObject({ phase: "complete", mergeSha: "8".repeat(40) });
+    expect(f.writes.filter((write) => write.includes("/pulls/321/merge"))).toHaveLength(1);
+  });
+
+  it("recovers an already-merged intent signed under the previous policy with its original semantics", async () => {
+    const f = await serializedControllerFixture("browser");
+    f.pull.state = "closed"; f.pull.merged = true;
+    const old: CompletionRecord = { ...f.receipt, mergeWriteState: "accepted",
+      identity: { ...f.receipt.identity, policyVersion: PR_REVIEW_GATE_V11_POLICY_VERSION } };
+    const recovered = await recoverControllerCompletion(f.config, old, f.clock);
+    expect(recovered).toMatchObject({ phase: "complete", mergeSha: MERGE_SHA });
+    expect(recovered.testedTreeSha).toBeUndefined();
+    expect(f.writes.some((write) => write.includes("/pulls/321/merge"))).toBe(false);
+  });
+
+  it("cannot prove a merge this controller never sent", async () => {
+    const f = await serializedControllerFixture("browser");
+    f.pull.state = "closed"; f.pull.merged = true;
+    const stopped = await recoverControllerCompletion(f.config, f.receipt, f.clock);
+    expect(stopped).toMatchObject({ phase: "needs_attention", reason: "merged_tree_unproven" });
+    expect(f.issue.state).toBe("open");
   });
 
   it("lets unrelated work proceed after a confirmed merge with incomplete Issue cleanup", async () => {

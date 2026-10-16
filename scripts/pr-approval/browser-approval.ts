@@ -82,8 +82,9 @@ export function parseBrowserContext(value: unknown): BrowserContext {
 }
 export function browserContextDigest(context: BrowserContext): string {
   const parsed = parseBrowserContext(context);
-  // The controller separately proves that main changes are safe before passing
-  // a head-v2 context. Old challenges retain their exact-base interpretation.
+  // A head-v2 approval survives main advancing; combined Validate on the
+  // current merge ref carries that risk. Old challenges retain their exact-base
+  // interpretation.
   // Final-decision challenges keep requirement freshness out of drift: a scope
   // change withholds the human route until reconciled instead of revoking it.
   const identity = {

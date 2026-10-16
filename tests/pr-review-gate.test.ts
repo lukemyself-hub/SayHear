@@ -205,7 +205,6 @@ function input(
       }),
       decision: "approve",
       diffComplete: true,
-      baseReviewSafe: true,
       reviewerAppId: REVIEW_APP_ID,
       reviewerActorId: 303,
       declaredImpacts,
@@ -742,23 +741,18 @@ describe("PR review gate", () => {
     }
   });
 
-  it("reuses a historical review only after clearing main changes and validating the current integration", () => {
+  it("reuses a head review across main advancement only with current-integration evidence", () => {
     const currentMain = "f".repeat(40);
     const candidate = input({
       repository: { defaultBranchSha: currentMain },
       pullRequest: { baseSha: currentMain, mergeable: true, mergeableState: "clean" },
       branchProtection: { requiresUpToDate: false },
       runtime: { integrationMode: "serialized-merge", mainWriterGuard: APP_ONLY_MAIN_WRITER_GUARD },
-      review: { baseSha: BASE_SHA, baseReviewSafe: true },
+      review: { baseSha: BASE_SHA },
     });
+    // Path overlap or config-like main changes no longer revoke the review on
+    // their own; the combined Validate below is the only main-side guard.
     expect(evaluatePrReviewGate(candidate, policy).outcome).toBe("merge_candidate");
-    const { baseReviewSafe: _baseReviewSafe, ...unverifiedReview } = candidate.review;
-    for (const review of [{ ...unverifiedReview, baseReviewSafe: false }, unverifiedReview]) {
-      const blocked = evaluatePrReviewGate({
-        ...candidate, review,
-      }, policy);
-      expect(blocked.reasons[0]?.code).toBe("stale_base_review_risk");
-    }
     const oldEvidence = candidate.evidence.map((entry) =>
       entry.kind === "deferred-before-merge" ? entry :
         { ...entry, source: { ...entry.source, baseSha: BASE_SHA } });
