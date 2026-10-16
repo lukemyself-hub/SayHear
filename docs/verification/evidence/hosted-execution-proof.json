@@ -1,0 +1,138 @@
+{
+  "recordedAt": "2026-10-14T07:22:00.000Z",
+  "issue": "https://github.com/lukemyself-hub/SayHear/issues/345",
+  "plan": "docs/verification/hosted-execution-plan.md",
+  "environment": {
+    "project": "sayhear-g1-acceptance",
+    "projectId": "prj_nNj1vzuYjj7oeiwzqfsV3iMb3THs",
+    "teamId": "team_h4sAgEsoM7MeGcGoLdbuIyH1",
+    "alias": "sayhear-g1-canary-lukemyself.vercel.app",
+    "deploymentId": "dpl_9DYrp9ARfSxCNNcKggBu1FEteE5m",
+    "commit": "acaa502f1558d29dc0de97168c842257644ce30a",
+    "readyState": "READY",
+    "previousDeployment": "dpl_FZd4FLRPKc9oqxBuYfFKvz9DLxjL",
+    "vercelEnv": "preview"
+  },
+  "authorization": {
+    "approvedBy": "Luke",
+    "items": [
+      "deployment decision (deploy the merged main head acaa502, CLI upload by the agent)",
+      "Vercel and GitHub logins for Owner actions",
+      "one-round paid Provider budget of at most 12 generation calls",
+      "Weekly due rule was authorized, but due status was not evaluated because G1 was off and no Weekly Reflection generation ran",
+      "applying the missing station database migrations 0068-0070",
+      "rotating the station CRON_SECRET"
+    ]
+  },
+  "deploymentIdentity": {
+    "method": "operator-secret-authenticated read of /api/internal/inspection/release-identity through vercel curl with the station CRON_SECRET (the alias is behind Vercel Authentication)",
+    "releaseIdentityVersion": "1a3b-g1-hosted-release-identity:v1",
+    "environment": "preview",
+    "gitCommitId": "acaa502f1558d29dc0de97168c842257644ce30a",
+    "businessTargetHash": "d9ce28dde948d935eaca19cf2042edfa7fc25c9fd20ded9ebc9700685ca8ca8f",
+    "purgeMarkerTargetHash": "e862afeaa67a983c8c5db82a678ddf0680d34056f27b58cac3c6f0cff6dbd3d7",
+    "note": "Both hashes were recomputed from the stored connection strings with sha256(JSON.stringify(<host without -pooler>:<port||5432><pathname>)) and had to match before any database write was allowed."
+  },
+  "effectiveRuntimeConfig": {
+    "collectedAt": "2026-10-14T03:30:20.221Z",
+    "deploymentId": "dpl_9DYrp9ARfSxCNNcKggBu1FEteE5m",
+    "configVersion": "1a3b-g1-effective-runtime-config:v1",
+    "items": 67,
+    "providerAdapter": "deepseek",
+    "providerModel": "deepseek-v4-flash",
+    "providerEndpoint": "https://api.deepseek.com",
+    "rolesEnabled": "episode.build,reflection.daily,reflection.weekly,narrative.validate",
+    "switchEpisodeBuildEnabled": false,
+    "switchReflectionEnabled": false,
+    "switchJournalEnabled": true,
+    "switchEvidenceExtractionEnabled": true,
+    "switchMemoryRetrievalEnabled": true,
+    "switchFastPathExtractionEnabled": true,
+    "switchMemoryConsolidationEnabled": true,
+    "g1PromptPolicyBundleVersion": null,
+    "migrationsBusinessFingerprint": null,
+    "externalIntegrationManifestVersion": null,
+    "githubOauth": "present",
+    "note": "The G1 switches read false and no G1 release manifest exists on the station, so G1-gated generation stayed off. No pins were invented and no G1 flag was changed. This config was read back from the redeployment after CRON_SECRET rotation; the deployment used the same commit."
+  },
+  "timeline": [
+    { "at": "2026-10-14T03:06:52.000Z", "event": "first deployment of the candidate commit dpl_FZd4FLRPKc9oqxBuYfFKvz9DLxjL became ready" },
+    { "at": "2026-10-14T03:16:02.000Z", "event": "Owner login session row created on the station (auth_sessions)" },
+    { "at": "2026-10-14T03:22:00.000Z", "event": "first hosted send attempt failed before commit: generation_commands lacked the request_timezone column (station database stopped at migration 0067)" },
+    { "at": "between 2026-10-14T03:22Z and 2026-10-14T03:30:20Z", "event": "station CRON_SECRET rotated and the same commit redeployed as dpl_9DYrp9ARfSxCNNcKggBu1FEteE5m" },
+    { "at": "2026-10-14T03:30:20.221Z", "event": "deployment identity and effective runtime configuration read back from dpl_9DYrp9ARfSxCNNcKggBu1FEteE5m" },
+    { "at": "2026-10-14T03:52:06.746Z", "event": "station database migrations 0068, 0069, 0070 applied after hash verification; rerun reported the database as current" },
+    { "at": "2026-10-14T03:55:22.973Z", "event": "hosted retry of the synthetic message: conversation.text succeeded (deepseek, deepseek-v4-flash)" },
+    { "at": "2026-10-14T04:27:32.629Z", "event": "first hosted recovery scan (scheduler substitute) applied inactivity, created and dispatched eligibility, dialogueState, fast-path, journal-eligibility and outbox items" },
+    { "at": "2026-10-14T04:28:14.593Z", "event": "the current Journal published (journal.draft 04:28:01.500Z, journal.validate 04:28:13.447Z)" },
+    { "at": "2026-10-14T04:30:10.000Z", "event": "second recovery scan created and dispatched nothing (idempotent replay)" },
+    { "at": "2026-10-14T04:32:44.000Z", "event": "third recovery scan created and dispatched nothing (idempotent replay)" },
+    { "at": "2026-10-14T05:01:20.571Z", "event": "first evidence step-up completed through GitHub OAuth with prompt=select_account; the grant row recorded step_up_authenticated_at" },
+    { "at": "2026-10-14T05:06:33.719Z", "event": "evidence excerpt expansion allowed (sensitive_access_audits, authorized)" },
+    { "at": "2026-10-14T05:16:29.727Z", "event": "expansion after step-up expiry refused (sensitive_access_audits, denied recent_step_up_required); no original words returned" },
+    { "at": "2026-10-14T05:16:56.370Z", "event": "step-up refreshed from the Reflection Inspector's own Verify again button" },
+    { "at": "2026-10-14T05:17:29.863Z", "event": "evidence excerpt expansion allowed again (sensitive_access_audits, authorized)" }
+  ],
+  "journalDelivery": {
+    "syntheticFixture": "two determined sentences about a synthetic garden fence, typed into the hosted composer",
+    "firstAttempt": "failed before commit; the message, events and commands left zero rows in the business database (full-table scan of the last 36 hours found only the Owner login session); the alerted UI copy was 'There was a problem reaching SayHear. You can try again, and this history will not be lost.' with a Try again button and the draft still in the composer",
+    "retry": "after migrations 0068-0070 the same composer draft produced the turn: user seq 1 at 03:55:19.789Z and assistant seq 2 at 03:55:22.973Z, generation_commands succeeded with request_timezone America/Los_Angeles",
+    "session": { "dailySessionId": "01a1388c-e36d-7f25-9f36-538263018aef", "logicalDate": "2026-10-13", "state": "quiescent", "reason": "inactivity_timeout" },
+    "journal": { "journalVersionId": "01a138ab-0107-741a-9c58-9b91ba80f761", "outcome": "published", "publishedAt": "2026-10-14T04:28:14.593Z", "statements": 2, "diagnosticFindings": ["third_person_style/first_person_expression"] },
+    "browser": {
+      "method": "visible Chrome with CDP on port 9223 (independent profile), driven as the Owner",
+      "evidence": ["journal list shows the 2026-10-13 entry", "copy returned the two prose paragraphs (clipboard readback matched)", "export wrote sayhear-journal-2026-10-13.txt starting with the date then the prose", "backlink reached /internal?date=2026-10-13 with the history banner, read-only composer and no duplicate dated entry"]
+    }
+  },
+  "providerCalls": {
+    "budget": 12,
+    "recorded": 4,
+    "detail": [
+      { "at": "2026-10-14T03:55:22.973Z", "role": "conversation.text", "provider": "deepseek", "model": "deepseek-v4-flash", "status": "succeeded", "tokens": { "input": 3381, "output": 180 } },
+      { "at": "2026-10-14T04:27:42.816Z", "role": "evidence.extract", "provider": "deepseek", "model": "deepseek-v4-flash", "status": "completed", "result": "item_count 2" },
+      { "at": "2026-10-14T04:28:01.500Z", "role": "journal.draft", "provider": "deepseek", "model": "deepseek-v4-flash", "status": "succeeded" },
+      { "at": "2026-10-14T04:28:13.447Z", "role": "journal.validate", "provider": "deepseek", "model": "deepseek-v4-flash", "status": "succeeded" }
+    ],
+    "note": "These four attempts are the only ones recorded across model_run_attempts, evidence_model_run_attempts and journal_model_run_attempts for the run. The fast-path extraction run and the daily/weekly consolidation runs finished without additional provider attempt rows. provider_egress_dispositions recorded only the conversation-text egress."
+  },
+  "retryIdempotency": {
+    "executed": [
+      "repeating the recovery scan after the completed work created and dispatched nothing (scans 2 and 3 returned all zero buckets)",
+      "retrying the send through the client recovered the admission-time failure on the next attempt without duplicating the turn"
+    ],
+    "notExecuted": [
+      "forcing a hosted Workflow callback redelivery",
+      "a real Provider failure or retry (every recorded call succeeded on the first try)"
+    ]
+  },
+  "reflectionEvidence": {
+    "unverified": "the journal inspection read and the evidence expansion are both refused without a recent step-up: 403 elevated_capability_required with a 40-byte error body, and after the step-up expired the UI answered 'Your verification expired. Verify again, then reopen the excerpt.' with no excerpt text and no prefetch",
+    "stepUp": "two GitHub OAuth round trips with prompt=select_account on the station's independent OAuth client, each completed by Luke selecting the account; the grant row internal_diagnostic_access_grants(capability conversation_content:read) recorded step_up_authenticated_at 2026-10-14T05:01:20.571Z and the refresh 2026-10-14T05:16:56.370Z issued from the Inspector's own Verify again button",
+    "expanded": "on the 2026-10-07 Daily Reflection the trace opened and the single requested excerpt '我从今天开始参与橡港图书馆收音机维修项目' was returned, nothing else",
+    "audits": [
+      { "at": "2026-10-14T05:06:33.719Z", "disposition": "allowed", "reason": "authorized", "policyVersion": "reflection-inspection:v1" },
+      { "at": "2026-10-14T05:16:29.727Z", "disposition": "denied", "reason": "recent_step_up_required", "policyVersion": "reflection-inspection:v1" },
+      { "at": "2026-10-14T05:17:29.863Z", "disposition": "allowed", "reason": "authorized", "policyVersion": "reflection-inspection:v1" }
+    ],
+    "note": "The expansion targeted an already-generated historical Reflection because the station's G1 switches are off; this run did not generate any new Episode or Daily/Weekly Reflection."
+  },
+  "gaps": [
+    "Episode and Daily/Weekly Reflection generation on the station: switch.episode_build_enabled and switch.reflection_enabled are both false and no G1 manifest exists, so the scans created no episode or reflection commands; recorded as a configuration gap, G1 was not enabled",
+    "Weekly due status was not evaluated because G1 was off and no Weekly Reflection generation ran",
+    "hosted Workflow callback redelivery and a real Provider fault were not forced",
+    "the journal inspection route is an API surface; no UI opens it, so the 403-then-200 sequence was exercised as an authenticated API read",
+    "cross-date per-date journal evidence stays blocked by issue #340"
+  ],
+  "substitutions": [
+    "recovery scans triggered by the agent with vercel curl plus the Bearer CRON_SECRET instead of the GitHub Actions schedule (the workflow targets production and the station has no Vercel cron)",
+    "the first evidence step-up replayed the Inspector button's intent and NextAuth sign-in calls; the refreshed step-up used the Inspector button itself",
+    "the browser chained to the visible Vercel SSO session"
+  ],
+  "cleanupReceipt": {
+    "productionChanges": "none; every change stopped at the isolated station",
+    "publicBypassLinks": "none created; access used vercel curl and the Owner session",
+    "secrets": "the rotated station CRON_SECRET exists only in a 0600 local file; it is not committed anywhere",
+    "data": "the synthetic acceptance fixture and its Journal remain in the isolated station database; they were retained as hosted evidence",
+    "artifacts": "screenshots 01-15, request and database logs and the browser reports are kept in artifacts/verify/hosted-345-1/ (git-ignored)"
+  }
+}

@@ -7,7 +7,11 @@ import { asUserId } from "../packages/domain/src/index.ts";
 const state = JSON.parse(readFileSync(process.argv[2], "utf8"));
 assert.equal(process.env.SAYHEAR_DEPLOYMENT, "test");
 assert.equal(process.env.SAYHEAR_PROVIDER_ADAPTER, state.standIns.provider);
-const now = process.env.SAYHEAR_TEST_NOW ? new Date(process.env.SAYHEAR_TEST_NOW) : new Date();
+const now = state.testNowInitial
+  ? new Date(state.testNowInitial)
+  : process.env.SAYHEAR_TEST_NOW
+    ? new Date(process.env.SAYHEAR_TEST_NOW)
+    : new Date();
 const hour = 3_600_000;
 for (const [name, database] of [["DATABASE_URL", "business"], ["PURGE_MARKER_DATABASE_URL", "marker"]]) {
   const url = new URL(process.env[name]);
