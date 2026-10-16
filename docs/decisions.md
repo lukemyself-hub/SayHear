@@ -19,6 +19,10 @@ Accepted
 
 ## 按主题读取
 
+### PR 审批与 Agent 交付
+
+- [`0154`](adr/0154-human-review-is-a-complete-pr-approval-path.md)：自动审批只加速已有授权范围内的变更；人工审查是完整审批通路，未知情况不要求先更新控制器
+
 ### 技术底座、部署与运行时
 
 - [`0148`](adr/0148-deployment-identity-config-authorization-and-acceptance-are-separate.md)：部署身份、运行配置授权与历史能力验收分离；同配置新 commit 复用未变角色配置与 pins，真实配置变化仍诚实版本化
