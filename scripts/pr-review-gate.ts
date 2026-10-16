@@ -27,6 +27,26 @@ export const SAYHEAR_REPOSITORY_NAME = "lukemyself-hub/SayHear";
 export const PR_VALIDATE_WORKFLOW_PATH = ".github/workflows/pr-validate.yml";
 export const PR_REVIEW_GATE_CHECK_NAME = "pr-review-gate";
 
+// Trusted-policy human binding only; omission keeps automatic behavior.
+export const HUMAN_FINAL_DECISION_VERSION = "final-decision-v1";
+/** Authorized human reviewer id (Luke). */
+export const HUMAN_FINAL_DECISION_REVIEWER_ID = 236989142;
+/** Authorized human reviewer login (Luke). */
+export const HUMAN_FINAL_DECISION_REVIEWER_LOGIN = "lukemyself-hub";
+
+// Trusted-policy binding only; omission keeps automatic behavior.
+export type HumanFinalDecisionBinding = Readonly<{
+  version: typeof HUMAN_FINAL_DECISION_VERSION;
+  repositoryId: number;
+  pullRequestNumber: number;
+  headSha: string;
+  requirementDigest: string;
+  validateWorkflowBlobSha: string;
+  reviewerActorId: number;
+  reviewerLogin: string;
+  reviewId: number;
+}>;
+
 /**
  * How a PR proves it integrates with the current main before it merges.
  *
@@ -399,6 +419,12 @@ export type TrustedPrReviewPolicy = Readonly<{
   humanApprovedPaths?: readonly string[];
   humanApprovedNoRuntimeImpact?: boolean;
   humanApprovalChannel?: "browser" | "legacy-root" | "unknown";
+  /**
+   * Versioned complete-human-final-decision binding supplied by the
+   * controller from a live verified BrowserReceipt. Absent keeps the exact
+   * automatic behavior; present but mismatched never relaxes the gate.
+   */
+  humanFinalDecision?: HumanFinalDecisionBinding;
 }>;
 
 export type PrReviewGateReport = Readonly<{
@@ -1269,6 +1295,29 @@ export function requirementDigest(
   }), "utf8").digest("hex");
 }
 
+export function hasHumanFinalDecision(
+  input: PrReviewGateInput,
+  policy: TrustedPrReviewPolicy,
+): boolean {
+  if (policy.humanApprovalChannel !== "browser") return false;
+  const binding = policy.humanFinalDecision;
+  if (!binding) return false;
+  if (binding.version !== HUMAN_FINAL_DECISION_VERSION) return false;
+  if (binding.reviewerActorId !== HUMAN_FINAL_DECISION_REVIEWER_ID) return false;
+  if (binding.reviewerLogin !== HUMAN_FINAL_DECISION_REVIEWER_LOGIN) return false;
+  if (!Number.isSafeInteger(binding.reviewId) || binding.reviewId < 1) return false;
+  if (!Number.isSafeInteger(binding.repositoryId) || binding.repositoryId < 1) return false;
+  if (!Number.isSafeInteger(binding.pullRequestNumber) || binding.pullRequestNumber < 1) return false;
+  if (binding.repositoryId !== input.repository.id) return false;
+  if (binding.repositoryId !== policy.repositoryId) return false;
+  if (binding.pullRequestNumber !== input.pullRequest.number) return false;
+  if (binding.headSha !== input.pullRequest.headSha) return false;
+  if (binding.requirementDigest !== requirementDigest(input.issues, input.pullRequest)) return false;
+  if (typeof policy.validateWorkflowBlobSha !== "string" || policy.validateWorkflowBlobSha.length === 0) return false;
+  if (binding.validateWorkflowBlobSha !== policy.validateWorkflowBlobSha) return false;
+  return true;
+}
+
 function outcome(
   input: PrReviewGateInput,
   result: GateOutcome,
@@ -1586,23 +1635,59 @@ export function evaluatePrReviewGate(
     });
   }
 
-  if (
-    input.pullRequest.externalReviewState === "unavailable" ||
-    input.issues.some((issue) => issue.state === "open" && !input.pullRequest.keepOpenIssueNumbers.includes(issue.number) && issue.blockedBy === null)
-  ) {
-    return outcome(input, "awaiting_verification", {
-      code: "github_context_unavailable",
-      message:
-        "The current PR reviews, Issue discussion, or dependency state could not be read.",
-    });
-  }
+  const manual = hasHumanFinalDecision(input, policy);
+  if (!manual) {
+    if (
+      input.pullRequest.externalReviewState === "unavailable" ||
+      input.issues.some((issue) => issue.state === "open" && !input.pullRequest.keepOpenIssueNumbers.includes(issue.number) && issue.blockedBy === null)
+    ) {
+      return outcome(input, "awaiting_verification", {
+        code: "github_context_unavailable",
+        message:
+          "The current PR reviews, Issue discussion, or dependency state could not be read.",
+      });
+    }
 
-  const humanReason = requiresHumanReview(input, policy);
-  if (humanReason) {
-    return outcome(input, "human_decision", {
-      code: humanReason.code,
-      message: humanReason.message,
-    });
+    const humanReason = requiresHumanReview(input, policy);
+    if (humanReason) {
+      return outcome(input, "human_decision", {
+        code: humanReason.code,
+        message: humanReason.message,
+      });
+    }
+  } else {
+    if (input.pullRequest.externalReviewState === "unavailable") {
+      return outcome(input, "awaiting_verification", {
+        code: "github_context_unavailable",
+        message:
+          "The current PR reviews, Issue discussion, or dependency state could not be read.",
+      });
+    }
+    if (
+      /\b(?:do not merge|do not auto[- ]merge|not for merge|not to be merged)\b|不要(?:自动)?合入|暂停自动审批/i.test(
+        [input.pullRequest.title, input.pullRequest.body, ...input.issues.map((issue) => issue.body)].join("\n"),
+      )
+    ) {
+      return outcome(input, "human_decision", {
+        code: "human_review_required",
+        message: "The PR or Issue explicitly pauses automatic merging.",
+      });
+    }
+    if (input.pullRequest.state !== "open") {
+      return outcome(input, "human_decision", {
+        code: "human_review_required",
+        message: "The PR is closed.",
+      });
+    }
+    for (const issue of input.issues) {
+      if (input.pullRequest.keepOpenIssueNumbers.includes(issue.number)) continue;
+      if (issue.pause.active || issue.pause.source === "unknown") {
+        return outcome(input, "human_decision", {
+          code: "human_review_required",
+          message: `Issue #${issue.number} is paused or its pause state cannot be trusted.`,
+        });
+      }
+    }
   }
   if (
     input.pullRequest.draft ||
@@ -1653,11 +1738,12 @@ export function evaluatePrReviewGate(
       message: "The complete PR diff was not available to the reviewer.",
     });
   }
-  if (
-    input.review.decision === "request_changes" ||
-    input.review.decision === "awaiting_verification" ||
-    input.review.decision === "human_decision"
-  ) {
+  if (!manual) {
+    if (
+      input.review.decision === "request_changes" ||
+      input.review.decision === "awaiting_verification" ||
+      input.review.decision === "human_decision"
+    ) {
     if (
       input.review.decision === "request_changes" &&
       !input.review.findings.some(
@@ -1706,6 +1792,7 @@ export function evaluatePrReviewGate(
       code: "issue_label_conflict",
       message: "The linked Issue has both ongoing and ready-for-agent state.",
     });
+  }
   }
   if (
     policy.reviewAppId === null ||
@@ -1859,7 +1946,7 @@ export function evaluatePrReviewGate(
     },
     capability: input.review.capability,
   });
-  if (plan.fullAcceptance.required) {
+  if (!manual && plan.fullAcceptance.required) {
     return outcome(input, "human_decision", {
       code: "full_acceptance_required",
       message: "This change requires full capability acceptance and a human release decision.",
@@ -1877,18 +1964,20 @@ export function evaluatePrReviewGate(
           [".gitignore", "AGENTS.md", "CODEOWNERS", "package.json", "pnpm-lock.yaml"].includes(path) ||
           /^tsconfig[^/]*\.json$/.test(path))),
     );
-  if (plan.requiresImpactLocation && !ownerLocatedTooling) {
+  if (!manual && plan.requiresImpactLocation && !ownerLocatedTooling) {
     return outcome(input, "awaiting_verification", {
       code: "impact_not_located",
       message: "The change impact is unknown and must be classified before approval.",
     });
   }
 
-  const requiredEvidenceIds = [
-    ...plan.fixedBaseline,
-    ...plan.targeted,
-    ...plan.reused,
-  ].map(({ check }) => check.id);
+  const requiredEvidenceIds = manual
+    ? [...FIXED_PR_CI_BASELINE]
+    : [
+        ...plan.fixedBaseline,
+        ...plan.targeted,
+        ...plan.reused,
+      ].map(({ check }) => check.id);
   const uniqueRequiredIds = [...new Set(requiredEvidenceIds)];
   const verification = verifyEvidence(input, policy, uniqueRequiredIds);
   if (verification.blocker) {
