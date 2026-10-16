@@ -1,13 +1,13 @@
-# PR 审批 v12 迁移说明（候选，未安装）
+# PR 审批 v12 迁移说明（已安装，PR #379 已合入）
 
-本文件是 SPEC #362 → #369 的迁移 howto。候选 `v12 / report v5` 未安装，
+本文件是 SPEC #362 → #369 的迁移 howto。`v12 / report v5` 已安装（`c5fa984f`，来源 main `7ee8e89`），
 一切以固定 `status` 回读为准，不以源码存在为准。
 
 ## 现状快照（2026-10-16）
 
-- 已安装运行中：`v11 / report v4`，`serialized-merge` 生效，
+- 已安装运行中：`v12 / report v5`（`c5fa984f`），`serialized-merge` 生效，
   App-only main 写入见证有效；每小时自动化 `sayhear-pr` 当前 PAUSED。
-- 候选：`v12 / report v5` 未安装。候选已集成：人工最终决定、
+- 旧版：`v11 / report v4` 已由 root 备份保留，可经冻结回滚 wizard 恢复。本版已集成：人工最终决定、
   最新 main 组合、Provider＋行为范围、零 Issue、生命周期、归属、服务观察。
 - History 与 thin CLI 已集成并通过审查，与其它候选模块同属本候选。
 - #369 实际受控 PR 全部待验证。不新增常驻服务、webhook、事件桥或统一台账。
