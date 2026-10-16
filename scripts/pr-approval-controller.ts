@@ -4303,7 +4303,7 @@ async function blockedMergeProtectionsAreSafe(
       // in a second applicable ruleset that does not restrict writers at all.
       if (!Array.isArray(ruleset.rules) || ruleset.rules.some((rule) =>
         !isRecord(rule) || (rule.type !== "update" && rule.type !== "non_fast_forward") ||
-        (rule.parameters !== undefined && (!isRecord(rule.parameters) || Object.keys(rule.parameters).length !== 0)))) return false;
+        !blockedMergeRuleParametersAreSafe(rule.type, rule.parameters))) return false;
       if (!ruleset.rules.some((rule) => rule.type === "update")) continue;
       const id = requiredPositiveInteger(ruleset.id, "rulesetId");
       if (freshWriters.has(id) || writers.get(id) !== fingerprintRuleset(ruleset)) return false;
@@ -4329,6 +4329,16 @@ async function blockedMergeProtectionsAreSafe(
   } catch {
     return false;
   }
+}
+
+// The pinned rulesets API documents update_allows_fetch_and_merge as the update
+// rule's required parameter; false is the strict form, so only it is accepted.
+function blockedMergeRuleParametersAreSafe(type: "update" | "non_fast_forward", parameters: unknown): boolean {
+  if (parameters === undefined) return true;
+  if (!isRecord(parameters)) return false;
+  const keys = Object.keys(parameters);
+  if (keys.length === 0) return true;
+  return type === "update" && keys.length === 1 && parameters.update_allows_fetch_and_merge === false;
 }
 
 function blockedMergeRulesetCoversMain(conditions: unknown): boolean | null {

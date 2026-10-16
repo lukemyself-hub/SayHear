@@ -2676,6 +2676,28 @@ describe("guarded serialized controller completion", () => {
     });
   });
 
+  it("accepts the documented update parameter only when fetch and merge is disallowed", async () => {
+    const f = await serializedControllerFixture("browser");
+    f.pull.mergeable_state = "blocked";
+    Object.assign(f.writerRuleset.rules.find((rule) => rule.type === "update")!, { parameters: { update_allows_fetch_and_merge: false } });
+    await expect(guardImmediateMerge(f.config, f.receipt.identity)).resolves.toMatchObject({ pullRequest: { mergeable_state: "blocked" } });
+    expect(f.writes).toEqual([]);
+  });
+
+  it.each([
+    ["update", { update_allows_fetch_and_merge: "false" }],
+    ["update", { update_allows_fetch_and_merge: 0 }],
+    ["update", { update_allows_fetch_and_merge: null }],
+    ["update", { update_allows_fetch_and_merge: false, unknown: true }],
+    ["non_fast_forward", { update_allows_fetch_and_merge: false }],
+  ] as const)("rejects %s rule parameters %j", async (type, parameters) => {
+    const f = await serializedControllerFixture("browser");
+    f.pull.mergeable_state = "blocked";
+    f.additionalRulesets.push({ ...structuredClone(f.writerRuleset), id: 10, rules: [{ type, parameters }] });
+    await expect(guardImmediateMerge(f.config, f.receipt.identity)).rejects.toThrow("blocked_merge_protections_unproven");
+    expect(f.writes).toEqual([]);
+  });
+
   it.each([
     ["unknown condition", { conditions: { ref_name: { include: ["refs/heads/release"], exclude: [] }, unknown: {} } }],
     ["missing include", { conditions: { ref_name: { exclude: [] } } }],
