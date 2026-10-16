@@ -37,10 +37,14 @@ Luke 对当前被审版本的 GitHub Approve 表达最终决定。控制器继�
 - 暂停与撤回：实际合入前 Luke 可撤销批准、要求暂停；暂停后停止新派发并通知在途 worker
   保留已有改动；解除暂停不恢复已撤销批准。
 - 第一版沿用现有 Codex 每小时任务，不新增常驻服务、webhook 或事件桥接。
+- 实质范围的判定：自由文本是否构成实质变化无法确定性地判断，因此不写分类器。
+  批准后需求摘要变化只暂缓人工通路；由协调者经固定 `submit` 入口给出
+  unchanged / material / unknown，控制器写入现有签名存储。unchanged 推进覆盖范围，
+  material 需要重新 Approve，unknown 等待人工。
 
 ## 与现行实现的边界
 
 本 ADR 是已确认的目标契约，不是安装或生效声明。当前已安装控制器仍为
-`sayhear-pr-review-gate:v11` / `sayhear-pr-review-report:v4`（`serialized-merge`），
-新协议实现待定。实施前须核验实时 main、安装版本、保护设置、worker 有效配置及既有
+`sayhear-pr-review-gate:v11` / `sayhear-pr-review-report:v4`（`serialized-merge`）。
+候选实现为 `sayhear-pr-review-gate:v12` / `sayhear-pr-review-report:v5`，尚未安装。实施前须核验实时 main、安装版本、保护设置、worker 有效配置及既有
 未提交改动；沿用 ADR-0148 的部署身份、配置授权与验收分离。

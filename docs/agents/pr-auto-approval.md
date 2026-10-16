@@ -1,13 +1,15 @@
 # PR 自动审批 gate
 
-## SPEC362 已确认目标契约（待实施，未安装）
+## SPEC362 已确认目标契约（候选实现中，未安装）
 
 Luke 于 2026-10-15 确认 SPEC #362（开发票 #363），属 Internal Core 工程交付工具链，
 不新增产品 Core Flow。GitHub Issue 正文、评论和标签是执行唯一真源。
 本节是已批准的目标契约，不是安装、生效或部署声明。
 
 当前已安装运行控制器不变：`sayhear-pr-review-gate:v11` /
-`sayhear-pr-review-report:v4`，`serialized-merge`。新协议实现待定（pending），
+`sayhear-pr-review-report:v4`，`serialized-merge`。候选实现在 SPEC #362 集成分支上，
+策略为 `sayhear-pr-review-gate:v12`、报告为 `sayhear-pr-review-report:v5`；
+v11 保留在已签发收据的恢复允许列表中。候选不等于安装，安装与切换由 #369 负责。
 实施前须核验实时 main、安装版本、保护设置、worker 有效配置及既有未提交改动。
 本文件其余章节保留既有安装与恢复细节，不代表已符合新契约。
 
@@ -35,7 +37,25 @@ Luke 于 2026-10-15 确认 SPEC #362（开发票 #363），属 Internal Core 工
 - 暂停与撤回：实际合入前 Luke 可撤销批准或要求暂停；暂停后停止新派发并通知在途
   worker 保留已有改动；解除暂停不恢复已撤销批准；已合入后修复或回滚另行决定。
 - 第一版沿用现有 Codex 每小时任务；不新增常驻服务、webhook、事件桥接或统一验收
-  台账。范围新鲜度按本契约描述，不新增具体命令。
+  台账。范围新鲜度不新增命令，复用固定 `prepare` / `submit` 入口。
+
+### 候选实现：人工最终决定（#363）
+
+- 新浏览器 challenge 带 `liveness: final-decision-v1`。Luke 在该 challenge 冻结后对
+  当前 head 的最新决定性 review（忽略其后的 COMMENTED）为 Approve 时，控制器从
+  签名回执构造 `humanFinalDecision`，gate 只再核验共同硬检查与显式暂停。
+  CHANGES_REQUESTED、DISMISSED、新提交、diff、路径或 workflow 变化仍撤销批准。
+- 升级前已冻结、不带 liveness 的 challenge 保持原语义：最后一条 review 决定撤销，
+  需求摘要变化即漂移，不获得人工通路。
+- 普通评论使需求摘要变化时不撤销批准，只暂缓人工通路。`prepare` 包的
+  `browserApproval` 给出 `approvedRequirementDigest` 与 `coveredRequirementDigest`；
+  两者不同时，协调者核对批准后新增的讨论，在 v5 报告中填写
+  `scopeReconciliation: { epoch, approvedRequirementDigest, verdict }` 后经 `submit`
+  提交。报告的 `requirementDigest` 必须等于实时摘要才生效。
+  `unchanged` 把覆盖范围推进到实时摘要；`material` 撤销回执，需要 Luke 重新
+  Approve；`unknown` 保持暂缓，等待人工。旧 epoch 的结论在重放时无效。
+- 零 Issue 的人工 PR 走完收集、scan、gate、App review、合入与 v2 签名收尾，不写入
+  任何 Issue。无人工决定的零 Issue PR 仍转人工，自动资格由 #367 交付。
 
 原因与取舍见 [ADR-0154](../adr/0154-human-review-is-a-complete-pr-approval-path.md)。
 旧契约中“人工只解锁局部门禁”“所有讨论变化撤销批准”“必须有开放交付 Issue”
