@@ -9,7 +9,9 @@ export type MergeRefRebuildRecord = Readonly<{
   version: 1;
   pullRequestNumber: number;
   target: MergeRefRebuildTarget;
-  phase: "closing" | "reopened";
+  // `interrupted` means the close may never have happened, so the same
+  // target may be rebuilt again.
+  phase: "closing" | "reopened" | "interrupted";
 }>;
 export interface MergeRefRebuildStore {
   read(number: number): Promise<MergeRefRebuildRecord | null>;
@@ -23,7 +25,7 @@ export function parseMergeRefRebuild(value: unknown): MergeRefRebuildRecord {
       !("version" in value) || value.version !== 1 ||
       !("pullRequestNumber" in value) || typeof value.pullRequestNumber !== "number" ||
       !Number.isSafeInteger(value.pullRequestNumber) || value.pullRequestNumber < 1 ||
-      !("phase" in value) || (value.phase !== "closing" && value.phase !== "reopened")) {
+      !("phase" in value) || (value.phase !== "closing" && value.phase !== "reopened" && value.phase !== "interrupted")) {
     throw new Error("merge_ref_rebuild_schema_invalid");
   }
   const target = value.target;
@@ -71,26 +73,39 @@ export async function requestMergeRefRebuild(
   return "requested";
 }
 
-export type ClosedPullRequestState = Readonly<{ state: string; merged: boolean; headSha: string }>;
+export type ClosedPullRequestState = Readonly<{ state: string; merged: boolean }>;
+export type MergeRefRebuildRecovery = Readonly<{
+  reopened: number[];
+  failures: Array<Readonly<{ pullRequestNumber: number; reason: string }>>;
+}>;
 
-// Reopen every PR this controller may have closed for a rebuild. A PR that
-// merged, changed head, or is already open needs no further write.
+// Reopen every PR this controller may have left closed, even if its head
+// changed meanwhile. An open or merged PR needs no write; its record allows a
+// retry because the close may never have reached GitHub. A failed record stays
+// `closing` and does not stop recovery of the others.
 export async function resumeMergeRefRebuilds(
   store: MergeRefRebuildStore,
   actions: Readonly<{
     read: (number: number) => Promise<ClosedPullRequestState>;
     reopen: (number: number) => Promise<void>;
   }>,
-): Promise<number[]> {
+): Promise<MergeRefRebuildRecovery> {
   const reopened: number[] = [];
+  const failures: Array<Readonly<{ pullRequestNumber: number; reason: string }>> = [];
   for (const record of await store.list()) {
     if (record.phase !== "closing") continue;
-    const pull = await actions.read(record.pullRequestNumber);
-    if (pull.state === "closed" && !pull.merged && pull.headSha === record.target.headSha) {
-      await actions.reopen(record.pullRequestNumber);
-      reopened.push(record.pullRequestNumber);
+    try {
+      const pull = await actions.read(record.pullRequestNumber);
+      if (pull.state === "closed" && !pull.merged) {
+        await actions.reopen(record.pullRequestNumber);
+        reopened.push(record.pullRequestNumber);
+        await store.save({ ...record, phase: "reopened" });
+      } else {
+        await store.save({ ...record, phase: "interrupted" });
+      }
+    } catch (error) {
+      failures.push({ pullRequestNumber: record.pullRequestNumber, reason: error instanceof Error ? error.message : String(error) });
     }
-    await store.save({ ...record, phase: "reopened" });
   }
-  return reopened;
+  return { reopened, failures };
 }

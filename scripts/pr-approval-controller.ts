@@ -4602,18 +4602,30 @@ export async function requestDeferredMerge(
   };
 }
 
-export async function refreshStaleIntegration(config: ControllerConfig, snapshot: Snapshot): Promise<boolean> {
+// `rebuildMergeRef` is off inside the merge guard: a close there could leave a
+// PR with a pending completion receipt closed, which reads as closed-unmerged.
+export async function refreshStaleIntegration(
+  config: ControllerConfig,
+  snapshot: Snapshot,
+  options: Readonly<{ rebuildMergeRef?: boolean }> = {},
+): Promise<boolean> {
   if (integrationModeOf(snapshot.gateInput) !== "serialized-merge") return false;
   const pull = snapshot.gateInput.pullRequest;
   const staleMergeRefSha = pull.mergeSha === null ? snapshot.staleMergeRefSha ?? null : null;
   if (snapshot.staleIntegrationRunId === null && staleMergeRefSha === null) return false;
-  if ((!pull.mergeSha && !staleMergeRefSha) || pull.mergeable !== true || containsExplicitMergeHold(snapshot) || pull.issueClosureAmbiguous ||
+  if (staleMergeRefSha !== null && options.rebuildMergeRef !== true) return true;
+  if (pull.mergeable !== true || containsExplicitMergeHold(snapshot) || pull.issueClosureAmbiguous ||
       snapshot.gateInput.issues.some((issue) => !pull.keepOpenIssueNumbers.includes(issue.number) && issue.state === "open" &&
         (!issue.labels.includes("ongoing") || issue.pause.active || issue.pause.source === "unknown" ||
           issue.labels.some((label) => ["ready-for-human", "needs-info", "needs-triage", "wontfix"].includes(label)) ||
-          (issue.blockedBy === null || issue.blockedBy.some((dependency) => !snapshot.gateInput.issues.some((target) => target.number === dependency && !pull.keepOpenIssueNumbers.includes(target.number))))))) return true;
+          (issue.blockedBy === null || issue.blockedBy.some((dependency) => !snapshot.gateInput.issues.some((target) => target.number === dependency && !pull.keepOpenIssueNumbers.includes(target.number))))))) {
+    // An ineligible stale ref falls through to the normal review and handoff.
+    return staleMergeRefSha === null;
+  }
   if (staleMergeRefSha !== null) {
     if (!config.mergeRefRebuildStore) throw new Error("merge_ref_rebuild_store_unavailable");
+    const receipt = await config.completionStore?.read(pull.number);
+    if (receipt && receipt.phase !== "complete") return true;
     const mainSha = snapshot.gateInput.repository.defaultBranchSha;
     const reopen = async () => {
       await config.api.request(repositoryPath(`/pulls/${pull.number}`), { method: "PATCH", body: { state: "open" } });
@@ -4726,7 +4738,7 @@ async function reportReviewResult(
   if (integrationModeOf(snapshot.gateInput) === "serialized-merge" && snapshot.baseReviewSafe !== true) {
     return { outcome: "awaiting_verification", message: "stale_base_review_risk: current main introduces material or unknown review risk; prepare a fresh review anchored to current main." };
   }
-  if (await refreshStaleIntegration(config, snapshot)) {
+  if (await refreshStaleIntegration(config, snapshot, { rebuildMergeRef: true })) {
     return { outcome: "awaiting_verification", message: "Waiting for current-main integration Validate; no Issue handoff was created." };
   }
   const { gate } = evaluateSnapshot(config, snapshot, report);
@@ -5040,26 +5052,29 @@ export async function scanPullRequests(
   onlyPullNumber: number | null,
   prepareOnly = false,
 ): Promise<readonly Readonly<Record<string, unknown>>[]> {
-  const results = await retryPendingIssueCompletions(config, prepareOnly);
-  if (results.some((result) => result.blocks === "repository")) return results;
+  // Reopen PRs left closed by an interrupted rebuild before reading completion
+  // receipts, which treat a closed unmerged PR as a mismatch.
+  const recoveryResults: Array<Readonly<Record<string, unknown>>> = [];
   if (!prepareOnly && config.mergeRefRebuildStore) {
     try {
-      await resumeMergeRefRebuilds(config.mergeRefRebuildStore, {
+      const recovery = await resumeMergeRefRebuilds(config.mergeRefRebuildStore, {
         read: async (number) => {
           const pull = await config.api.request<GitHubPullRequest>(repositoryPath(`/pulls/${number}`));
-          return { state: pull.state, merged: pull.merged === true, headSha: pull.head.sha };
+          return { state: pull.state, merged: pull.merged === true };
         },
         reopen: async (number) => {
           await config.api.request(repositoryPath(`/pulls/${number}`), { method: "PATCH", body: { state: "open" } });
         },
       });
+      for (const failure of recovery.failures) {
+        recoveryResults.push({ pullRequest: failure.pullRequestNumber, status: "merge_ref_rebuild_recovery_blocked", reason: failure.reason });
+      }
     } catch (error) {
-      // The signed intent stays and is retried next scan. A closed PR is not
-      // scanned, so the other PRs remain safe to process.
-      results.push({ status: "merge_ref_rebuild_recovery_blocked",
-        reason: error instanceof Error ? error.message : String(error) });
+      recoveryResults.push({ status: "merge_ref_rebuild_recovery_blocked", reason: error instanceof Error ? error.message : String(error) });
     }
   }
+  const results = [...recoveryResults, ...await retryPendingIssueCompletions(config, prepareOnly)];
+  if (results.some((result) => result.blocks === "repository")) return results;
   const pullRequests = onlyPullNumber === null
     ? await config.api.pages<GitHubPullRequest>(
         repositoryPath("/pulls?state=open"),
@@ -5161,7 +5176,7 @@ export async function scanPullRequests(
 
     if (!prepareOnly) {
       try {
-        if (await refreshStaleIntegration(config, snapshot)) {
+        if (await refreshStaleIntegration(config, snapshot, { rebuildMergeRef: true })) {
           results.push({ pullRequest: pullRequest.number, status: "waiting_for_validation", reason: "Current-main integration validation requested or awaiting reconciliation." });
           continue;
         }

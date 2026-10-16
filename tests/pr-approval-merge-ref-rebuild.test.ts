@@ -49,41 +49,63 @@ describe("merge ref rebuild requests", () => {
     expect(f.store.value).toBeNull();
   });
 
-  it("reopens a PR left closed by a crash after the close", async () => {
+  it("reopens a PR left closed by a crash after the close, even if its head moved", async () => {
     const f = fixture();
     f.actions.reopen = async () => { throw new Error("controller crashed"); };
     await expect(requestMergeRefRebuild(f.store, 348, target, f.actions)).rejects.toThrow("controller crashed");
     expect(f.store.value?.phase).toBe("closing");
     const reopened: number[] = [];
     expect(await resumeMergeRefRebuilds(f.store, {
-      read: async () => ({ state: "closed", merged: false, headSha: target.headSha }),
+      read: async () => ({ state: "closed", merged: false }),
       reopen: async (number) => { reopened.push(number); },
-    })).toEqual([348]);
+    })).toEqual({ reopened: [348], failures: [] });
     expect(reopened).toEqual([348]);
     expect(f.store.value?.phase).toBe("reopened");
   });
 
-  it.each([
-    { state: "open", merged: false, headSha: "a".repeat(40) },
-    { state: "closed", merged: true, headSha: "a".repeat(40) },
-    { state: "closed", merged: false, headSha: "e".repeat(40) },
-  ])("settles without reopening %j", async (pull) => {
+  it("retries the same target when the close may never have reached GitHub", async () => {
+    const f = fixture();
+    f.actions.close = async () => { throw new Error("HTTP 503"); };
+    await expect(requestMergeRefRebuild(f.store, 348, target, f.actions)).rejects.toThrow("HTTP 503");
+    expect(await resumeMergeRefRebuilds(f.store, {
+      read: async () => ({ state: "open", merged: false }),
+      reopen: async () => { throw new Error("must not reopen an open PR"); },
+    })).toEqual({ reopened: [], failures: [] });
+    expect(f.store.value?.phase).toBe("interrupted");
+    f.actions.close = async () => { f.writes.push("close"); };
+    expect(await requestMergeRefRebuild(f.store, 348, target, f.actions)).toBe("requested");
+    expect(f.writes).toEqual(["close", "reopen"]);
+  });
+
+  it("does not reopen a merged PR", async () => {
     const store = new MemoryStore();
     store.value = { version: 1, pullRequestNumber: 348, target, phase: "closing" };
     const reopened: number[] = [];
-    expect(await resumeMergeRefRebuilds(store, { read: async () => pull, reopen: async (number) => { reopened.push(number); } })).toEqual([]);
+    expect(await resumeMergeRefRebuilds(store, {
+      read: async () => ({ state: "closed", merged: true }),
+      reopen: async (number) => { reopened.push(number); },
+    })).toEqual({ reopened: [], failures: [] });
     expect(reopened).toEqual([]);
-    expect(store.value.phase).toBe("reopened");
+    expect(store.value.phase).toBe("interrupted");
   });
 
-  it("keeps the intent when the reopen fails during recovery", async () => {
-    const store = new MemoryStore();
-    store.value = { version: 1, pullRequestNumber: 348, target, phase: "closing" };
-    await expect(resumeMergeRefRebuilds(store, {
-      read: async () => ({ state: "closed", merged: false, headSha: target.headSha }),
-      reopen: async () => { throw new Error("HTTP 503"); },
-    })).rejects.toThrow("HTTP 503");
-    expect(store.value.phase).toBe("closing");
+  it("keeps a failed record and still recovers the others", async () => {
+    const records = new Map<number, MergeRefRebuildRecord>([
+      [348, { version: 1, pullRequestNumber: 348, target, phase: "closing" }],
+      [349, { version: 1, pullRequestNumber: 349, target, phase: "closing" }],
+    ]);
+    const store: MergeRefRebuildStore = {
+      read: async (number) => records.get(number) ?? null,
+      save: async (value) => { records.set(value.pullRequestNumber, value); },
+      list: async () => [...records.values()],
+    };
+    const reopened: number[] = [];
+    expect(await resumeMergeRefRebuilds(store, {
+      read: async () => ({ state: "closed", merged: false }),
+      reopen: async (number) => { if (number === 348) throw new Error("HTTP 422"); reopened.push(number); },
+    })).toEqual({ reopened: [349], failures: [{ pullRequestNumber: 348, reason: "HTTP 422" }] });
+    expect(records.get(348)?.phase).toBe("closing");
+    expect(records.get(349)?.phase).toBe("reopened");
   });
 
   it("rejects malformed records", () => {
