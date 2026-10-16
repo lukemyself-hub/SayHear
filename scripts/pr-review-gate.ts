@@ -666,6 +666,31 @@ export function closingKeywordIssueNumbers(text: string): number[] {
   return [...numbers].sort((left, right) => left - right);
 }
 
+/**
+ * Issues this PR explicitly delivers: named by a closing keyword in the PR
+ * title or body or by GitHub's closing references, among the Issues the PR
+ * references, minus keep-open declarations. Other references are background:
+ * they shape the requirement digest but get no lifecycle writes and do not
+ * decide eligibility.
+ */
+export function deliveryIssueNumbers(
+  pullRequest: Readonly<{ title: string; body: string; closingIssueNumbers: readonly number[] | null; keepOpenIssueNumbers: readonly number[] }>,
+  issues: readonly Readonly<{ number: number }>[],
+): number[] {
+  const closing = new Set([
+    ...closingKeywordIssueNumbers(`${pullRequest.title}\n${pullRequest.body}`),
+    ...(pullRequest.closingIssueNumbers ?? []),
+  ]);
+  return issues.map((issue) => issue.number)
+    .filter((number) => closing.has(number) && !pullRequest.keepOpenIssueNumbers.includes(number))
+    .sort((left, right) => left - right);
+}
+
+function openDeliveryIssues(input: PrReviewGateInput): PrReviewGateInput["issues"] {
+  const delivery = deliveryIssueNumbers(input.pullRequest, input.issues);
+  return input.issues.filter((issue) => issue.state === "open" && delivery.includes(issue.number));
+}
+
 /** An explicit pause in the PR or any linked Issue title or body. Shared by the gate and controller. */
 export function hasExplicitMergeHold(
   pullRequest: Readonly<{ title: string; body: string }>,
@@ -1437,7 +1462,7 @@ function requiresHumanReview(input: PrReviewGateInput, policy: TrustedPrReviewPo
   }
   const numbers = input.issues.map((issue) => issue.number);
   const linked = input.pullRequest.linkedIssueNumbers;
-  if (numbers.length === 0 || new Set(numbers).size !== numbers.length ||
+  if (new Set(numbers).size !== numbers.length ||
     new Set(linked).size !== linked.length || numbers.length !== linked.length ||
     linked.some((number) => !numbers.includes(number))) {
     return { code: "human_review_required", message: "The PR must supply every referenced Issue exactly once." };
@@ -1445,18 +1470,21 @@ function requiresHumanReview(input: PrReviewGateInput, policy: TrustedPrReviewPo
   if (input.pullRequest.state !== "open") return { code: "human_review_required", message: "The PR is closed." };
   const closure = closureDeclarationReason(input);
   if (closure) return closure;
-  const deliveryIssues = input.issues.filter((issue) => !input.pullRequest.keepOpenIssueNumbers.includes(issue.number));
-  if (!deliveryIssues.some((issue) => issue.state === "open")) {
-    return { code: "human_review_required", message: "All referenced Issues are already closed." };
+  // No delivered Issue is ordinary: the PR body then carries the requirement.
+  const delivery = deliveryIssueNumbers(input.pullRequest, input.issues);
+  if (delivery.length === 0 && input.pullRequest.body.trim().length === 0) {
+    return { code: "human_review_required", message: "The PR names no delivered Issue and states no requirement." };
   }
   for (const issue of input.issues) {
-    if (issue.body.trim().length === 0) return { code: "human_review_required", message: `Issue #${issue.number} has no review requirement.` };
     if (input.pullRequest.keepOpenIssueNumbers.includes(issue.number)) continue;
+    // Pauses are holds, so they apply to background references too.
     if (issue.pause.active || issue.pause.source === "unknown") {
       return { code: "human_review_required", message: `Issue #${issue.number} is paused or its pause state cannot be trusted.` };
     }
+    if (!delivery.includes(issue.number)) continue;
+    if (issue.body.trim().length === 0) return { code: "human_review_required", message: `Issue #${issue.number} has no review requirement.` };
     if (issue.state === "closed") continue;
-    if (issue.blockedBy === null || issue.blockedBy.some((number) => !deliveryIssues.some((target) => target.number === number))) {
+    if (issue.blockedBy === null || issue.blockedBy.some((number) => !delivery.includes(number))) {
       return { code: "human_review_required", message: `Issue #${issue.number} still has blocking dependencies outside this PR.` };
     }
     if (issue.labels.some((label) =>
@@ -1647,7 +1675,7 @@ export function evaluatePrReviewGate(
   if (!manual) {
     if (
       input.pullRequest.externalReviewState === "unavailable" ||
-      input.issues.some((issue) => issue.state === "open" && !input.pullRequest.keepOpenIssueNumbers.includes(issue.number) && issue.blockedBy === null)
+      openDeliveryIssues(input).some((issue) => issue.blockedBy === null)
     ) {
       return outcome(input, "awaiting_verification", {
         code: "github_context_unavailable",
@@ -1783,14 +1811,14 @@ export function evaluatePrReviewGate(
       message: "The review says approve but contains a P0, P1, or P2 finding.",
     });
   }
-  if (input.issues.some((issue) => issue.state === "open" && !input.pullRequest.keepOpenIssueNumbers.includes(issue.number) && !issue.labels.some((label) => label.toLowerCase() === "ongoing"))) {
+  if (openDeliveryIssues(input).some((issue) => !issue.labels.some((label) => label.toLowerCase() === "ongoing"))) {
     return outcome(input, "awaiting_verification", {
       code: "issue_not_claimed",
       message: "The linked Issue does not have the ongoing execution label.",
     });
   }
   if (
-    input.issues.some((issue) => issue.state === "open" && !input.pullRequest.keepOpenIssueNumbers.includes(issue.number) && issue.labels.some(
+    openDeliveryIssues(input).some((issue) => issue.labels.some(
       (label) => label.toLowerCase() === "ready-for-agent",
     ))
   ) {
