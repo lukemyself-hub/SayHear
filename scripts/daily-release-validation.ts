@@ -716,6 +716,12 @@ const NON_RUNTIME_TOOL_PATHS: ReadonlySet<string> = new Set([
   "tests/pr-approval-integration-refresh.test.ts",
   "tests/pr-approval-merge-ref-rebuild.test.ts",
   "tests/pr-review-gate.test.ts",
+  "tests/pr-approval-behavior-scope.test.ts",
+  "tests/pr-approval-deployment-closeout.test.ts",
+  "tests/pr-work-coordination.test.ts",
+  "tests/pr-worker-coordinator.test.ts",
+  "tests/pr-worker-service.test.ts",
+  "tests/provider-behavior-review.test.ts",
 ]);
 
 export function classifyReleaseImpact(
