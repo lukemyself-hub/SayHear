@@ -1764,10 +1764,11 @@ describe("PR approval controller", () => {
       count: 0,
       historyConsistent: true,
     });
-    expect(remediationFromHistory({ count: 0, historyConsistent: true }, { active: false, source: "none" })).toMatchObject({
+    expect(remediationFromHistory({ count: 0, historyConsistent: true, latestHeadSha: null }, { active: false, source: "none" })).toMatchObject({
       roundsConsumed: 0,
       paused: false,
       historyConsistent: true,
+      latestReviewedHead: null,
     });
   });
 
@@ -1787,11 +1788,13 @@ describe("PR approval controller", () => {
     expect(nextRequestChangeRound(history, "e".repeat(64))).toBe(MAX_REMEDIATION_ROUNDS);
     // The second post-fix review on the same changed diff replays the same round.
     expect(nextRequestChangeRound({ ...history, count: MAX_REMEDIATION_ROUNDS }, "e".repeat(64))).toBe(MAX_REMEDIATION_ROUNDS);
-    expect(remediationFromHistory({ count: MAX_REMEDIATION_ROUNDS, historyConsistent: true }, { active: false, source: "none" })).toMatchObject({
+    expect(remediationFromHistory({ count: MAX_REMEDIATION_ROUNDS, historyConsistent: true, latestHeadSha: history.latestHeadSha }, { active: false, source: "none" })).toMatchObject({
       roundsConsumed: MAX_REMEDIATION_ROUNDS,
       paused: true,
       pauseSource: "review-app",
+      latestReviewedHead: history.latestHeadSha,
     });
+    expect(history.latestHeadSha).toBe(HEAD_SHA.toLowerCase());
   });
 
   it("regression: same review id with round 0 then 3 keeps MAX and fails closed", () => {

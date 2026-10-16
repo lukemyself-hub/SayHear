@@ -1579,6 +1579,34 @@ function closureDeclarationReason(input: PrReviewGateInput): Readonly<{ code: st
   return null;
 }
 
+// Issues GitHub itself would close on merge (the Development-sidebar closing
+// set) must sit inside delivery before an immediate merge, on either route. A
+// null (unreadable) set fails closed; a keep-open number or a number outside
+// deliveryIssueNumbers stops the merge. An empty set with zero Issues, or a
+// set exactly equal to delivery, still passes.
+function immediateClosingSetReason(input: PrReviewGateInput): Readonly<{ code: string; message: string }> | null {
+  const closing = input.pullRequest.closingIssueNumbers;
+  if (closing === null) {
+    return { code: "human_review_required", message: "The Issues GitHub would close on merge could not be read (closing_set_unverified)." };
+  }
+  const keepOpen = closing.filter((number) => input.pullRequest.keepOpenIssueNumbers.includes(number));
+  if (keepOpen.length > 0) {
+    return {
+      code: "human_review_required",
+      message: `GitHub would close ${keepOpen.map((number) => `#${number}`).join(", ")} on merge, but the PR declares them keep-open (closing_set_outside_delivery). Remove the Development links or the keep-open declarations so the Issue lifecycle is unambiguous.`,
+    };
+  }
+  const delivery = new Set(deliveryIssueNumbers(input.pullRequest, input.issues));
+  const outside = closing.filter((number) => !delivery.has(number));
+  if (outside.length > 0) {
+    return {
+      code: "human_review_required",
+      message: `GitHub would close ${outside.map((number) => `#${number}`).join(", ")} on merge outside the delivery Issues (closing_set_outside_delivery). Remove the closing keywords and Development links so the Issues stay open.`,
+    };
+  }
+  return null;
+}
+
 function deferralPolicyEquals(
   candidate: PreMergeDeferralPolicy,
   registry: PreMergeDeferralPolicy,
@@ -2316,6 +2344,16 @@ export function evaluatePrReviewGate(
         verification.accepted,
       );
     }
+  }
+  const immediateClosing = immediateClosingSetReason(input);
+  if (immediateClosing) {
+    return outcome(
+      input,
+      "human_decision",
+      immediateClosing,
+      uniqueRequiredIds,
+      verification.accepted,
+    );
   }
   return {
     version: PR_REVIEW_REPORT_VERSION,

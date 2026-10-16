@@ -2568,6 +2568,7 @@ type Snapshot = Readonly<{
     paused: boolean;
     pauseSource: "none" | "maintainer" | "review-app";
     historyConsistent: boolean;
+    latestReviewedHead: string | null;
   }>;
   remediationHistory: ReturnType<typeof parseRequestChangeHistory>;
   gateInput: Omit<PrReviewGateInput, "review" | "evidence">;
@@ -2581,16 +2582,18 @@ type Snapshot = Readonly<{
 export const MAX_REMEDIATION_ROUNDS = 3;
 
 export function remediationFromHistory(
-  history: Pick<ReturnType<typeof parseRequestChangeHistory>, "count" | "historyConsistent">,
+  history: Pick<ReturnType<typeof parseRequestChangeHistory>, "count" | "historyConsistent" | "latestHeadSha">,
   pause: Pick<PrReviewGateInput["issues"][number]["pause"], "active" | "source">,
 ): Snapshot["remediation"] {
   const historyConsistent = history.historyConsistent;
+  const latestReviewedHead = history.latestHeadSha;
   if (pause.source === "unknown") {
     return {
       roundsConsumed: history.count,
       paused: false,
       pauseSource: "none",
       historyConsistent: false,
+      latestReviewedHead,
     };
   }
   const budgetExhausted = history.count >= MAX_REMEDIATION_ROUNDS;
@@ -2600,6 +2603,7 @@ export function remediationFromHistory(
     paused,
     pauseSource: pause.active ? pause.source : (budgetExhausted ? "review-app" : "none"),
     historyConsistent,
+    latestReviewedHead,
   };
 }
 
@@ -4216,7 +4220,7 @@ async function recordReviewHandoff(
   const pauseBody = (round >= MAX_REMEDIATION_ROUNDS && snapshot.remediation.historyConsistent)
     ? [
         "",
-        "Automatic follow-up is paused after three post-fix reviews with blocking findings. Luke must resume it explicitly.",
+        "Automatic remediation stopped at 3/3 post-fix reviews with blocking findings. Luke can take over, or Approve the current head in the browser (human final decision).",
         `@lukemyself-hub`,
         `${PAUSE_MARKER} pr=${report.pullRequestNumber} active=true round=${round} -->`,
       ]
