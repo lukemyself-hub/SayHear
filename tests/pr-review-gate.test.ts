@@ -7,6 +7,9 @@ import {
   type ReleaseImpactKind,
 } from "../scripts/daily-release-validation.ts";
 import {
+  HUMAN_FINAL_DECISION_REVIEWER_ID,
+  HUMAN_FINAL_DECISION_REVIEWER_LOGIN,
+  HUMAN_FINAL_DECISION_VERSION,
   MAIN_WRITER_ATTESTATION_VERSION,
   PR_REVIEW_GATE_POLICY_VERSION,
   PR_REVIEW_REPORT_VERSION,
@@ -14,6 +17,7 @@ import {
   SAYHEAR_REPOSITORY_ID,
   SAYHEAR_REPOSITORY_NAME,
   evaluatePrReviewGate,
+  hasHumanFinalDecision,
   integrationModeOf,
   parsePrReviewGateInput,
   requirementDigest,
@@ -2060,5 +2064,236 @@ describe("PR review gate", () => {
     expect(() => parsePrReviewGateInput(malformed)).toThrow(
       "review.decision is invalid",
     );
+  });
+
+  it("activates the complete human route only with a valid binding and fixed evidence", () => {
+    function manualSetup(overrides: InputOverrides = {}) {
+      const raw = input(overrides);
+      const digest = requirementDigest(raw.issues, raw.pullRequest);
+      const candidate: PrReviewGateInput = {
+        ...raw,
+        review: { ...raw.review, requirementDigest: digest },
+      };
+      const bound: TrustedPrReviewPolicy = {
+        ...policy,
+        humanApprovalChannel: "browser",
+        humanFinalDecision: {
+          version: HUMAN_FINAL_DECISION_VERSION,
+          repositoryId: SAYHEAR_REPOSITORY_ID,
+          pullRequestNumber: candidate.pullRequest.number,
+          headSha: candidate.pullRequest.headSha,
+          requirementDigest: digest,
+          validateWorkflowBlobSha: WORKFLOW_BLOB_SHA,
+          reviewerActorId: HUMAN_FINAL_DECISION_REVIEWER_ID,
+          reviewerLogin: HUMAN_FINAL_DECISION_REVIEWER_LOGIN,
+          reviewId: 999,
+        },
+      };
+      return { candidate, bound };
+    }
+
+    const { candidate, bound } = manualSetup({
+      issues: [],
+      pullRequest: {
+        linkedIssueNumbers: [],
+        closingIssueNumbers: [],
+        keepOpenIssueNumbers: [],
+      },
+      review: {
+        declaredImpacts: [],
+        decision: "request_changes",
+        findings: [{
+          severity: "P2",
+          file: "packages/application/src/server/fix.ts",
+          line: 12,
+          trigger: "retry with an expired record",
+          userImpact: "the request returns stale data",
+          evidence: "the retry path skips the version check",
+        }],
+        riskFlags: { productDefinitionChanged: true },
+        capability: { newCapabilityEnabled: true },
+      },
+      evidence: FIXED_PR_CI_BASELINE.map((id) => makeEvidence(id)),
+    });
+
+    const approved = evaluatePrReviewGate(candidate, bound);
+    expect(approved.outcome).toBe("merge_candidate");
+    expect(approved.requiredEvidenceIds).toEqual([...FIXED_PR_CI_BASELINE]);
+    expect(approved.acceptedEvidenceIds).toEqual([...FIXED_PR_CI_BASELINE]);
+    expect(approved.deferredEvidence).toEqual([]);
+
+    // Missing or forged binding keeps the exact automatic outcome.
+    expect(evaluatePrReviewGate(candidate, policy).outcome).not.toBe("merge_candidate");
+    expect(evaluatePrReviewGate(candidate, {
+      ...bound,
+      humanApprovalChannel: "unknown",
+    }).outcome).toBe(evaluatePrReviewGate(candidate, policy).outcome);
+    expect(evaluatePrReviewGate(candidate, {
+      ...bound,
+      humanFinalDecision: { ...bound.humanFinalDecision!, headSha: "f".repeat(40) },
+    }).outcome).toBe(evaluatePrReviewGate(candidate, policy).outcome);
+
+    // Fixed baseline provenance still blocks the manual route.
+    const failedFixed = {
+      ...candidate,
+      evidence: candidate.evidence.map((entry, index) =>
+        index === 0 && entry.kind !== "deferred-before-merge"
+          ? { ...entry, result: "failed" as const }
+          : entry),
+    };
+    expect(evaluatePrReviewGate(failedFixed, bound).outcome).toBe("awaiting_verification");
+    const untrustedFixed = {
+      ...candidate,
+      evidence: candidate.evidence.map((entry, index) =>
+        index === 0 && entry.kind !== "deferred-before-merge"
+          ? { ...entry, source: { ...entry.source, appId: 77 } }
+          : entry),
+    };
+    expect(evaluatePrReviewGate(untrustedFixed, bound).reasons[0]?.code).toBe("required_evidence_missing");
+    expect(evaluatePrReviewGate({ ...candidate, evidence: [] }, bound).outcome).toBe("awaiting_verification");
+
+    // Binding, state, integration, and trust holds still block.
+    expect(evaluatePrReviewGate(
+      { ...candidate, pullRequest: { ...candidate.pullRequest, headSha: "f".repeat(40) } },
+      bound,
+    ).reasons[0]?.code).toBe("stale_review");
+    expect(evaluatePrReviewGate(
+      { ...candidate, repository: { ...candidate.repository, id: 1 } },
+      bound,
+    ).outcome).toBe("human_decision");
+    expect(evaluatePrReviewGate(
+      { ...candidate, pullRequest: { ...candidate.pullRequest, body: "Changed requirement" } },
+      bound,
+    ).reasons[0]?.code).toBe("requirements_changed");
+    expect(evaluatePrReviewGate(
+      { ...candidate, pullRequest: { ...candidate.pullRequest, draft: true } },
+      bound,
+    ).reasons[0]?.code).toBe("pr_not_ready");
+    expect(evaluatePrReviewGate(
+      { ...candidate, pullRequest: { ...candidate.pullRequest, headRepositoryId: 999 } },
+      bound,
+    ).reasons[0]?.code).toBe("pr_not_ready");
+    expect(evaluatePrReviewGate(
+      { ...candidate, pullRequest: { ...candidate.pullRequest, state: "closed" as const } },
+      bound,
+    ).outcome).toBe("human_decision");
+    expect(evaluatePrReviewGate(
+      { ...candidate, repository: { ...candidate.repository, defaultBranchSha: "f".repeat(40) } },
+      bound,
+    ).reasons[0]?.code).toBe("base_or_merge_ref_changed");
+
+    const pausedSetup = manualSetup({
+      review: {
+        declaredImpacts: [],
+        decision: "request_changes",
+        findings: [{
+          severity: "P2",
+          file: "packages/application/src/server/fix.ts",
+          line: 12,
+          trigger: "retry",
+          userImpact: "stale",
+          evidence: "skip",
+        }],
+        riskFlags: { productDefinitionChanged: true },
+      },
+      evidence: FIXED_PR_CI_BASELINE.map((id) => makeEvidence(id)),
+    });
+    expect(evaluatePrReviewGate({
+      ...pausedSetup.candidate,
+      issues: [{ ...pausedSetup.candidate.issues[0]!, pause: { active: true, source: "maintainer" as const } }],
+    }, pausedSetup.bound).outcome).toBe("human_decision");
+    expect(evaluatePrReviewGate({
+      ...pausedSetup.candidate,
+      issues: [{ ...pausedSetup.candidate.issues[0]!, pause: { active: false, source: "unknown" as const } }],
+    }, pausedSetup.bound).outcome).toBe("human_decision");
+
+    expect(evaluatePrReviewGate(candidate, { ...bound, reviewAppId: null }).outcome)
+      .toBe("awaiting_verification");
+    expect(evaluatePrReviewGate(
+      { ...candidate, branchProtection: null },
+      bound,
+    ).reasons[0]?.code).toBe("branch_protection_unreadable");
+    expect(evaluatePrReviewGate(
+      { ...candidate, runtime: { ...candidate.runtime, ordinaryMergeTriggersProduction: null } },
+      bound,
+    ).reasons[0]?.code).toBe("production_deploy_behavior_unknown");
+    expect(evaluatePrReviewGate(
+      {
+        ...candidate,
+        runtime: {
+          ...candidate.runtime,
+          ordinaryMergeTriggersProduction: true,
+          productionMergeAuthorized: false,
+        },
+      },
+      bound,
+    ).outcome).toBe("human_decision");
+    expect(evaluatePrReviewGate(
+      { ...candidate, pullRequest: { ...candidate.pullRequest, externalReviewState: "unavailable" as const } },
+      bound,
+    ).outcome).toBe("awaiting_verification");
+  });
+
+  it("validates the trusted human final decision binding only", () => {
+    const candidate = input();
+    const digest = requirementDigest(candidate.issues, candidate.pullRequest);
+    const bound: TrustedPrReviewPolicy = {
+      ...policy,
+      humanApprovalChannel: "browser",
+      humanFinalDecision: {
+        version: HUMAN_FINAL_DECISION_VERSION,
+        repositoryId: SAYHEAR_REPOSITORY_ID,
+        pullRequestNumber: 321,
+        headSha: HEAD_SHA,
+        requirementDigest: digest,
+        validateWorkflowBlobSha: WORKFLOW_BLOB_SHA,
+        reviewerActorId: HUMAN_FINAL_DECISION_REVIEWER_ID,
+        reviewerLogin: HUMAN_FINAL_DECISION_REVIEWER_LOGIN,
+        reviewId: 999,
+      },
+    };
+
+    expect(hasHumanFinalDecision(candidate, bound)).toBe(true);
+    expect(hasHumanFinalDecision(candidate, policy)).toBe(false);
+    expect(
+      hasHumanFinalDecision(candidate, {
+        ...policy,
+        humanApprovalChannel: "browser",
+      }),
+    ).toBe(false);
+    expect(
+      hasHumanFinalDecision(candidate, { ...bound, humanApprovalChannel: "legacy-root" }),
+    ).toBe(false);
+    expect(
+      hasHumanFinalDecision(candidate, { ...bound, humanApprovalChannel: "unknown" }),
+    ).toBe(false);
+    const binding = bound.humanFinalDecision!;
+    const cases: TrustedPrReviewPolicy[] = [
+      { ...bound, humanFinalDecision: { ...binding, headSha: "b".repeat(40) } },
+      { ...bound, humanFinalDecision: { ...binding, requirementDigest: "0".repeat(64) } },
+      { ...bound, humanFinalDecision: { ...binding, repositoryId: 1 } },
+      { ...bound, humanFinalDecision: { ...binding, pullRequestNumber: 322 } },
+      { ...bound, humanFinalDecision: { ...binding, reviewerActorId: 303 } },
+      { ...bound, humanFinalDecision: { ...binding, reviewerLogin: "someone-else" } },
+      { ...bound, humanFinalDecision: { ...binding, reviewId: 0 } },
+      {
+        ...bound,
+        humanFinalDecision: {
+          ...binding,
+          version: "legacy" as typeof HUMAN_FINAL_DECISION_VERSION,
+        },
+      },
+      { ...bound, validateWorkflowBlobSha: null },
+      { ...bound, humanFinalDecision: { ...binding, validateWorkflowBlobSha: "e".repeat(40) } },
+    ];
+    for (const mismatch of cases) {
+      expect(hasHumanFinalDecision(candidate, mismatch)).toBe(false);
+    }
+    expect(
+      hasHumanFinalDecision(
+        input({ review: { reviewerActorId: HUMAN_FINAL_DECISION_REVIEWER_ID } }),
+        policy,
+      ),
+    ).toBe(false);
   });
 });
