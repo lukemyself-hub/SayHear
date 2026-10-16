@@ -22,6 +22,7 @@
     "release:validate": "tsx scripts/daily-release-validation.ts",
     "release:closure:report": "tsx scripts/release-closure-report.ts",
     "pr:review-gate:dry-run": "tsx scripts/pr-review-gate.ts",
+    "pr:work": "tsx scripts/pr-worker-coordinator.ts",
     "pr:approval": "tsx scripts/pr-approval-controller.ts",
     "pr:deploy-closeout": "tsx scripts/pr-approval/deployment-closeout.ts",
     "pr:approval:build": "node scripts/build-pr-approval-controller.mjs",
