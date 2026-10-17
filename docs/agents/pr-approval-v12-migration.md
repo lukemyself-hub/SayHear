@@ -1,6 +1,6 @@
 # PR 审批 v12 迁移说明（最终源码已安装；受控验收进行中）
 
-本文件是 SPEC #362 → #369 的迁移 howto。`v12 / report v5` 最终源码安装已完成（控制器 `5c454fdda28f3807e556f0c40ec7be0e91596147e6a90a0df69848d210129fbe`，`build.sourceCommit 2cdf0c60defc683dc06314dece2ca7193853dd5a` 干净源码身份，PR #384 合入），`serialized-merge` 生效，真保护／App-only 守卫 intact；全部 17 项 completion 收据 `phase` 已 complete 且 attempt 均为 1（#348、#351、#352、#356、#359、#361、#373、#376、#379、#381、#383、#384、#385、#387、#388、#390、#391）。先前最终源码（`05ee8089…`／`7ee8e89`）现为已审查回滚恢复对象；`c5fa984f`／`34ab5815` 为更旧 fallback，仅历史保留。
+[受控文档冲突夹具，禁止发布或合入；本分支有意从旧基线构造。] 本文件是 SPEC #362 → #369 的迁移 howto。`v12 / report v5` 最终源码安装已完成（控制器 `5c454fdda28f3807e556f0c40ec7be0e91596147e6a90a0df69848d210129fbe`，`build.sourceCommit 2cdf0c60defc683dc06314dece2ca7193853dd5a` 干净源码身份，PR #384 合入），`serialized-merge` 生效，真保护／App-only 守卫 intact；全部 17 项 completion 收据 `phase` 已 complete 且 attempt 均为 1（#348、#351、#352、#356、#359、#361、#373、#376、#379、#381、#383、#384、#385、#387、#388、#390、#391）。先前最终源码（`05ee8089…`／`7ee8e89`）现为已审查回滚恢复对象；`c5fa984f`／`34ab5815` 为更旧 fallback，仅历史保留。
 一切以固定 `status` 回读为准，不以源码存在为准。
 
 ## 现状快照（2026-10-17，最终源码安装后；真实值以固定 `status` 为准）
