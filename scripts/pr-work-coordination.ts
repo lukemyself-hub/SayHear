@@ -71,6 +71,16 @@ export type ProbeWorker = (
   owner: WorkOwnerSnapshot,
 ) => Promise<WorkerProbe>;
 
+/**
+ * Caller-supplied dispatch check for a sessionless owner: true when no
+ * wrapper was launched for this reservation yet, so probing-free release is
+ * safe. Evaluated inside the store transaction, right before the release
+ * write.
+ */
+export type UndispatchedCheck = (
+  owner: WorkOwnerSnapshot,
+) => Promise<boolean>;
+
 export interface WorkIdentity {
   repositoryId: number;
   pullRequestNumber: number;
@@ -109,6 +119,12 @@ export interface SeenSession {
   model: string | null;
 }
 
+export interface AcceptedReview {
+  head: string;
+  changeDigest: string;
+  sessionId: string;
+}
+
 export interface WorkRecord extends WorkIdentity {
   version: 1;
   owner: WorkOwnerSnapshot | null;
@@ -116,6 +132,13 @@ export interface WorkRecord extends WorkIdentity {
   findings: WorkFinding[];
   /** Every session ever attached for this PR with the role that used it; bounded, fail closed. */
   seenSessions: SeenSession[];
+  /**
+   * Accepted code-review results (reserved head + change digest + session);
+   * bounded, fail closed. A repeat code-review reserve for the same head +
+   * change digest is refused as `already_reviewed` unless re-review is
+   * explicitly requested.
+   */
+  acceptedReviews: AcceptedReview[];
 }
 
 /**
@@ -143,6 +166,11 @@ export interface ReserveInput extends WorkIdentity {
   workerStateDir?: string | null;
   model?: string | null;
   ledger: TrustedLedger;
+  /**
+   * Explicit re-review: bypasses only the `already_reviewed` refusal for a
+   * code-review reserve. Defaults to false; non-boolean values are invalid.
+   */
+  reReview?: boolean;
 }
 
 export interface AttachInput extends WorkIdentity {
@@ -156,7 +184,11 @@ export interface AttachInput extends WorkIdentity {
 }
 
 export interface ReleaseInput extends WorkIdentity {
-  /** Omitted for crash-gap recovery; then any owner needs stopped proof. */
+  /**
+   * Omitted for crash-gap recovery; then any owner needs stopped proof.
+   * A sessionless (never-attached) owner additionally requires its token:
+   * without a token it is never released.
+   */
   ownerToken?: string;
 }
 
@@ -189,6 +221,7 @@ export type ReserveResult =
         | "rounds_exhausted"
         | "review_not_recorded"
         | "repeated_finding"
+        | "already_reviewed"
         | "occupied"
         | "too_large"
         | CorruptReason;
@@ -221,6 +254,7 @@ export type ReleaseResult =
       ok: false;
       reason:
         | "token_mismatch"
+        | "dispatched_unattached"
         | "worker_running"
         | "worker_unknown"
         | "too_large"
@@ -269,6 +303,7 @@ const MODEL_MAX = 256;
 const PATH_MAX = 1_024;
 const MAX_FINDINGS = 64;
 const MAX_SESSION_IDS = 64;
+const MAX_ACCEPTED_REVIEWS = 20;
 const LOCK_SETTLE_LIMIT = 200;
 
 const REPOSITORY_ROOT = resolve(
@@ -615,6 +650,43 @@ function parseOwner(value: unknown): WorkOwnerSnapshot | null {
   };
 }
 
+function parseAcceptedReviews(value: unknown): AcceptedReview[] {
+  // Records written before accepted-review memory existed carry no field;
+  // they parse as an empty list so existing on-disk state keeps working.
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > MAX_ACCEPTED_REVIEWS) {
+    throw corrupt("record acceptedReviews are malformed.");
+  }
+  const parsed: AcceptedReview[] = [];
+  for (const entry of value) {
+    if (!isRecord(entry)) throw corrupt("record acceptedReviews are malformed.");
+    const allowed = new Set(["head", "changeDigest", "sessionId"]);
+    for (const field of Object.keys(entry)) {
+      if (!allowed.has(field)) throw corrupt("record acceptedReviews are malformed.");
+    }
+    const head = entry.head;
+    const changeDigest = entry.changeDigest;
+    const sessionId = entry.sessionId;
+    if (
+      typeof head !== "string" ||
+      head.length !== 40 ||
+      head.toLowerCase() !== head ||
+      !/^[0-9a-f]+$/.test(head) ||
+      typeof changeDigest !== "string" ||
+      changeDigest.length !== 64 ||
+      changeDigest.toLowerCase() !== changeDigest ||
+      !/^[0-9a-f]+$/.test(changeDigest) ||
+      typeof sessionId !== "string" ||
+      sessionId.length === 0 ||
+      sessionId.length > SESSION_MAX
+    ) {
+      throw corrupt("record acceptedReviews are malformed.");
+    }
+    parsed.push({ head, changeDigest, sessionId });
+  }
+  return parsed;
+}
+
 function parseWorkRecord(value: unknown, identity: WorkIdentity): WorkRecord {
   if (!isRecord(value)) throw corrupt("record must be a JSON object.");
   if (value.version !== RECORD_VERSION) {
@@ -725,6 +797,7 @@ function parseWorkRecord(value: unknown, identity: WorkIdentity): WorkRecord {
     phase,
     findings: parsedFindings,
     seenSessions: parsedSessions,
+    acceptedReviews: parseAcceptedReviews(value.acceptedReviews),
   };
 }
 
@@ -1002,6 +1075,7 @@ function blankRecord(identity: {
     phase: "reserved",
     findings: [],
     seenSessions: [],
+    acceptedReviews: [],
   };
 }
 
@@ -1149,10 +1223,11 @@ export async function reserveWork(
   const workerStateDir = optionalAbsolutePath(input.workerStateDir, "workerStateDir");
   const model = optionalText(input.model, "model", MODEL_MAX);
   const ledger = checkLedger(input.ledger);
+  const reReview = input.reReview === undefined ? false : flag(input.reReview, "reReview");
   try {
     return await withTooLarge<ReserveResult>(null, () =>
       withRecord<ReserveResult>(store, ids, async (current) => {
-      const refuse = (reason: "paused" | "history_inconsistent" | "rounds_exhausted" | "review_not_recorded" | "repeated_finding" | "occupied" | CorruptReason): { write: null; result: ReserveResult } =>
+      const refuse = (reason: "paused" | "history_inconsistent" | "rounds_exhausted" | "review_not_recorded" | "repeated_finding" | "already_reviewed" | "occupied" | CorruptReason): { write: null; result: ReserveResult } =>
         ({ write: null, result: { ok: false, reason, record: current } });
       if (ledger.paused) return refuse("paused");
       if (!ledger.historyConsistent) return refuse("history_inconsistent");
@@ -1169,8 +1244,20 @@ export async function reserveWork(
       if (role === "implementation" && (current?.findings.some((finding) => finding.repeatedAfterFix) ?? false)) {
         return refuse("repeated_finding");
       }
+      // Occupancy first: while an owner is held no re-review request may
+      // leapfrog it, and a re-review flag never turns an `occupied` refusal
+      // into a confusing retry loop.
       if (current?.owner !== null && current?.owner !== undefined) {
         return refuse("occupied");
+      }
+      // An accepted code-review result for this exact head + change digest
+      // refuses a duplicate reviewer; an explicit re-review bypasses only
+      // this check. Implementation reservations are unaffected.
+      if (role === "code-review" && !reReview) {
+        const reviewed = (current?.acceptedReviews ?? []).some(
+          (entry) => entry.head === startHead && entry.changeDigest === changeDigest,
+        );
+        if (reviewed) return refuse("already_reviewed");
       }
       const base = current ?? blankRecord(ids);
       const record: WorkRecord = {
@@ -1322,7 +1409,16 @@ export async function attachSession(
 
 /**
  * Release the current owner (or recover the crash gap when no token is
- * given). The probe runs outside the short lock; the owner token is
+ * given). A sessionless reservation (null session, never dispatched) is
+ * released by its token holder without probing any session: if the owner is
+ * still sessionless under the lock, the token match alone clears it. The
+ * store-level precondition is that no wrapper was launched for this
+ * reservation; the CLI enforces it via an `undispatched` predicate evaluated
+ * inside the transaction, bound to this reservation's attempt (the holder
+ * must not launch the wrapper and release concurrently). Without the
+ * predicate the sessionId/token checks alone clear a sessionless owner. A
+ * bound owner keeps
+ * the probe path: the probe runs outside the short lock; the owner token is
  * re-checked under the lock before clearing. Requires fresh stopped proof: a
  * running/unknown worker keeps occupancy. Findings and other edits are kept.
  */
@@ -1330,6 +1426,7 @@ export async function releaseWork(
   store: PrWorkCoordinationStore,
   input: ReleaseInput,
   probe: ProbeWorker,
+  undispatched?: UndispatchedCheck,
 ): Promise<ReleaseResult> {
   const ids = checkIdentity(input);
   requireProbe(probe, "releaseWork");
@@ -1344,6 +1441,46 @@ export async function releaseWork(
   }
   if (token !== null && token !== snapshot.record.owner.token) {
     return { ok: false, reason: "token_mismatch", record: snapshot.record };
+  }
+  // Sessionless fast path: the reservation was never dispatched, so there is
+  // no session to probe. The holder releases with its token; a missing token
+  // never releases, and a session attached after the snapshot refuses as a
+  // bound owner (drift) instead of clearing without proof.
+  if (snapshot.record.owner.sessionId === null) {
+    if (token === null) {
+      return { ok: false, reason: "token_mismatch", record: snapshot.record };
+    }
+    try {
+      return await withTooLarge<ReleaseResult>(snapshot.record, () =>
+        withRecord<ReleaseResult>(store, ids, async (current) => {
+        if (current === null || current.owner === null) {
+          return { write: null, result: { ok: true as const, record: current, released: false } };
+        }
+        if (current.owner.token !== token) {
+          return { write: null, result: { ok: false as const, reason: "token_mismatch" as const, record: current } };
+        }
+        // A session attached after the snapshot means the owner is now
+        // bound: refuse without probing rather than clearing live work.
+        // Generation needs no compare here: it is 0 at reserve and moves
+        // only on a successful attach, which always sets a session id.
+        if (current.owner.sessionId !== null) {
+          return { write: null, result: { ok: false as const, reason: "worker_unknown" as const, record: current } };
+        }
+        // The caller-supplied dispatch check runs under the same lock, so
+        // a wrapper launched for this reservation blocks the release even
+        // when no session was attached yet.
+        if (undispatched !== undefined && !(await undispatched(current.owner))) {
+          return { write: null, result: { ok: false as const, reason: "dispatched_unattached" as const, record: current } };
+        }
+        const record: WorkRecord = { ...current, owner: null, phase: "reserved" };
+        return { write: record, result: { ok: true as const, record, released: true } };
+        }),
+      );
+    } catch (error) {
+      const reason = corruptReason(error);
+      if (reason !== null) return { ok: false, reason, record: null };
+      throw error;
+    }
   }
   const status = await resolveProbe(probe, snapshot.record.owner);
   if (status !== "stopped") {
@@ -1462,10 +1599,26 @@ export async function acceptResult(
       // Only an accepted implementation fix arms the repeat signal; a
       // code-review accept never marked findings fixed (P2-2).
       const fixed = live.role === "implementation";
+      // An accepted code-review result memorizes its head + change digest so
+      // a duplicate reviewer for the same change is refused later. Record
+      // the reserved controller PR-diff digest (`live.changeDigest`), not
+      // the worktree diff (`liveChangeDigest`, always empty for reviews
+      // since a review must not modify code).
+      const alreadyRecorded = current.acceptedReviews.some(
+        (entry) => entry.head === live.startHead && entry.sessionId === sessionId,
+      );
+      const acceptedReviews =
+        live.role === "code-review" && !alreadyRecorded
+          ? [
+              ...current.acceptedReviews,
+              { head: live.startHead, changeDigest: live.changeDigest, sessionId },
+            ].slice(-MAX_ACCEPTED_REVIEWS)
+          : current.acceptedReviews;
       const record: WorkRecord = {
         ...current,
         owner: { ...live, changeDigest: liveChangeDigest ?? live.changeDigest },
         phase: "verifying",
+        acceptedReviews,
         findings: fixed
           ? current.findings.map((finding) =>
               finding.status === "confirmed" ? { ...finding, fixedAccepted: true } : finding,

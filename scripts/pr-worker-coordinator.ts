@@ -48,6 +48,11 @@ export interface CoordinatorRequest {
   expectedService: PrWorkerServiceIdentity;
   resumeSessionId?: string;
   startingWorktreeDigest?: string;
+  /**
+   * Explicit re-review: bypasses only the `already_reviewed` refusal for a
+   * code-review reserve. Defaults to false; never part of the scope digest.
+   */
+  reReview?: boolean;
   finding?: { key: string; status: "confirmed" | "refuted" | "disputed"; evidence: string; repairDirective?: string | null };
 }
 export type ServiceOverrides = Pick<PrWorkerServiceConfig, "baseUrl" | "credentialFile" | "timeoutMs" | "fetch">;
@@ -94,6 +99,8 @@ export function parseCoordinatorRequest(raw: unknown): CoordinatorRequest {
   if (v.role === "implementation" && allowedPaths.length === 0) fail("allowedPaths must be nonempty for implementation.");
   if (typeof v.taskSha256 !== "string" || !HEX64.test((v.taskSha256 as string).toLowerCase())) fail("taskSha256 must be 64-char hex.");
   const expectedAttempt = posInt(v.expectedAttempt, "expectedAttempt");
+  if (v.reReview !== undefined && typeof v.reReview !== "boolean") fail("reReview must be a boolean.");
+  const reReview = (v.reReview as boolean | undefined) ?? false;
   const service = asRecord(v.expectedService);
   if (typeof service.pid !== "number" || !Number.isInteger(service.pid) || (service.pid as number) <= 0) fail("expectedService.pid must be a positive integer.");
   if (typeof service.version !== "string" || service.version.length === 0 || service.version.length > 128) fail("expectedService.version must be 1-128 chars.");
@@ -129,6 +136,7 @@ export function parseCoordinatorRequest(raw: unknown): CoordinatorRequest {
     expectedService: { pid: service.pid as number, version: service.version as string },
     ...(resumeSessionId === undefined ? {} : { resumeSessionId }),
     ...(startingWorktreeDigest === undefined ? {} : { startingWorktreeDigest }),
+    ...(v.reReview === undefined ? {} : { reReview }),
     ...(finding === undefined ? {} : { finding }),
   };
 }
@@ -196,7 +204,7 @@ function ownerTokenOf(options: RunOptions): string {
   return token;
 }
 function heldExit(reason: string): number {
-  return ["occupied", "worker_running", "worker_unknown", "session_unknown", "paused", "rounds_exhausted", "history_inconsistent", "review_not_recorded", "repeated_finding", "model_changed", "not_completed", "still_running", "awaiting_release"].includes(reason) ? 2 : 1;
+  return ["occupied", "already_reviewed", "dispatched_unattached", "worker_running", "worker_unknown", "session_unknown", "paused", "rounds_exhausted", "history_inconsistent", "review_not_recorded", "repeated_finding", "model_changed", "not_completed", "still_running", "awaiting_release"].includes(reason) ? 2 : 1;
 }
 async function git(worktree: string, argv: string[]): Promise<string> {
   const { stdout } = await runExec("git", argv, { cwd: worktree, timeout: 10_000, maxBuffer: 10 * 1024 * 1024 });
@@ -442,6 +450,7 @@ export async function runReserve(request: CoordinatorRequest, options: RunOption
     repositoryId: request.repositoryId, pullRequestNumber: request.pullRequestNumber, role: request.role,
     startHead: request.head, scopeDigest, changeDigest: request.changeDigest, worktree,
     taskFile, workerStateDir, ledger: request.ledger,
+    ...(request.reReview === undefined ? {} : { reReview: request.reReview }),
   });
   if (!reserved.ok) return { exitCode: heldExit(reserved.reason), output: { ok: false, reason: reserved.reason } };
   return { exitCode: 0, output: { ok: true, ownerToken: reserved.record.owner?.token ?? "", scopeDigest, head: request.head } };
@@ -557,9 +566,38 @@ export async function runRelease(request: CoordinatorRequest, options: RunOption
   if (record?.owner !== null && record?.owner !== undefined && record.owner.scopeDigest !== computeScopeDigest(request)) {
     return { exitCode: 1, output: { ok: false, reason: "scope_mismatch" } };
   }
+  // Undispatched predicate for the sessionless fast path, bound to THIS
+  // reservation's attempt: the wrapper writes session.json with
+  // attempt = previous.attempt + 1 (1 for a fresh dir) at the start of every
+  // run. A receipt with attempt below this reservation's attempt and a
+  // terminal status is the previous attempt's leftover, not a launch of this
+  // reservation. Anything else present means this reservation may be live,
+  // so probing-free release must not clear it; the operator path is `attach`
+  // (then the normal stop/release flow).
+  const undispatched = async (owner: { workerStateDir: string | null }): Promise<boolean> => {
+    if (owner.workerStateDir === null) return true;
+    let raw: string;
+    try {
+      raw = await readFile(join(owner.workerStateDir, "session.json"), "utf8");
+    } catch (error) {
+      // Only a confirmed absence allows release; any other read error fails closed.
+      return (error as NodeJS.ErrnoException).code === "ENOENT";
+    }
+    let receipt: WrapperReceipt;
+    try {
+      receipt = parseWrapperReceipt(asRecord(JSON.parse(raw) as unknown), "wrapper session.json");
+    } catch {
+      return false;
+    }
+    return (
+      receipt.attempt < request.expectedAttempt &&
+      (receipt.status === "completed" || receipt.status === "blocked" || receipt.status === "timed_out" || receipt.status === "interrupted")
+    );
+  };
   const released = await releaseWork(store,
     { repositoryId: request.repositoryId, pullRequestNumber: request.pullRequestNumber, ownerToken: token },
-    async (owner) => (await probePrWorkerSession(serviceConfig(options.serviceConfig), { expectedService: request.expectedService, sessionId: owner.sessionId })).state);
+    async (owner) => (await probePrWorkerSession(serviceConfig(options.serviceConfig), { expectedService: request.expectedService, sessionId: owner.sessionId })).state,
+    undispatched);
   if (!released.ok) return { exitCode: heldExit(released.reason), output: { ok: false, reason: released.reason } };
   return { exitCode: 0, output: { ok: true, released: released.released } };
 }
