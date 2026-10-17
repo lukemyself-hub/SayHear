@@ -118,3 +118,15 @@ PR 的生产部署结果（`not_required` / `succeeded` / `pending` / `failed` /
   `tests/pr-approval-deployment-closeout.test.ts` 中 `deploymentRequired` 与 `decideDeploymentCloseout`
   （含 “reports failure as fact without retrying”）。
 - 每行证据须注明来源（真实运行的 PR／回执，或夹具测试名），两类证据不混记。
+
+### 真实运行记录（2026-10-17）
+
+- #388 hourly 双唤醒重叠（Luke 05:41Z 连点两次“立即运行”）：两轮从未同时持有写入权（第一轮 reserve → 派发
+  `ses_eb798dd6` → accept → release 后，第二轮才 reserve 成功）。但第二轮未重复派发 reviewer 只因碰巧复用同名
+  worker state 目录被 wrapper 拒绝，且未绑定会话的预约无合规释放路径，该轮直接编辑了 owner store。
+  本行记为部分证据：无并发第二 writer 已真实观测；重复派发防护与预约释放缺口见 #389，修复前不算通过。
+- #388 确认缺陷整改：控制器 `request_changes` 到 `02fadb7`（P2 token 不一致），授权协调者推送修复 `327da3b`，
+  hourly 全新独立会话复审通过，submit 后普通自动合入 `b3e4ba3`，completion 收据 attempt 1，无 Issue 写入、无需部署。
+- 人工最终决定的 challenge 时序：Luke 在 #387 上的 Approve（05:41:32Z）早于该 PR 首次 `prepare` 冻结
+  final-decision challenge（06:08:52Z），watermark 把这条 review 记在 challenge 之前，因此不构成人工最终决定。
+  需要 Luke 批准的 PR 必须先 `prepare` 冻结 challenge，再请 Luke Approve（与 #382 同类现象）。
