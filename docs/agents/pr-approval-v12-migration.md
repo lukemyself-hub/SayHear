@@ -1,12 +1,12 @@
 # PR 审批 v12 迁移说明（最终源码已安装；受控验收待定）
 
-本文件是 SPEC #362 → #369 的迁移 howto。`v12 / report v5` 最终源码安装已完成（控制器 `5c454fdda28f3807e556f0c40ec7be0e91596147e6a90a0df69848d210129fbe`，`build.sourceCommit 2cdf0c60defc683dc06314dece2ca7193853dd5a` 干净源码身份，PR #384 合入），`serialized-merge` 生效，真保护／App-only 守卫 intact；全部 completion 收据 `phase` 已 complete（#379、#381、#384 attempt 均为 1）。先前最终源码（`05ee8089…`／`7ee8e89`）现为已审查回滚恢复对象；`c5fa984f`／`34ab5815` 为更旧 fallback，仅历史保留。
+本文件是 SPEC #362 → #369 的迁移 howto。`v12 / report v5` 最终源码安装已完成（控制器 `5c454fdda28f3807e556f0c40ec7be0e91596147e6a90a0df69848d210129fbe`，`build.sourceCommit 2cdf0c60defc683dc06314dece2ca7193853dd5a` 干净源码身份，PR #384 合入），`serialized-merge` 生效，真保护／App-only 守卫 intact；全部 completion 收据 `phase` 已 complete（#379、#381、#383、#384 attempt 均为 1）。先前最终源码（`05ee8089…`／`7ee8e89`）现为已审查回滚恢复对象；`c5fa984f`／`34ab5815` 为更旧 fallback，仅历史保留。
 一切以固定 `status` 回读为准，不以源码存在为准。
 
 ## 现状快照（2026-10-17，最终源码安装后；真实值以固定 `status` 为准）
 
 - 已安装运行中：policy `sayhear-pr-review-gate:v12`／report `sayhear-pr-review-report:v5`（控制器 `5c454fdda28f3807e556f0c40ec7be0e91596147e6a90a0df69848d210129fbe`，`build.sourceCommit 2cdf0c60defc683dc06314dece2ca7193853dd5a` 干净源码身份，PR #384 合入），`serialized-merge` 生效，
-  真保护／App-only main 写入守卫 intact；全部 completion 收据 `phase` 已 complete（#379、#381、#384 attempt 均为 1）。
+  真保护／App-only main 写入守卫 intact；全部 completion 收据 `phase` 已 complete（#379、#381、#383、#384 attempt 均为 1）。
   先前最终源码（`05ee8089…`／`7ee8e89`）现为已审查回滚恢复对象（升级／回滚对恢复它）；`c5fa984f`／`34ab5815` 为更旧 fallback，仅历史保留；旧 `v11 / report v4` 备份为历史保留，不声称旧 `v11` 适用同一 helper。
   每小时自动化 `sayhear-pr` 现为 ACTIVE，但受控验收期内仅处理 `sayhear-pr` automation 当前 prompt 指定的 PR；2026-10-16 22:55Z 与 23:54Z 两次受控运行仅观测（未 reserve／派发／合入），其后定时运行因 Codex App `execution-config-loading` 错误未执行（立即运行同样报错），重启 App 后恢复，恢复后首次运行回执仍待确认，首次真实 hourly 修补派发仍待定。
 - 旧版：历史 `v11 / report v4` 已由 root 备份保留（历史，不作当前回滚依据）。本次已集成：人工最终决定、
