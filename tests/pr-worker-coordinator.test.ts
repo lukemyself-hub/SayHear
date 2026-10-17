@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { realpathSync } from "node:fs";
@@ -11,6 +11,7 @@ import {
   collectChangeDigest,
   computeScopeDigest,
   parseCoordinatorRequest,
+  PR_WORK_OWNER_STORE,
   runAccept,
   runAttach,
   runCapture,
@@ -399,9 +400,9 @@ describe("CLI JSON and exit codes", () => {
     const bad = await runCli(["reserve", "--state-dir", env.stateDir]);
     expect(bad.exitCode).toBe(1);
     const reqFile = await writeRequestFile(env.root, env.request);
-    const first = await runCli(["reserve", "--request", reqFile, "--state-dir", env.stateDir]);
+    const first = await runCli(["reserve", "--request", reqFile, "--state-dir", env.stateDir], undefined, env.stateDir);
     expect(first.exitCode).toBe(0);
-    const second = await runCli(["reserve", "--request", reqFile, "--state-dir", resolve(env.stateDir)]);
+    const second = await runCli(["reserve", "--request", reqFile, "--state-dir", resolve(env.stateDir)], undefined, env.stateDir);
     expect(second.exitCode).toBe(2);
     expect(JSON.parse(JSON.stringify(second.output)).reason).toBe("occupied");
   });
@@ -1022,5 +1023,155 @@ describe("sessionless release and already-reviewed refusal (#389)", () => {
     expect(refused.exitCode).toBe(2);
     expect(refused.output.reason).toBe("dispatched_unattached");
     expect((await runReserve(resumeReq, { stateDir: env.stateDir })).output.reason).toBe("occupied");
+  });
+});
+
+describe("misplaced owner store guard (#393)", () => {
+  async function cliFor(stateDir: string, env: Awaited<ReturnType<typeof setupEnv>>, command: string, extra: string[] = [], expected?: string) {
+    const reqFile = await writeRequestFile(env.root, env.request);
+    return runCli([command, "--request", reqFile, "--state-dir", stateDir, ...extra], undefined, expected);
+  }
+
+  it("pins PR_WORK_OWNER_STORE to the documented shared path", async () => {
+    expect(PR_WORK_OWNER_STORE).toBe("/Users/lukemyself/.codex/automations/sayhear-pr/pr-work-state");
+  });
+
+  it("refuses store == workerStateDir for reserve and release without writing", async () => {
+    for (const command of ["reserve", "release"] as const) {
+      const env = await setupEnv({ pr: command === "reserve" ? 760 : 761 });
+      const extra = command === "release" ? ["--owner-token", "0".repeat(32)] : [];
+      // expectedOwnerStore is the misplaced path itself so the equality
+      // defense-in-depth check (not the pinned-path check) fires.
+      const out = await cliFor(env.wrapper, env, command, extra, env.wrapper);
+      expect(out.exitCode, command).toBe(1);
+      expect(out.output.reason, command).toBe("owner_store_misplaced");
+      expect(String(out.output.detail ?? ""), command).toContain(env.wrapper);
+      expect(await readdir(env.wrapper), command).toEqual([]);
+      expect(await readdir(env.stateDir).catch((error: NodeJS.ErrnoException) => (error.code === "ENOENT" ? [] : Promise.reject(error))), command).toEqual([]);
+    }
+  });
+
+  it("refuses a store that is the parent of the worker dir", async () => {
+    for (const command of ["reserve", "release"] as const) {
+      const env = await setupEnv({ pr: command === "reserve" ? 762 : 763 });
+      const extra = command === "release" ? ["--owner-token", "0".repeat(32)] : [];
+      const out = await cliFor(env.root, env, command, extra, env.root);
+      expect(out.exitCode, command).toBe(1);
+      expect(out.output.reason, command).toBe("owner_store_misplaced");
+      expect(String(out.output.detail ?? ""), command).toContain("overlaps");
+    }
+  });
+
+  it("refuses a store that is a child of the worker dir", async () => {
+    for (const command of ["reserve", "release"] as const) {
+      const env = await setupEnv({ pr: command === "reserve" ? 764 : 765 });
+      const extra = command === "release" ? ["--owner-token", "0".repeat(32)] : [];
+      const child = join(env.wrapper, "nested-store");
+      await mkdir(child, { recursive: true });
+      const out = await cliFor(child, env, command, extra, child);
+      expect(out.exitCode, command).toBe(1);
+      expect(out.output.reason, command).toBe("owner_store_misplaced");
+      expect(await readdir(child), command).toEqual([]);
+    }
+  });
+
+  it("refuses a store containing session.json", async () => {
+    for (const command of ["reserve", "release"] as const) {
+      const env = await setupEnv({ pr: command === "reserve" ? 766 : 767 });
+      const extra = command === "release" ? ["--owner-token", "0".repeat(32)] : [];
+      const store = join(env.root, "foreign-store");
+      await mkdir(store, { recursive: true });
+      await writeFile(join(store, "session.json"), JSON.stringify({ stale: true }));
+      const out = await cliFor(store, env, command, extra, store);
+      expect(out.exitCode, command).toBe(1);
+      expect(out.output.reason, command).toBe("owner_store_misplaced");
+      expect(String(out.output.detail ?? ""), command).toContain("session.json");
+    }
+  });
+
+  it("refuses a store containing an attempt status artifact", async () => {
+    for (const command of ["reserve", "release"] as const) {
+      const env = await setupEnv({ pr: command === "reserve" ? 768 : 769 });
+      const extra = command === "release" ? ["--owner-token", "0".repeat(32)] : [];
+      const store = join(env.root, "foreign-store");
+      await mkdir(store, { recursive: true });
+      await writeFile(join(store, "attempt-001-status.json"), JSON.stringify({ stale: true }));
+      const out = await cliFor(store, env, command, extra, store);
+      expect(out.exitCode, command).toBe(1);
+      expect(out.output.reason, command).toBe("owner_store_misplaced");
+      expect(String(out.output.detail ?? ""), command).toContain("attempt-001-status.json");
+    }
+  });
+
+  it("refuses a clean sibling path that only shares a name prefix", async () => {
+    const env = await setupEnv({ pr: 770 });
+    const sibling = `${env.stateDir}2`;
+    const reqFile = await writeRequestFile(env.root, env.request);
+    const out = await runCli(["reserve", "--request", reqFile, "--state-dir", sibling], undefined, env.stateDir);
+    expect(out.exitCode).toBe(1);
+    expect(out.output).toMatchObject({ ok: false, reason: "owner_store_misplaced" });
+    expect(String(out.output.detail ?? "")).toContain("configured shared path");
+    // Nothing was written: neither the sibling nor the expected store exists.
+    expect(await readdir(sibling).catch((error: NodeJS.ErrnoException) => (error.code === "ENOENT" ? null : Promise.reject(error)))).toBeNull();
+    expect(await readdir(env.stateDir).catch((error: NodeJS.ErrnoException) => (error.code === "ENOENT" ? null : Promise.reject(error)))).toBeNull();
+  });
+
+  it("refuses two different clean directories (the double-awakening case)", async () => {
+    const env = await setupEnv({ pr: 771 });
+    const reqFile = await writeRequestFile(env.root, env.request);
+    for (const store of [join(env.root, "store-a"), join(env.root, "store-b")]) {
+      const out = await runCli(["reserve", "--request", reqFile, "--state-dir", store], undefined, env.stateDir);
+      expect(out.exitCode, store).toBe(1);
+      expect(out.output, store).toMatchObject({ ok: false, reason: "owner_store_misplaced" });
+      expect(await readdir(store).catch((error: NodeJS.ErrnoException) => (error.code === "ENOENT" ? null : Promise.reject(error))), store).toBeNull();
+    }
+  });
+
+  it("refuses a mistyped nonexistent path without creating it", async () => {
+    const env = await setupEnv({ pr: 772 });
+    const reqFile = await writeRequestFile(env.root, env.request);
+    const mistyped = join(env.root, "ownersihp");
+    const out = await runCli(["reserve", "--request", reqFile, "--state-dir", mistyped], undefined, env.stateDir);
+    expect(out.exitCode).toBe(1);
+    expect(out.output).toMatchObject({ ok: false, reason: "owner_store_misplaced" });
+    expect(await readdir(mistyped).catch((error: NodeJS.ErrnoException) => (error.code === "ENOENT" ? null : Promise.reject(error)))).toBeNull();
+  });
+
+  it("accepts the canonical path when the expected store is reached through a symlink", async () => {
+    const env = await setupEnv({ pr: 773 });
+    await mkdir(env.stateDir, { recursive: true, mode: 0o700 });
+    const link = join(env.root, "store-link");
+    await symlink(env.stateDir, link);
+    const reqFile = await writeRequestFile(env.root, env.request);
+    // Canonicalization equality: the expected path is an alias of the given
+    // --state-dir, so the pinned-path check passes. (The reverse direction —
+    // a symlink as --state-dir — stays refused downstream by the store's own
+    // lstat trust check, which is outside this guard.)
+    const out = await runCli(["reserve", "--request", reqFile, "--state-dir", env.stateDir], undefined, link);
+    expect(out.exitCode).toBe(0);
+    expect(out.output.ok).toBe(true);
+  });
+
+  it("refuses the equality case for all seven commands before any store access", async () => {
+    for (const command of ["reserve", "attach", "status", "accept", "release", "stop", "finding"] as const) {
+      const env = await setupEnv({ pr: 780 + command.length });
+      const extra =
+        command === "finding"
+          ? ["--owner-token", "0".repeat(32)]
+          : ["attach", "accept", "release", "stop"].includes(command)
+            ? ["--owner-token", "0".repeat(32)]
+            : [];
+      const req: CoordinatorRequest =
+        command === "finding"
+          ? { ...env.request, finding: { key: "k", status: "confirmed", evidence: "ev" } }
+          : env.request;
+      const reqFile = await writeRequestFile(env.root, req);
+      // expectedOwnerStore is the wrapper dir itself so the equality
+      // defense-in-depth check (not the pinned-path check) fires.
+      const out = await runCli([command, "--request", reqFile, "--state-dir", env.wrapper, ...extra], undefined, env.wrapper);
+      expect(out.exitCode, command).toBe(1);
+      expect(out.output, command).toMatchObject({ ok: false, reason: "owner_store_misplaced" });
+      expect(String(out.output.detail ?? ""), command).toContain(env.wrapper);
+    }
   });
 });

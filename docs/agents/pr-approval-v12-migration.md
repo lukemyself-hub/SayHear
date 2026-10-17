@@ -90,6 +90,7 @@ PR 的生产部署结果（`not_required` / `succeeded` / `pending` / `failed` /
   需 `release` 才解除占用；已停止且已释放的旧 worker 才不算第二个写入者。
 - 未派发的 null 会话预约由持 token 者直接 `release` 释放，不探活、无需 `stop`；无 token 或 token 不符永不释放。派发检查绑定本次预约的 attempt：本轮 session.json 已写（attempt 达本轮或 running／不可解析）时拒为 `dispatched_unattached`（held 类，exit 2），须先 `attach` 再走正常 stop／release；上一轮终态收据不阻断复用同一目录的新预约。释放与派发不可并发：持 token 者须先停派发再释放。
 - 同一 head＋changeDigest 已有 accept 的 code-review 结果时，再次 `reserve` 同角色返回 `already_reviewed`（held 类，exit 2）；request 置 `"reReview": true` 才显式复审。只记最近 20 条已接受审查。
+- owner store 在代码中 pin 定共享路径 `/Users/lukemyself/.codex/automations/sayhear-pr/pr-work-state`，任何其它 `--state-dir`（含干净 sibling／误拼目录、无 env／flag 覆盖）均拒为 `owner_store_misplaced`（exit 1，不写任何状态）；与 worker task state 目录相同或互为父子、或含 wrapper 产物亦拒；派发须在前台运行。
 - Luke 有效 Approve 后停止语义审查重复，只做常规 CI／版本／保护核验。
 - 依实际需要的部署才跟进，否则静默 noop。本节不新增部署自动化；每小时 `sayhear-pr` 现为 ACTIVE，受控验收期内仅处理 `sayhear-pr` automation 当前 prompt 指定的 PR；重启后已恢复，#385 上 hourly 已真实完成发现、派发独立 review、确认缺陷修复派发与新会话复审，普通自动合入 `e2ef35b`。
 
@@ -136,3 +137,4 @@ PR 的生产部署结果（`not_required` / `succeeded` / `pending` / `failed` /
 - #390 真实 PR 上转人工路由：未解决外部 review thread（chatgpt-codex-connector，06:12:15Z）使控制器回 `human_decision`，未走自动批准；Luke Approve（06:27:52Z）后 humanChannel browser 在 head `3a7e675` 上合入 `832213e`（06:28:56Z），completion 收据 `~/Library/Application Support/SayHear/PRApproval/completions/pr-390.json` attempt 1。
 - #391 交付 Issue 的普通自动合入与控制器 Issue 收尾：首轮 head `3c99321` 上 hourly 已派发全新独立 review（approve），控制器因 chatgpt-codex-connector 未解决 P1 thread 回 `human_decision`（转人工路由第二例）；协调者确认为真实 P2 后推送修复 `74d968f` 并在该 thread 回复（未 resolve），Luke resolve 该 thread（Luke 未 Approve）；`74d968f` 上 08:25Z hourly 派发全新独立 review（approve，zero findings），09:06Z—16:17Z 共 8 轮 hourly 见到当前 head 已接受 review 未再派发（hourly prompt 规则约束；helper 层 `already_reviewed` 拒绝仅源码／测试证明，未在真实运行观测）；协调者 submit 得 `merge_candidate` 后由 app／sayhear-pr-review-gate 以 humanChannel app 合入 `a9bd894`（16:32:08Z，无 Luke 决定），控制器收尾关闭 Issue #389，completion 收据 `~/Library/Application Support/SayHear/PRApproval/completions/pr-391.json` attempt 1。
 - #389 已合入并关闭；#388 重叠行仍记部分证据，在 post-#389 helper 上重观前不算通过。
+- #392 双唤醒重叠（Luke 连点两次"立即运行"）：第一轮把 worker 目录当 owner store，第二轮在共享 store 再次 reserve 成功并后台派发（派发未启动，随后合规释放）；单写入者在 store 层失效，本行记为失败，修复见 #393，合入后须真实复测。
