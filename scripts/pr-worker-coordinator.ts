@@ -48,6 +48,11 @@ export interface CoordinatorRequest {
   expectedService: PrWorkerServiceIdentity;
   resumeSessionId?: string;
   startingWorktreeDigest?: string;
+  /**
+   * Explicit re-review: bypasses only the `already_reviewed` refusal for a
+   * code-review reserve. Defaults to false; never part of the scope digest.
+   */
+  reReview?: boolean;
   finding?: { key: string; status: "confirmed" | "refuted" | "disputed"; evidence: string; repairDirective?: string | null };
 }
 export type ServiceOverrides = Pick<PrWorkerServiceConfig, "baseUrl" | "credentialFile" | "timeoutMs" | "fetch">;
@@ -94,6 +99,8 @@ export function parseCoordinatorRequest(raw: unknown): CoordinatorRequest {
   if (v.role === "implementation" && allowedPaths.length === 0) fail("allowedPaths must be nonempty for implementation.");
   if (typeof v.taskSha256 !== "string" || !HEX64.test((v.taskSha256 as string).toLowerCase())) fail("taskSha256 must be 64-char hex.");
   const expectedAttempt = posInt(v.expectedAttempt, "expectedAttempt");
+  if (v.reReview !== undefined && typeof v.reReview !== "boolean") fail("reReview must be a boolean.");
+  const reReview = (v.reReview as boolean | undefined) ?? false;
   const service = asRecord(v.expectedService);
   if (typeof service.pid !== "number" || !Number.isInteger(service.pid) || (service.pid as number) <= 0) fail("expectedService.pid must be a positive integer.");
   if (typeof service.version !== "string" || service.version.length === 0 || service.version.length > 128) fail("expectedService.version must be 1-128 chars.");
@@ -129,6 +136,7 @@ export function parseCoordinatorRequest(raw: unknown): CoordinatorRequest {
     expectedService: { pid: service.pid as number, version: service.version as string },
     ...(resumeSessionId === undefined ? {} : { resumeSessionId }),
     ...(startingWorktreeDigest === undefined ? {} : { startingWorktreeDigest }),
+    ...(v.reReview === undefined ? {} : { reReview }),
     ...(finding === undefined ? {} : { finding }),
   };
 }
@@ -196,7 +204,7 @@ function ownerTokenOf(options: RunOptions): string {
   return token;
 }
 function heldExit(reason: string): number {
-  return ["occupied", "worker_running", "worker_unknown", "session_unknown", "paused", "rounds_exhausted", "history_inconsistent", "review_not_recorded", "repeated_finding", "model_changed", "not_completed", "still_running", "awaiting_release"].includes(reason) ? 2 : 1;
+  return ["occupied", "already_reviewed", "dispatched_unattached", "worker_running", "worker_unknown", "session_unknown", "paused", "rounds_exhausted", "history_inconsistent", "review_not_recorded", "repeated_finding", "model_changed", "not_completed", "still_running", "awaiting_release"].includes(reason) ? 2 : 1;
 }
 async function git(worktree: string, argv: string[]): Promise<string> {
   const { stdout } = await runExec("git", argv, { cwd: worktree, timeout: 10_000, maxBuffer: 10 * 1024 * 1024 });
@@ -442,6 +450,7 @@ export async function runReserve(request: CoordinatorRequest, options: RunOption
     repositoryId: request.repositoryId, pullRequestNumber: request.pullRequestNumber, role: request.role,
     startHead: request.head, scopeDigest, changeDigest: request.changeDigest, worktree,
     taskFile, workerStateDir, ledger: request.ledger,
+    ...(request.reReview === undefined ? {} : { reReview: request.reReview }),
   });
   if (!reserved.ok) return { exitCode: heldExit(reserved.reason), output: { ok: false, reason: reserved.reason } };
   return { exitCode: 0, output: { ok: true, ownerToken: reserved.record.owner?.token ?? "", scopeDigest, head: request.head } };
@@ -556,6 +565,23 @@ export async function runRelease(request: CoordinatorRequest, options: RunOption
   const record = await readWork(store, { repositoryId: request.repositoryId, pullRequestNumber: request.pullRequestNumber });
   if (record?.owner !== null && record?.owner !== undefined && record.owner.scopeDigest !== computeScopeDigest(request)) {
     return { exitCode: 1, output: { ok: false, reason: "scope_mismatch" } };
+  }
+  // A sessionless owner whose wrapper already wrote session.json may have a
+  // live worker even though no session was attached: probing would see
+  // nothing, so probing-free release must not clear it. The operator path is
+  // `attach` (then the normal stop/release flow).
+  if (
+    record?.owner !== null &&
+    record?.owner !== undefined &&
+    record.owner.sessionId === null &&
+    record.owner.workerStateDir !== null
+  ) {
+    // Only a confirmed absence allows release; any other lstat error fails closed.
+    const launched = await lstat(join(record.owner.workerStateDir, "session.json")).then(
+      () => true,
+      (error: NodeJS.ErrnoException) => error.code !== "ENOENT",
+    );
+    if (launched) return { exitCode: 2, output: { ok: false, reason: "dispatched_unattached" } };
   }
   const released = await releaseWork(store,
     { repositoryId: request.repositoryId, pullRequestNumber: request.pullRequestNumber, ownerToken: token },

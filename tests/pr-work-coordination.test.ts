@@ -234,44 +234,71 @@ describe("single writer under real contention", () => {
 });
 
 describe("null-session gap", () => {
-  it("blocks a second writer until stopped proof clears it", async () => {
+  it("blocks a second writer until the token holder releases the gap", async () => {
     const { store } = await makeStore();
     const first = await reserveWork(store, reserveArgs(21, "gap"));
     if (!first.ok || first.record.owner === null) {
       throw new Error("initial reservation must succeed");
     }
     expect(first.record.owner.sessionId).toBeNull();
+    const token = first.record.owner.token;
 
     const second = await reserveWork(store, reserveArgs(21, "gap-retry"));
     if (second.ok) throw new Error("null-session gap must block");
     expect(second.reason).toBe("occupied");
 
-    for (const [probe, reason] of [
-      [running, "worker_running"],
-      [unknown, "worker_unknown"],
-    ] as const) {
+    // Without a token the sessionless gap never releases, whatever the
+    // probe says; the probe is not even consulted.
+    for (const probe of [running, unknown, stopped] as const) {
+      let probed = false;
+      const watching: ProbeWorker = async (owner) => {
+        probed = true;
+        return probe(owner);
+      };
       const denied = await releaseWork(
         store,
         { repositoryId: REPO, pullRequestNumber: 21 },
-        probe,
+        watching,
       );
-      if (denied.ok) throw new Error(`${reason} must keep occupancy`);
-      expect(denied.reason).toBe(reason);
-      expect(denied.record?.owner?.token).toBe(
-        first.record.owner?.token,
-      );
+      if (denied.ok) throw new Error("a tokenless release must keep occupancy");
+      expect(denied.reason).toBe("token_mismatch");
+      expect(denied.record?.owner?.token).toBe(token);
+      expect(probed).toBe(false);
     }
-    const cleared = await releaseWork(
+
+    // A foreign token never releases the gap either.
+    const foreign = await releaseWork(
       store,
-      { repositoryId: REPO, pullRequestNumber: 21 },
+      {
+        repositoryId: REPO,
+        pullRequestNumber: 21,
+        ownerToken: "1".repeat(32),
+      },
       stopped,
     );
+    if (foreign.ok) throw new Error("a foreign token must not release");
+    expect(foreign.reason).toBe("token_mismatch");
+    expect(foreign.record?.owner?.token).toBe(token);
+
+    // The token holder releases the sessionless gap with no probe call.
+    let probed = false;
+    const watching: ProbeWorker = async () => {
+      probed = true;
+      return "stopped";
+    };
+    const cleared = await releaseWork(
+      store,
+      { repositoryId: REPO, pullRequestNumber: 21, ownerToken: token },
+      watching,
+    );
     if (!cleared.ok || !cleared.released) {
-      throw new Error("stopped proof must clear the gap");
+      throw new Error("the token holder must clear the sessionless gap");
     }
+    expect(probed).toBe(false);
+    expect(cleared.record?.owner).toBeNull();
     const retry = await reserveWork(store, reserveArgs(21, "gap-after"));
-    if (!retry.ok) throw new Error("must proceed after stopped recovery");
-    expect(retry.record.owner?.token).not.toBe(first.record.owner?.token);
+    if (!retry.ok) throw new Error("must proceed after holder release");
+    expect(retry.record.owner?.token).not.toBe(token);
   });
 });
 
@@ -909,28 +936,28 @@ describe("findings disposition", () => {
 });
 
 describe("overlapping runs", () => {
-  it("an attach landing between probe and release keeps the owner", async () => {
+  it("no probe window on the sessionless path: a would-be racing attach never lands", async () => {
     const { store } = await makeStore();
     const reserved = await reserveWork(store, reserveArgs(67, "overlap"));
     if (!reserved.ok || reserved.record.owner === null) {
       throw new Error("reservation must succeed");
     }
     const token = reserved.record.owner.token;
-    // The probe runs outside the lock; simulate the attach landing there.
+    // The sessionless holder release never invokes the probe, so an attach
+    // smuggled into the probe callback (the old race) cannot land: the gap
+    // clears and the callback never runs.
     let raced = false;
     const probe: ProbeWorker = async () => {
-      if (!raced) {
-        raced = true;
-        await attachSession(store, {
-          repositoryId: REPO,
-          pullRequestNumber: 67,
-          ownerToken: token,
-          startHead: HEAD_A,
-          scopeDigest: SCOPE_A,
-          role: "implementation",
-          sessionId: "sess-overlap",
-        });
-      }
+      raced = true;
+      await attachSession(store, {
+        repositoryId: REPO,
+        pullRequestNumber: 67,
+        ownerToken: token,
+        startHead: HEAD_A,
+        scopeDigest: SCOPE_A,
+        role: "implementation",
+        sessionId: "sess-overlap",
+      });
       return "stopped";
     };
     const released = await releaseWork(
@@ -938,13 +965,13 @@ describe("overlapping runs", () => {
       { repositoryId: REPO, pullRequestNumber: 67, ownerToken: token },
       probe,
     );
-    if (released.ok) throw new Error("a changed owner must not be released");
-    expect(released.reason).toBe("worker_unknown");
-    expect(released.record?.owner?.token).toBe(token);
-    expect(released.record?.owner?.sessionId).toBe("sess-overlap");
-    const blocked = await reserveWork(store, reserveArgs(67, "overlap-2"));
-    if (blocked.ok) throw new Error("the surviving owner must block a new writer");
-    expect(blocked.reason).toBe("occupied");
+    if (!released.ok || !released.released) {
+      throw new Error("the sessionless holder release must clear the gap");
+    }
+    expect(raced).toBe(false);
+    expect(released.record?.owner).toBeNull();
+    const retry = await reserveWork(store, reserveArgs(67, "overlap-2"));
+    if (!retry.ok) throw new Error("must proceed after holder release");
   });
 
   it("a same-session re-attach between snapshot and probe blocks release", async () => {
@@ -1326,5 +1353,405 @@ describe("worker model pinning (P2-3)", () => {
     // The refusal preserves the owner and its files-side state.
     expect(changed.record?.owner?.sessionId).toBe("sess-model");
     expect(changed.record?.owner?.model).toBe("magpie/group/group#high");
+  });
+});
+
+describe("sessionless release edge cases (#389)", () => {
+  it("a session attached before the holder release keeps the probe path", async () => {
+    const { store } = await makeStore();
+    const reserved = await reserveWork(store, reserveArgs(95, "attach-race"));
+    if (!reserved.ok || reserved.record.owner === null) {
+      throw new Error("reservation must succeed");
+    }
+    const token = reserved.record.owner.token;
+    // A session attached after the snapshot means the owner is now bound:
+    // the holder release must take the normal probe path (no bypass) and
+    // clear only with stopped proof.
+    const attached = await attachSession(store, {
+      repositoryId: REPO,
+      pullRequestNumber: 95,
+      ownerToken: token,
+      startHead: HEAD_A,
+      scopeDigest: SCOPE_A,
+      role: "implementation",
+      sessionId: "sess-late",
+    });
+    if (!attached.ok) throw new Error("attach must succeed");
+    let probed = false;
+    const watching: ProbeWorker = async () => {
+      probed = true;
+      return "stopped";
+    };
+    const outcome = await releaseWork(
+      store,
+      { repositoryId: REPO, pullRequestNumber: 95, ownerToken: token },
+      watching,
+    );
+    if (!outcome.ok || !outcome.released) {
+      throw new Error("bound holder release with stopped proof must clear");
+    }
+    expect(probed).toBe(true);
+  });
+
+  it("a bound-owner release still probes after the sessionless fast path lands", async () => {
+    const { store, token } = await reserveAttached(96, "bound-probe");
+    for (const [probe, reason] of [
+      [running, "worker_running"],
+      [unknown, "worker_unknown"],
+    ] as const) {
+      const denied = await releaseWork(
+        store,
+        { repositoryId: REPO, pullRequestNumber: 96, ownerToken: token },
+        probe,
+      );
+      if (denied.ok) throw new Error(`${reason} must keep occupancy`);
+      expect(denied.reason).toBe(reason);
+    }
+    const cleared = await releaseWork(
+      store,
+      { repositoryId: REPO, pullRequestNumber: 96, ownerToken: token },
+      stopped,
+    );
+    if (!cleared.ok || !cleared.released) {
+      throw new Error("stopped proof must clear the bound owner");
+    }
+  });
+
+  it("concurrent attach vs holder release never frees a bound owner", async () => {
+    // The sessionless release takes no probe window, so a real
+    // snapshot/commit race cannot be injected deterministically; instead
+    // race attach against release and assert every outcome is safe: either
+    // the release won before any session existed, or the attach won (or the
+    // owner was already cleared) — never "released while bound".
+    for (let round = 0; round < 10; round += 1) {
+      const pr = 900 + round;
+      const { store } = await makeStore();
+      const reserved = await reserveWork(store, reserveArgs(pr, `race-${round}`));
+      if (!reserved.ok || reserved.record.owner === null) {
+        throw new Error("reservation must succeed");
+      }
+      const token = reserved.record.owner.token;
+      const input = { repositoryId: REPO, pullRequestNumber: pr, ownerToken: token };
+      const base = {
+        repositoryId: REPO,
+        pullRequestNumber: pr,
+        ownerToken: token,
+        startHead: HEAD_A,
+        scopeDigest: SCOPE_A,
+        role: "implementation" as const,
+      };
+      const [attached, outcome] = await Promise.all([
+        attachSession(store, { ...base, sessionId: `sess-race-${round}` }),
+        releaseWork(store, input, stopped),
+      ]);
+      // The safety invariant: never "released while a bound owner is
+      // retained". Both released orders are safe: either the release won
+      // outright (losing attach finds no owner) or the attach won first and
+      // the release cleared via the stopped-probe bound path. Either way the
+      // final owner is null. A refused release must retain the bound owner.
+      const settled = await readWork(store, {
+        repositoryId: REPO,
+        pullRequestNumber: pr,
+      });
+      if (outcome.ok && outcome.released) {
+        expect(settled?.owner).toBeNull();
+      } else if (!outcome.ok && outcome.reason === "worker_unknown") {
+        // Release lost to a now-bound owner: occupancy retained.
+        expect(attached.ok).toBe(true);
+        expect(settled?.owner?.sessionId).toBe(`sess-race-${round}`);
+        const blocked = await reserveWork(store, reserveArgs(pr, `race-${round}-retry`));
+        if (blocked.ok) throw new Error("the bound owner must block");
+        expect(blocked.reason).toBe("occupied");
+      } else {
+        throw new Error(`unexpected race outcome: ${JSON.stringify(outcome)}`);
+      }
+    }
+  });
+});
+
+describe("already-reviewed refusal (#389)", () => {
+  const reviewLedger: TrustedLedger = {
+    roundsConsumed: 0,
+    paused: false,
+    historyConsistent: true,
+    latestReviewedHead: null,
+  };
+
+  async function acceptReview(pr: number, tag: string) {
+    const { store } = await makeStore();
+    const reserved = await reserveWork(
+      store,
+      reserveArgs(pr, tag, { role: "code-review", ledger: reviewLedger }),
+    );
+    if (!reserved.ok || reserved.record.owner === null) {
+      throw new Error("code-review reservation must succeed");
+    }
+    const token = reserved.record.owner.token;
+    const attached = await attachSession(store, {
+      repositoryId: REPO,
+      pullRequestNumber: pr,
+      ownerToken: token,
+      startHead: HEAD_A,
+      scopeDigest: SCOPE_A,
+      role: "code-review",
+      sessionId: `sess-review-${tag}`,
+    });
+    if (!attached.ok) throw new Error("code-review attach must succeed");
+    const accepted = await acceptResult(
+      store,
+      {
+        repositoryId: REPO,
+        pullRequestNumber: pr,
+        ownerToken: token,
+        sessionId: `sess-review-${tag}`,
+        startHead: HEAD_A,
+        scopeDigest: SCOPE_A,
+        liveHead: HEAD_A,
+      },
+      stopped,
+    );
+    if (!accepted.ok) throw new Error("code-review accept must succeed");
+    const released = await releaseWork(
+      store,
+      { repositoryId: REPO, pullRequestNumber: pr, ownerToken: token },
+      stopped,
+    );
+    if (!released.ok || !released.released) {
+      throw new Error("release after accept must clear");
+    }
+    return { store };
+  }
+
+  it("code-review reserve for the same head + changeDigest is refused after accept", async () => {
+    const { store } = await acceptReview(97, "dup");
+    const dup = await reserveWork(
+      store,
+      reserveArgs(97, "dup-2", { role: "code-review", ledger: reviewLedger }),
+    );
+    if (dup.ok) throw new Error("a duplicate reviewer must be refused");
+    expect(dup.reason).toBe("already_reviewed");
+    expect(dup.record?.owner).toBeNull();
+  });
+
+  it("explicit re-review bypasses only already_reviewed; other checks still apply", async () => {
+    const { store } = await acceptReview(98, "rereview");
+    const again = await reserveWork(
+      store,
+      reserveArgs(98, "rereview-2", {
+        role: "code-review",
+        ledger: reviewLedger,
+        reReview: true,
+      }),
+    );
+    if (!again.ok || again.record.owner === null) {
+      throw new Error("an explicit re-review must reserve");
+    }
+    // Non-boolean reReview is rejected structurally.
+    await expect(
+      reserveWork(
+        store,
+        reserveArgs(98, "rereview-bad", {
+          role: "code-review",
+          ledger: reviewLedger,
+          reReview: "yes" as unknown as boolean,
+        }),
+      ),
+    ).rejects.toMatchObject({ name: "PrWorkCoordinationError" });
+  });
+
+  it("a different changeDigest reserves; an implementation reservation is unaffected", async () => {
+    const { store } = await acceptReview(99, "evolve");
+    const changed = await reserveWork(
+      store,
+      reserveArgs(99, "evolve-2", {
+        role: "code-review",
+        ledger: reviewLedger,
+        changeDigest: "f".repeat(64),
+      }),
+    );
+    if (!changed.ok) throw new Error("a changed tree must allow a new review");
+    const impl = await reserveWork(store, reserveArgs(100, "impl-unaffected"));
+    if (!impl.ok) throw new Error("implementation reservations ignore review memory");
+  });
+
+  it("a legacy record without acceptedReviews parses and reserves", async () => {
+    const { store } = await makeStore();
+    const reserved = await reserveWork(
+      store,
+      reserveArgs(101, "legacy", { role: "code-review", ledger: reviewLedger }),
+    );
+    if (!reserved.ok) throw new Error("initial reservation must succeed");
+    // Strip the field to simulate a record written before this change.
+    const path = store.recordPath(REPO, 101);
+    const raw = JSON.parse(await readFile(path, "utf8")) as Record<string, unknown>;
+    delete raw.acceptedReviews;
+    await writeFile(path, JSON.stringify(raw));
+    const settled = await readWork(store, {
+      repositoryId: REPO,
+      pullRequestNumber: 101,
+    });
+    expect(settled?.acceptedReviews).toEqual([]);
+    // Owner still held: a second reserve is occupied, not already_reviewed.
+    const blocked = await reserveWork(
+      store,
+      reserveArgs(101, "legacy-2", { role: "code-review", ledger: reviewLedger }),
+    );
+    if (blocked.ok) throw new Error("the legacy owner must still block");
+    expect(blocked.reason).toBe("occupied");
+  });
+
+  it("malformed acceptedReviews fail closed; the list caps at 20, oldest dropped", async () => {
+    const { store } = await makeStore();
+    const good = { head: HEAD_A, changeDigest: CHANGE_A, sessionId: "sess-ok" };
+    const variants: Array<[string, unknown]> = [
+      ["non-array", {}],
+      ["overlong", Array.from({ length: 21 }, () => ({ ...good }))],
+      ["unknown field", [{ ...good, extra: 1 }]],
+      ["bad head hex", [{ ...good, head: "z".repeat(40) }]],
+      ["short head", [{ ...good, head: "a".repeat(39) }]],
+      ["uppercase head", [{ ...good, head: "A".repeat(40) }]],
+      ["bad digest", [{ ...good, changeDigest: "q".repeat(64) }]],
+      ["empty session", [{ ...good, sessionId: "" }]],
+    ];
+    for (const [index, [label, acceptedReviews]] of variants.entries()) {
+      const pr = 1100 + index;
+      const reserved = await reserveWork(
+        store,
+        reserveArgs(pr, `parse-${index}`, { role: "code-review", ledger: reviewLedger }),
+      );
+      if (!reserved.ok) throw new Error("reservation must succeed");
+      const path = store.recordPath(REPO, pr);
+      const raw = JSON.parse(await readFile(path, "utf8")) as Record<string, unknown>;
+      raw.acceptedReviews = acceptedReviews;
+      await writeFile(path, JSON.stringify(raw));
+      const outcome = await reserveWork(
+        store,
+        reserveArgs(pr, `parse-${index}-retry`, { role: "code-review", ledger: reviewLedger }),
+      );
+      if (outcome.ok) throw new Error(`${label} must fail closed`);
+      expect(outcome.reason, label).toBe("corrupt");
+      expect(outcome.record).toBeNull();
+    }
+    // Cap: 21 sequential accepts keep the newest 20.
+    const capPr = 1200;
+    const capStore = store;
+    const seen: string[] = [];
+    for (let i = 0; i < 21; i += 1) {
+      const digest = i.toString(16).padStart(64, "0");
+      const r = await reserveWork(
+        capStore,
+        reserveArgs(capPr, `cap-${i}`, { role: "code-review", ledger: reviewLedger, changeDigest: digest }),
+      );
+      if (!r.ok || r.record.owner === null) throw new Error(`reserve ${i} must succeed`);
+      const token = r.record.owner.token;
+      const sid = `sess-cap-${i}`;
+      const attached = await attachSession(capStore, {
+        repositoryId: REPO,
+        pullRequestNumber: capPr,
+        ownerToken: token,
+        startHead: HEAD_A,
+        scopeDigest: SCOPE_A,
+        role: "code-review",
+        sessionId: sid,
+      });
+      if (!attached.ok) throw new Error(`attach ${i} must succeed`);
+      const accepted = await acceptResult(
+        capStore,
+        {
+          repositoryId: REPO,
+          pullRequestNumber: capPr,
+          ownerToken: token,
+          sessionId: sid,
+          startHead: HEAD_A,
+          scopeDigest: SCOPE_A,
+          liveHead: HEAD_A,
+        },
+        stopped,
+      );
+      if (!accepted.ok) throw new Error(`accept ${i} must succeed`);
+      seen.push(digest);
+      const released = await releaseWork(
+        capStore,
+        { repositoryId: REPO, pullRequestNumber: capPr, ownerToken: token },
+        stopped,
+      );
+      if (!released.ok || !released.released) throw new Error(`release ${i} must clear`);
+    }
+    const settled = await readWork(capStore, { repositoryId: REPO, pullRequestNumber: capPr });
+    expect(settled?.acceptedReviews).toHaveLength(20);
+    expect(settled?.acceptedReviews.map((e) => e.changeDigest)).toEqual(seen.slice(1));
+  });
+
+  it("a repeat accept for the same head + session appends no duplicate", async () => {
+    const { store } = await makeStore();
+    const reserved = await reserveWork(
+      store,
+      reserveArgs(1300, "dedup", { role: "code-review", ledger: reviewLedger }),
+    );
+    if (!reserved.ok || reserved.record.owner === null) {
+      throw new Error("reservation must succeed");
+    }
+    const token = reserved.record.owner.token;
+    const attached = await attachSession(store, {
+      repositoryId: REPO,
+      pullRequestNumber: 1300,
+      ownerToken: token,
+      startHead: HEAD_A,
+      scopeDigest: SCOPE_A,
+      role: "code-review",
+      sessionId: "sess-dedup",
+    });
+    if (!attached.ok) throw new Error("attach must succeed");
+    const input = {
+      repositoryId: REPO,
+      pullRequestNumber: 1300,
+      ownerToken: token,
+      sessionId: "sess-dedup",
+      startHead: HEAD_A,
+      scopeDigest: SCOPE_A,
+      liveHead: HEAD_A,
+    };
+    const first = await acceptResult(store, input, stopped);
+    if (!first.ok) throw new Error("first accept must succeed");
+    expect(first.record.acceptedReviews).toHaveLength(1);
+    // The phase is now verifying; a second accept call with the same
+    // identity must still succeed structurally but add no duplicate entry.
+    const again = await acceptResult(store, input, stopped);
+    if (!again.ok) throw new Error("repeat accept must succeed");
+    expect(again.record.acceptedReviews).toHaveLength(1);
+    expect(again.record.acceptedReviews[0]).toEqual({
+      head: HEAD_A,
+      changeDigest: CHANGE_A,
+      sessionId: "sess-dedup",
+    });
+  });
+
+  it("an owner held for re-review reports occupied, not already_reviewed", async () => {
+    const { store } = await acceptReview(1400, "prec");
+    const re = await reserveWork(
+      store,
+      reserveArgs(1400, "prec-1", {
+        role: "code-review",
+        ledger: reviewLedger,
+        reReview: true,
+      }),
+    );
+    if (!re.ok) throw new Error("re-review must reserve");
+    const dup = await reserveWork(
+      store,
+      reserveArgs(1400, "prec-2", {
+        role: "code-review",
+        ledger: reviewLedger,
+        reReview: true,
+      }),
+    );
+    if (dup.ok) throw new Error("the held re-review owner must block");
+    expect(dup.reason).toBe("occupied");
+    const plain = await reserveWork(
+      store,
+      reserveArgs(1400, "prec-3", { role: "code-review", ledger: reviewLedger }),
+    );
+    if (plain.ok) throw new Error("the held owner must block plain reserves too");
+    expect(plain.reason).toBe("occupied");
   });
 });
