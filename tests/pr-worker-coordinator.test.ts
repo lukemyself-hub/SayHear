@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { realpathSync } from "node:fs";
@@ -1022,5 +1022,105 @@ describe("sessionless release and already-reviewed refusal (#389)", () => {
     expect(refused.exitCode).toBe(2);
     expect(refused.output.reason).toBe("dispatched_unattached");
     expect((await runReserve(resumeReq, { stateDir: env.stateDir })).output.reason).toBe("occupied");
+  });
+});
+
+describe("misplaced owner store guard (#393)", () => {
+  async function cliFor(stateDir: string, env: Awaited<ReturnType<typeof setupEnv>>, command: string, extra: string[] = []) {
+    const reqFile = await writeRequestFile(env.root, env.request);
+    return runCli([command, "--request", reqFile, "--state-dir", stateDir, ...extra]);
+  }
+
+  it("refuses store == workerStateDir for reserve and release without writing", async () => {
+    for (const command of ["reserve", "release"] as const) {
+      const env = await setupEnv({ pr: command === "reserve" ? 760 : 761 });
+      const extra = command === "release" ? ["--owner-token", "0".repeat(32)] : [];
+      const out = await cliFor(env.wrapper, env, command, extra);
+      expect(out.exitCode, command).toBe(1);
+      expect(out.output.reason, command).toBe("owner_store_misplaced");
+      expect(String(out.output.detail ?? ""), command).toContain(env.wrapper);
+      expect(await readdir(env.wrapper), command).toEqual([]);
+      expect(await readdir(env.stateDir).catch((error: NodeJS.ErrnoException) => (error.code === "ENOENT" ? [] : Promise.reject(error))), command).toEqual([]);
+    }
+  });
+
+  it("refuses a store that is the parent of the worker dir", async () => {
+    for (const command of ["reserve", "release"] as const) {
+      const env = await setupEnv({ pr: command === "reserve" ? 762 : 763 });
+      const extra = command === "release" ? ["--owner-token", "0".repeat(32)] : [];
+      const out = await cliFor(env.root, env, command, extra);
+      expect(out.exitCode, command).toBe(1);
+      expect(out.output.reason, command).toBe("owner_store_misplaced");
+    }
+  });
+
+  it("refuses a store that is a child of the worker dir", async () => {
+    for (const command of ["reserve", "release"] as const) {
+      const env = await setupEnv({ pr: command === "reserve" ? 764 : 765 });
+      const extra = command === "release" ? ["--owner-token", "0".repeat(32)] : [];
+      const child = join(env.wrapper, "nested-store");
+      await mkdir(child, { recursive: true });
+      const out = await cliFor(child, env, command, extra);
+      expect(out.exitCode, command).toBe(1);
+      expect(out.output.reason, command).toBe("owner_store_misplaced");
+      expect(await readdir(child), command).toEqual([]);
+    }
+  });
+
+  it("refuses a store containing session.json", async () => {
+    for (const command of ["reserve", "release"] as const) {
+      const env = await setupEnv({ pr: command === "reserve" ? 766 : 767 });
+      const extra = command === "release" ? ["--owner-token", "0".repeat(32)] : [];
+      const store = join(env.root, "foreign-store");
+      await mkdir(store, { recursive: true });
+      await writeFile(join(store, "session.json"), JSON.stringify({ stale: true }));
+      const out = await cliFor(store, env, command, extra);
+      expect(out.exitCode, command).toBe(1);
+      expect(out.output.reason, command).toBe("owner_store_misplaced");
+      expect(String(out.output.detail ?? ""), command).toContain("session.json");
+    }
+  });
+
+  it("refuses a store containing an attempt status artifact", async () => {
+    for (const command of ["reserve", "release"] as const) {
+      const env = await setupEnv({ pr: command === "reserve" ? 768 : 769 });
+      const extra = command === "release" ? ["--owner-token", "0".repeat(32)] : [];
+      const store = join(env.root, "foreign-store");
+      await mkdir(store, { recursive: true });
+      await writeFile(join(store, "attempt-001-status.json"), JSON.stringify({ stale: true }));
+      const out = await cliFor(store, env, command, extra);
+      expect(out.exitCode, command).toBe(1);
+      expect(out.output.reason, command).toBe("owner_store_misplaced");
+    }
+  });
+
+  it("allows a sibling path that only shares a name prefix", async () => {
+    const env = await setupEnv({ pr: 770 });
+    const sibling = `${env.stateDir}2`;
+    const reqFile = await writeRequestFile(env.root, env.request);
+    const out = await runCli(["reserve", "--request", reqFile, "--state-dir", sibling]);
+    expect(out.exitCode).toBe(0);
+    expect(out.output.ok).toBe(true);
+  });
+
+  it("refuses the equality case for all seven commands before any store access", async () => {
+    for (const command of ["reserve", "attach", "status", "accept", "release", "stop", "finding"] as const) {
+      const env = await setupEnv({ pr: 780 + command.length });
+      const extra =
+        command === "finding"
+          ? ["--owner-token", "0".repeat(32)]
+          : ["attach", "accept", "release", "stop"].includes(command)
+            ? ["--owner-token", "0".repeat(32)]
+            : [];
+      const req: CoordinatorRequest =
+        command === "finding"
+          ? { ...env.request, finding: { key: "k", status: "confirmed", evidence: "ev" } }
+          : env.request;
+      const reqFile = await writeRequestFile(env.root, req);
+      const out = await runCli([command, "--request", reqFile, "--state-dir", env.wrapper, ...extra]);
+      expect(out.exitCode, command).toBe(1);
+      expect(out.output, command).toMatchObject({ ok: false, reason: "owner_store_misplaced" });
+      expect(String(out.output.detail ?? ""), command).toContain(env.wrapper);
+    }
   });
 });

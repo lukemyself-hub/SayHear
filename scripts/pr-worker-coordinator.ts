@@ -9,7 +9,7 @@
  */
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
-import { lstat, readFile, readlink, realpath } from "node:fs/promises";
+import { lstat, readFile, readdir, readlink, realpath } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
@@ -175,6 +175,68 @@ async function canonicalWorkerDir(path: string): Promise<string> {
     if (resolve(path) !== canon) fail("workerStateDir must be canonical.");
     return canon;
   }
+}
+async function canonicalizeForOwnerGuard(path: string): Promise<string> {
+  const abs = resolve(path);
+  try {
+    return await realpath(abs);
+  } catch (error) {
+    if ((error as { code?: unknown } | null)?.code !== "ENOENT") throw error;
+    const segments: string[] = [];
+    let cursor = abs;
+    for (;;) {
+      const parent = dirname(cursor);
+      if (parent === cursor) fail("owner store path is not accessible.");
+      segments.unshift(basename(cursor));
+      cursor = parent;
+      try {
+        const ancestor = await realpath(cursor);
+        return segments.length > 0 ? join(ancestor, ...segments) : ancestor;
+      } catch (next) {
+        if ((next as { code?: unknown } | null)?.code !== "ENOENT") throw next;
+      }
+    }
+  }
+}
+async function ownerStoreWrapperArtifact(canonicalStore: string): Promise<string | null> {
+  let entries: string[];
+  try {
+    entries = await readdir(canonicalStore);
+  } catch (error) {
+    const code = (error as { code?: unknown } | null)?.code;
+    if (code === "ENOENT" || code === "ENOTDIR") return null;
+    throw error;
+  }
+  if (entries.includes("session.json")) {
+    try {
+      const st = await lstat(join(canonicalStore, "session.json"));
+      if (st.isFile() || st.isSymbolicLink()) return "session.json";
+    } catch {
+      return "session.json";
+    }
+  }
+  return entries.find((entry) => entry.startsWith("attempt-")) ?? null;
+}
+/**
+ * Refuses a misplaced owner store before any store read/write or lock
+ * creation. The shared owner store must never be the request's worker task
+ * state directory, overlap it, or already carry wrapper receipts.
+ */
+async function refuseMisplacedOwnerStore(stateDir: string, workerStateDir: string): Promise<CliOutcome | null> {
+  if (!isAbsolute(stateDir)) return null;
+  const store = await canonicalizeForOwnerGuard(stateDir);
+  const worker = await canonicalizeForOwnerGuard(workerStateDir);
+  if (store === worker) {
+    return { exitCode: 1, output: { ok: false, reason: "owner_store_misplaced", detail: `owner store equals workerStateDir (store="${store}" worker="${worker}")` } };
+  }
+  if (store.startsWith(`${worker}/`) || worker.startsWith(`${store}/`)) {
+    return { exitCode: 1, output: { ok: false, reason: "owner_store_misplaced", detail: `owner store overlaps workerStateDir (store="${store}" worker="${worker}")` } };
+  }
+  const artifact = await ownerStoreWrapperArtifact(store);
+  if (artifact !== null) {
+    return { exitCode: 1, output: { ok: false, reason: "owner_store_misplaced", detail: `owner store contains wrapper artifact ${artifact} (store="${store}" worker="${worker}")` } };
+  }
+  return null;
 }
 async function requireTaskMatch(canonicalTaskFile: string, expected: string): Promise<void> {
   const bytes = await readFile(canonicalTaskFile).catch(() => fail("taskFile is not accessible."));
@@ -664,6 +726,8 @@ export async function runCli(argv: string[], serviceOverrides?: ServiceOverrides
     const options: RunOptions = { stateDir: parsed.stateDir };
     if (parsed.ownerToken !== undefined) options.ownerToken = parsed.ownerToken;
     if (serviceOverrides !== undefined) options.serviceConfig = serviceOverrides;
+    const misplaced = await refuseMisplacedOwnerStore(parsed.stateDir, request.workerStateDir);
+    if (misplaced !== null) return misplaced;
     switch (parsed.command) {
       case "reserve": return await runReserve(request, options);
       case "attach": return await runAttach(request, options);
