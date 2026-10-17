@@ -107,8 +107,14 @@ PR 的生产部署结果（`not_required` / `succeeded` / `pending` / `failed` /
 
 ## 受控验收证据口径（Luke 2026-10-17 裁定）
 
-- 必须真实运行：main 前进复用既有 Luke 批准、Luke 暂停／撤回、hourly 双唤醒并发重叠、
+- 仍待验证行中必须真实运行的：main 前进复用既有 Luke 批准、Luke 暂停／撤回、hourly 双唤醒并发重叠、
   中断 worker 跨小时恢复（`pr:work stop` 后同一会话恢复）、真实 PR 上文档级冲突与 CI 失败。
-- 允许以源码夹具证明并标记 `awaiting verification`：三轮整改预算耗尽、多 Issue 部分失败收尾、
+  上文已有真实证据的行不受本节影响。
+- 允许以源码夹具证明并标记为待验证（`awaiting_verification`）：三轮整改预算耗尽、多 Issue 部分失败收尾、
   需部署 PR 与部署失败。这些行在真实场景自然出现前不算真实外部证据，也不据此声称对应 AC 完整通过。
+  对应夹具：`tests/pr-approval-controller.test.ts` 中 “keeps the PR-level budget when the third round
+  pauses even with zero Issues”、“recovers multi-Issue closure after a partial failure using live merge
+  and App approval”、“recovers a partial multi-Issue close without a second merge”；
+  `tests/pr-approval-deployment-closeout.test.ts` 中 `deploymentRequired` 与 `decideDeploymentCloseout`
+  （含 “reports failure as fact without retrying”）。
 - 每行证据须注明来源（真实运行的 PR／回执，或夹具测试名），两类证据不混记。
