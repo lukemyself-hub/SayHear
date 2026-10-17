@@ -1,12 +1,12 @@
-# PR 审批 v12 迁移说明（最终源码已安装；受控验收待定）
+# PR 审批 v12 迁移说明（最终源码已安装；受控验收进行中）
 
-本文件是 SPEC #362 → #369 的迁移 howto。`v12 / report v5` 最终源码安装已完成（控制器 `5c454fdda28f3807e556f0c40ec7be0e91596147e6a90a0df69848d210129fbe`，`build.sourceCommit 2cdf0c60defc683dc06314dece2ca7193853dd5a` 干净源码身份，PR #384 合入），`serialized-merge` 生效，真保护／App-only 守卫 intact；全部 13 项 completion 收据 `phase` 已 complete 且 attempt 均为 1（#348、#351、#352、#356、#359、#361、#373、#376、#379、#381、#383、#384、#385）。先前最终源码（`05ee8089…`／`7ee8e89`）现为已审查回滚恢复对象；`c5fa984f`／`34ab5815` 为更旧 fallback，仅历史保留。
+本文件是 SPEC #362 → #369 的迁移 howto。`v12 / report v5` 最终源码安装已完成（控制器 `5c454fdda28f3807e556f0c40ec7be0e91596147e6a90a0df69848d210129fbe`，`build.sourceCommit 2cdf0c60defc683dc06314dece2ca7193853dd5a` 干净源码身份，PR #384 合入），`serialized-merge` 生效，真保护／App-only 守卫 intact；全部 17 项 completion 收据 `phase` 已 complete 且 attempt 均为 1（#348、#351、#352、#356、#359、#361、#373、#376、#379、#381、#383、#384、#385、#387、#388、#390、#391）。先前最终源码（`05ee8089…`／`7ee8e89`）现为已审查回滚恢复对象；`c5fa984f`／`34ab5815` 为更旧 fallback，仅历史保留。
 一切以固定 `status` 回读为准，不以源码存在为准。
 
 ## 现状快照（2026-10-17，最终源码安装后；真实值以固定 `status` 为准）
 
 - 已安装运行中：policy `sayhear-pr-review-gate:v12`／report `sayhear-pr-review-report:v5`（控制器 `5c454fdda28f3807e556f0c40ec7be0e91596147e6a90a0df69848d210129fbe`，`build.sourceCommit 2cdf0c60defc683dc06314dece2ca7193853dd5a` 干净源码身份，PR #384 合入），`serialized-merge` 生效，
-  真保护／App-only main 写入守卫 intact；全部 13 项 completion 收据 `phase` 已 complete 且 attempt 均为 1（#348、#351、#352、#356、#359、#361、#373、#376、#379、#381、#383、#384、#385）。
+  真保护／App-only main 写入守卫 intact；全部 17 项 completion 收据 `phase` 已 complete 且 attempt 均为 1（#348、#351、#352、#356、#359、#361、#373、#376、#379、#381、#383、#384、#385、#387、#388、#390、#391）。
   先前最终源码（`05ee8089…`／`7ee8e89`）现为已审查回滚恢复对象（升级／回滚对恢复它）；`c5fa984f`／`34ab5815` 为更旧 fallback，仅历史保留；旧 `v11 / report v4` 备份为历史保留，不声称旧 `v11` 适用同一 helper。
   每小时自动化 `sayhear-pr` 现为 ACTIVE，但受控验收期内仅处理 `sayhear-pr` automation 当前 prompt 指定的 PR；2026-10-16 22:55Z 与 23:54Z 两次受控运行仅观测（未 reserve／派发／合入），其后定时运行因 Codex App `execution-config-loading` 错误未执行（立即运行同样报错），重启后已恢复；#385 上 hourly 已真实完成发现、派发独立 review、确认缺陷修复派发与新会话复审，普通自动合入 `e2ef35b`。
 - 旧版：历史 `v11 / report v4` 已由 root 备份保留（历史，不作当前回滚依据）。本次已集成：人工最终决定、
@@ -14,9 +14,9 @@
   PR #384（已合入 `2cdf0c6`）：未解决外部 review thread 不再遮蔽可执行的 `request_changes`（decision 加至少一个 P0/P1/P2 finding），其余仍走人工。
   最终安装／回滚 helper 已独立审查：bundle 内 607 项通过，安装与回滚 helper 各 `bash -n`＋收据解析 10 项通过；这只证明安装，不证明完整端到端验收。
   人工手动无 Issue #381 合入已完成；#383 在其被审 head `2c5f82e` 上由 Luke 一次 Approve 后经 submit 首次即合入 `aa45552`，completion 收据 attempt 1；#383 另观测到一次最新 main 竞态（main 到 `2cdf0c6` 后 submit 按当前 main 重建 merge ref `a88b1cc` 并派发 Validate，首 run 取到旧 merge `f004c12` 被判 stale 证据驳回，重派后 `a88b1cc` 上 run 通过被接受）。
-  普通自动合入（#385 已有真实证据：无 Issue 纯文档，Luke 未作任何 review 或决定；hourly 发现并派发独立 review 确认真实 P2 后控制器 `request_changes` 到 `e2ef824`，确认缺陷后派发修复并由授权协调者核验 diff 后推送 `95e2f71`，全新独立会话复审通过后普通自动合入 `e2ef35b`，无需部署、无 Issue 写入，completion 收据 attempt 1）、hourly 恢复／重叠与其余受控矩阵仍待定（hourly 双唤醒并发重叠、中断 worker 跨小时恢复、Luke 暂停／撤回、真实 PR 上未知／转人工路由、真实 PR 上冲突与 CI 失败、main 前进复用既有 Luke 批准、三轮预算耗尽、多 Issue 部分收尾、需部署 PR 与部署失败）。不声称任一完整 AC 已通过。
+  普通自动合入（#385 已有真实证据：无 Issue 纯文档，Luke 未作任何 review 或决定；hourly 发现并派发独立 review 确认真实 P2 后控制器 `request_changes` 到 `e2ef824`，确认缺陷后派发修复并由授权协调者核验 diff 后推送 `95e2f71`，全新独立会话复审通过后普通自动合入 `e2ef35b`，无需部署、无 Issue 写入，completion 收据 attempt 1）、#387 人工最终决定合入、真实 PR 上转人工路由（#390、#391 首轮，未解决外部 review thread）、#391 交付 Issue 的普通自动合入与控制器 Issue 收尾已有真实证据；hourly 恢复／重叠与其余受控矩阵仍待定（hourly 双唤醒并发重叠、中断 worker 跨小时恢复、Luke 暂停／撤回、真实 PR 上未知路由、真实 PR 上冲突与 CI 失败、main 前进复用既有 Luke 批准、三轮预算耗尽、多 Issue 部分收尾、需部署 PR 与部署失败）。不声称任一完整 AC 已通过。
 - History 与 thin CLI 已集成并通过审查，属已安装最终源码 `2cdf0c6` 一部分。
-- #369 受控验收行仍待验证（人工手动无 Issue #381 合入、#383 人工最终决定合入、#383 上观测到一次的最新 main 竞态、#385 hourly 发现／独立 review 派发／确认缺陷修复派发／全新复审／普通自动合入行除外）。不新增常驻服务、webhook、事件桥或统一台账。
+- #369 受控验收行仍待验证（人工手动无 Issue #381 合入、#383 人工最终决定合入、#383 上观测到一次的最新 main 竞态、#385 hourly 发现／独立 review 派发／确认缺陷修复派发／全新复审／普通自动合入、#387 人工最终决定合入、真实 PR 上转人工路由（#390、#391 首轮）、#391 交付 Issue 的普通自动合入与控制器 Issue 收尾行除外）。不新增常驻服务、webhook、事件桥或统一台账。
 
 ## 前提与冻结
 
@@ -26,9 +26,9 @@
 - 运行时 App 私钥永不传入 worker，只走本机 Keychain 与 root-owned 配置。
 - 保留已安装备份：旧 bundle、见证、config、Keychain 条目、收据。
 
-## 安装与回滚（最终源码已安装；受控验收仍待定）
+## 安装与回滚（最终源码已安装；受控验收进行中）
 
-- 最终源码安装已完成（控制器 `5c454fdda28f3807e556f0c40ec7be0e91596147e6a90a0df69848d210129fbe`，`build.sourceCommit 2cdf0c60defc683dc06314dece2ca7193853dd5a` 干净源码身份，PR #384 合入；policy v12／report v5）；回滚恢复对象为已审查旧 bundle `05ee8089…`（`build.sourceCommit 7ee8e89`），不声称旧 `v11` 适用同一 helper。普通自动合入（#385 已有真实证据：普通自动合入 `e2ef35b`）、hourly 发现／派发（#385 已有真实证据）／恢复／重叠与其余受控矩阵仍待定（hourly 双唤醒并发重叠、中断 worker 跨小时恢复、Luke 暂停／撤回、真实 PR 上未知／转人工路由、真实 PR 上冲突与 CI 失败、main 前进复用既有 Luke 批准、三轮预算耗尽、多 Issue 部分收尾、需部署 PR 与部署失败）；不虚构 installer，不声称可从未合入候选直接安装。
+- 最终源码安装已完成（控制器 `5c454fdda28f3807e556f0c40ec7be0e91596147e6a90a0df69848d210129fbe`，`build.sourceCommit 2cdf0c60defc683dc06314dece2ca7193853dd5a` 干净源码身份，PR #384 合入；policy v12／report v5）；回滚恢复对象为已审查旧 bundle `05ee8089…`（`build.sourceCommit 7ee8e89`），不声称旧 `v11` 适用同一 helper。普通自动合入（#385 已有真实证据：普通自动合入 `e2ef35b`）、#387 人工最终决定合入、真实 PR 上转人工路由（#390、#391 首轮，未解决外部 review thread）、#391 交付 Issue 的普通自动合入与控制器 Issue 收尾、hourly 发现／派发（#385 已有真实证据）已有真实证据；hourly 恢复／重叠与其余受控矩阵仍待定（hourly 双唤醒并发重叠、中断 worker 跨小时恢复、Luke 暂停／撤回、真实 PR 上未知路由、真实 PR 上冲突与 CI 失败、main 前进复用既有 Luke 批准、三轮预算耗尽、多 Issue 部分收尾、需部署 PR 与部署失败）；不虚构 installer，不声称可从未合入候选直接安装。
 - 安装与回滚的共同前置条件：先读固定 `pr-approval-status`，其
   `completionStates` 每一项都必须 `phase === "complete"`（无论 `mergeSha` 是否为空）。
   helper 先做该检查，再在维护锁下重读 `pr-approval-status` 复核一遍后才 staging；未完成收据阻断维护且永不删除，只能由人工先核实实际合入状态再处理。
@@ -101,7 +101,7 @@ PR 的生产部署结果（`not_required` / `succeeded` / `pending` / `failed` /
 - 最新 main 竞态／树身份／重放按组合重验；超时重叠／取消恢复／三轮预算
   按控制器拥有计数。
 - Issue 写入精确绑定，部署异常如实报告；每小时发现恢复静默。
-- 人工手动无 Issue 合入（#381）、#383 人工最终决定合入、#383 上观测到一次的最新 main 竞态、#385 hourly 发现并派发独立 review、#385 确认缺陷后修复派发与授权协调者推送、全新独立会话复审通过、#385 普通自动合入（无 Issue 纯文档、无 Luke 决定、无需部署、无 Issue 写入）行已有真实证据；其余真实外部行仍待验证（hourly 双唤醒并发重叠、中断 worker 跨小时恢复、Luke 暂停／撤回、真实 PR 上未知／转人工路由、真实 PR 上冲突与 CI 失败、main 前进复用既有 Luke 批准、三轮预算耗尽、多 Issue 部分收尾、需部署 PR 与部署失败），源码夹具另计。不声称任一完整 AC 已通过。
+- 人工手动无 Issue 合入（#381）、#383 人工最终决定合入、#383 上观测到一次的最新 main 竞态、#385 hourly 发现并派发独立 review、#385 确认缺陷后修复派发与授权协调者推送、全新独立会话复审通过、#385 普通自动合入（无 Issue 纯文档、无 Luke 决定、无需部署、无 Issue 写入）、#387 人工最终决定合入、真实 PR 上转人工路由（#390、#391 首轮，未解决外部 review thread）、#391 交付 Issue 的普通自动合入与控制器 Issue 收尾行已有真实证据；其余真实外部行仍待验证（hourly 双唤醒并发重叠、中断 worker 跨小时恢复、Luke 暂停／撤回、真实 PR 上未知路由、真实 PR 上冲突与 CI 失败、main 前进复用既有 Luke 批准、三轮预算耗尽、多 Issue 部分收尾、需部署 PR 与部署失败），源码夹具另计。不声称任一完整 AC 已通过。
 - 本地真实 worker smoke：实际实现会话＋独立审查通过；
   占用 null／running 拒绝第二个写入者；
   停止保留部分改动且同一实现恢复＋全新预约通过。
@@ -132,3 +132,7 @@ PR 的生产部署结果（`not_required` / `succeeded` / `pending` / `failed` /
 - 人工最终决定的 challenge 时序：Luke 在 #387 上的 Approve（05:41:32Z）早于该 PR 首次 `prepare` 冻结
   final-decision challenge（06:08:52Z），watermark 把这条 review 记在 challenge 之前，因此不构成人工最终决定。
   需要 Luke 批准的 PR 必须先 `prepare` 冻结 challenge，再请 Luke Approve（与 #382 同类现象）。
+- #387 人工最终决定合入：首次 Approve（05:41:32Z）不计数后，Luke 在冻结后再次 Approve（06:11:39Z），该 Approve 构成人工最终决定；humanChannel browser 在 head `0e6c4b7` 上合入 `9b7941a`（06:45:31Z），completion 收据 `~/Library/Application Support/SayHear/PRApproval/completions/pr-387.json` attempt 1。
+- #390 真实 PR 上转人工路由：未解决外部 review thread（chatgpt-codex-connector，06:12:15Z）使控制器回 `human_decision`，未走自动批准；Luke Approve（06:27:52Z）后 humanChannel browser 在 head `3a7e675` 上合入 `832213e`（06:28:56Z），completion 收据 `~/Library/Application Support/SayHear/PRApproval/completions/pr-390.json` attempt 1。
+- #391 交付 Issue 的普通自动合入与控制器 Issue 收尾：首轮 head `3c99321` 上 hourly 已派发全新独立 review（approve），控制器因 chatgpt-codex-connector 未解决 P1 thread 回 `human_decision`（转人工路由第二例）；协调者确认为真实 P2 后推送修复 `74d968f` 并在该 thread 回复（未 resolve），Luke resolve 该 thread（Luke 未 Approve）；`74d968f` 上 08:25Z hourly 派发全新独立 review（approve，zero findings），09:06Z—16:17Z 共 8 轮 hourly 见到当前 head 已接受 review 未再派发（hourly prompt 规则约束；helper 层 `already_reviewed` 拒绝仅源码／测试证明，未在真实运行观测）；协调者 submit 得 `merge_candidate` 后由 app／sayhear-pr-review-gate 以 humanChannel app 合入 `a9bd894`（16:32:08Z，无 Luke 决定），控制器收尾关闭 Issue #389，completion 收据 `~/Library/Application Support/SayHear/PRApproval/completions/pr-391.json` attempt 1。
+- #389 已合入并关闭；#388 重叠行仍记部分证据，在 post-#389 helper 上重观前不算通过。

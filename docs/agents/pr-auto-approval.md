@@ -1,18 +1,18 @@
 # PR 自动审批 gate
 
-## SPEC362 已确认目标契约（最终源码已安装；受控验收待定）
+## SPEC362 已确认目标契约（最终源码已安装；受控验收进行中）
 
 Luke 于 2026-10-15 确认 SPEC #362（开发票 #363），属 Internal Core 工程交付工具链，
 不新增产品 Core Flow。GitHub Issue 正文、评论和标签是执行唯一真源。
 本节是已批准的目标契约，不是最终生效或部署声明。
 
 当前已安装运行控制器：`sayhear-pr-review-gate:v12` /
-`sayhear-pr-review-report:v5`（最终源码安装：控制器 `5c454fdda28f3807e556f0c40ec7be0e91596147e6a90a0df69848d210129fbe`，`build.sourceCommit 2cdf0c60defc683dc06314dece2ca7193853dd5a` 干净源码身份，PR #384 合入），`serialized-merge` 生效，真保护／App-only 守卫 intact；全部 13 项 completion 收据 `phase` 已 complete 且 attempt 均为 1（#348、#351、#352、#356、#359、#361、#373、#376、#379、#381、#383、#384、#385）。PR #384（已合入 `2cdf0c6`）：未解决外部 review thread 不再遮蔽可执行的 `request_changes`（decision 加至少一个 P0/P1/P2 finding），其余仍走人工。先前最终源码（`05ee8089…`／`7ee8e89`）现为已审查回滚恢复对象；`c5fa984f`／`34ab5815` 为更旧 fallback，仅历史保留；旧 `v11 / report v4` 备份为历史保留。每小时自动化 `sayhear-pr` 现为 ACTIVE，但受控验收期内仅处理 `sayhear-pr` automation 当前 prompt 指定的 PR；2026-10-16 22:55Z 与 23:54Z 两次受控运行仅观测（未 reserve／派发／合入），其后定时运行因 Codex App `execution-config-loading` 错误未执行（立即运行同样报错），重启后已恢复；#385 上 hourly 已真实完成发现、派发独立 review、确认缺陷修复派发与新会话复审，普通自动合入 `e2ef35b`。最终安装／回滚 helper 已独立审查：bundle 内 607 项通过，安装与回滚 helper 各 `bash -n`＋收据解析 10 项通过；这只证明安装，不证明完整端到端验收。人工手动无 Issue #381 合入已完成；#383 在其被审 head `2c5f82e` 上由 Luke 一次 Approve 后经 submit 首次即合入 `aa45552`，completion 收据 attempt 1；#383 另观测到一次最新 main 竞态（main 到 `2cdf0c6` 后 submit 按当前 main 重建 merge ref `a88b1cc` 并派发 Validate，首 run 取到旧 merge `f004c12` 被判 stale 证据驳回，重派后 `a88b1cc` 上 run 通过被接受）。普通自动合入（#385 已有真实证据：无 Issue 纯文档，Luke 未作任何 review 或决定；hourly 发现并派发独立 review 确认真实 P2 后控制器 `request_changes` 到 `e2ef824`，确认缺陷后派发修复并由授权协调者核验 diff 后推送 `95e2f71`，全新独立会话复审通过后普通自动合入 `e2ef35b`，无需部署、无 Issue 写入，completion 收据 attempt 1）、hourly 恢复／重叠与其余受控矩阵仍待定（hourly 双唤醒并发重叠、中断 worker 跨小时恢复、Luke 暂停／撤回、真实 PR 上未知／转人工路由、真实 PR 上冲突与 CI 失败、main 前进复用既有 Luke 批准、三轮预算耗尽、多 Issue 部分收尾、需部署 PR 与部署失败），真实值以固定 `status` 为准。
+`sayhear-pr-review-report:v5`（最终源码安装：控制器 `5c454fdda28f3807e556f0c40ec7be0e91596147e6a90a0df69848d210129fbe`，`build.sourceCommit 2cdf0c60defc683dc06314dece2ca7193853dd5a` 干净源码身份，PR #384 合入），`serialized-merge` 生效，真保护／App-only 守卫 intact；全部 17 项 completion 收据 `phase` 已 complete 且 attempt 均为 1（#348、#351、#352、#356、#359、#361、#373、#376、#379、#381、#383、#384、#385、#387、#388、#390、#391）。PR #384（已合入 `2cdf0c6`）：未解决外部 review thread 不再遮蔽可执行的 `request_changes`（decision 加至少一个 P0/P1/P2 finding），其余仍走人工。先前最终源码（`05ee8089…`／`7ee8e89`）现为已审查回滚恢复对象；`c5fa984f`／`34ab5815` 为更旧 fallback，仅历史保留；旧 `v11 / report v4` 备份为历史保留。每小时自动化 `sayhear-pr` 现为 ACTIVE，但受控验收期内仅处理 `sayhear-pr` automation 当前 prompt 指定的 PR；2026-10-16 22:55Z 与 23:54Z 两次受控运行仅观测（未 reserve／派发／合入），其后定时运行因 Codex App `execution-config-loading` 错误未执行（立即运行同样报错），重启后已恢复；#385 上 hourly 已真实完成发现、派发独立 review、确认缺陷修复派发与新会话复审，普通自动合入 `e2ef35b`。最终安装／回滚 helper 已独立审查：bundle 内 607 项通过，安装与回滚 helper 各 `bash -n`＋收据解析 10 项通过；这只证明安装，不证明完整端到端验收。人工手动无 Issue #381 合入已完成；#383 在其被审 head `2c5f82e` 上由 Luke 一次 Approve 后经 submit 首次即合入 `aa45552`，completion 收据 attempt 1；#383 另观测到一次最新 main 竞态（main 到 `2cdf0c6` 后 submit 按当前 main 重建 merge ref `a88b1cc` 并派发 Validate，首 run 取到旧 merge `f004c12` 被判 stale 证据驳回，重派后 `a88b1cc` 上 run 通过被接受）。普通自动合入（#385 已有真实证据：无 Issue 纯文档，Luke 未作任何 review 或决定；hourly 发现并派发独立 review 确认真实 P2 后控制器 `request_changes` 到 `e2ef824`，确认缺陷后派发修复并由授权协调者核验 diff 后推送 `95e2f71`，全新独立会话复审通过后普通自动合入 `e2ef35b`，无需部署、无 Issue 写入，completion 收据 attempt 1）、#387 人工最终决定合入、真实 PR 上转人工路由（#390、#391 首轮，未解决外部 review thread）、#391 交付 Issue 的普通自动合入与控制器 Issue 收尾已有真实证据；hourly 恢复／重叠与其余受控矩阵仍待定（hourly 双唤醒并发重叠、中断 worker 跨小时恢复、Luke 暂停／撤回、真实 PR 上未知路由、真实 PR 上冲突与 CI 失败、main 前进复用既有 Luke 批准、三轮预算耗尽、多 Issue 部分收尾、需部署 PR 与部署失败），真实值以固定 `status` 为准。
 v11 保留在已签发收据的恢复允许列表中（历史兼容，不作当前回滚依据）。最终源码安装不等于完整受控验收，剩余验收由 #369 负责。
 实施前须核验实时 main、安装版本、保护设置、worker 有效配置及既有未提交改动。
 本文件其余章节保留既有安装与恢复细节，不代表已符合新契约。
 
-v12 迁移 howto 见 [pr-approval-v12-migration.md](pr-approval-v12-migration.md)（最终源码已安装；受控验收待定）。
+v12 迁移 howto 见 [pr-approval-v12-migration.md](pr-approval-v12-migration.md)（最终源码已安装；受控验收进行中）。
 下文“已安装 v11”是历史运行基线快照，不是当前运行版本，也不是 v12 目标；是否生效以固定 `status` 为准。
 
 - 两条通路：自动通路只加速现有契约内普通修复与改进；未知授权范围、证据争议与新
