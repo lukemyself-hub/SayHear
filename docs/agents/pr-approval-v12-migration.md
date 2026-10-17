@@ -1,16 +1,20 @@
 # PR 审批 v12 迁移说明（最终源码已安装；受控验收待定）
 
-本文件是 SPEC #362 → #369 的迁移 howto。`v12 / report v5` 最终源码安装已完成（控制器 `05ee8089fad58a1d49d7138a15941a8e348e60d2fd85918301fd8defcdc1d4aa`，`build.sourceCommit 7ee8e897194df8300089094cef7fac2b86e20fc1` 干净源码身份），`serialized-merge` 生效，真保护／App-only 守卫 intact；全部 completion 收据 `phase` 已 complete。先前预合入候选（`c5fa984f`，`build.sourceCommit 34ab5815`）现为旧 fallback。
+本文件是 SPEC #362 → #369 的迁移 howto。`v12 / report v5` 最终源码安装已完成（控制器 `5c454fdda28f3807e556f0c40ec7be0e91596147e6a90a0df69848d210129fbe`，`build.sourceCommit 2cdf0c60defc683dc06314dece2ca7193853dd5a` 干净源码身份，PR #384 合入），`serialized-merge` 生效，真保护／App-only 守卫 intact；全部 completion 收据 `phase` 已 complete（#379、#381、#384 attempt 均为 1）。先前最终源码（`05ee8089…`／`7ee8e89`）现为已审查回滚恢复对象；`c5fa984f`／`34ab5815` 为更旧 fallback，仅历史保留。
 一切以固定 `status` 回读为准，不以源码存在为准。
 
-## 现状快照（2026-10-16，最终源码安装后；真实值以固定 `status` 为准）
+## 现状快照（2026-10-17，最终源码安装后；真实值以固定 `status` 为准）
 
-- 已安装运行中：`v12 / report v5`（控制器 `05ee8089fad58a1d49d7138a15941a8e348e60d2fd85918301fd8defcdc1d4aa`，`build.sourceCommit 7ee8e897194df8300089094cef7fac2b86e20fc1` 干净源码身份），`serialized-merge` 生效，
-  真保护／App-only main 写入守卫 intact；全部 completion 收据 `phase` 已 complete。PR #379 已合入 `7ee8e89`，PR #381 已合入 `2f52fa1`（3 笔 docs-only），两者 completion attempt 均为 1。
-  先前预合入候选（`c5fa984f`，`build.sourceCommit 34ab5815`）现为旧 fallback；旧 `v11 / report v4` 备份为历史保留，本次已审查回滚恢复对象为 `c5fa984f`／`34ab5815`，不声称旧 `v11` 适用同一 helper。
-  每小时自动化 `sayhear-pr` 现有 prompt 已更新为 SPEC362 worker 流程并经回读核验，当前仍 PAUSED，尚无实际 hourly 执行。
+- 已安装运行中：policy `sayhear-pr-review-gate:v12`／report `sayhear-pr-review-report:v5`（控制器 `5c454fdda28f3807e556f0c40ec7be0e91596147e6a90a0df69848d210129fbe`，`build.sourceCommit 2cdf0c60defc683dc06314dece2ca7193853dd5a` 干净源码身份，PR #384 合入），`serialized-merge` 生效，
+  真保护／App-only main 写入守卫 intact；全部 completion 收据 `phase` 已 complete（#379、#381、#384 attempt 均为 1）。
+  先前最终源码（`05ee8089…`／`7ee8e89`）现为已审查回滚恢复对象（升级／回滚对恢复它）；`c5fa984f`／`34ab5815` 为更旧 fallback，仅历史保留；旧 `v11 / report v4` 备份为历史保留，不声称旧 `v11` 适用同一 helper。
+  每小时自动化 `sayhear-pr` 现为 ACTIVE，但受控验收期内暂限 PR #383；2026-10-16 22:55Z 与 23:54Z 两次受控运行仅观测（未 reserve／派发／合入），其后定时运行未执行，首次真实 hourly 修补派发仍待定。
 - 旧版：历史 `v11 / report v4` 已由 root 备份保留（历史，不作当前回滚依据）。本次已集成：人工最终决定、
-  最新 main 组合、Provider＋行为范围、零 Issue、生命周期、归属、服务观察（均为最终源码 `7ee8e89` 及其后修复范围；完整受控验收仍待定）。最终安装／回滚 helper 已独立审查：bundle 内 605 项通过，helper `bash -n` 2 项＋收据解析 10 项通过；这只证明安装，不证明完整端到端验收。人工手动无 Issue #381 合入已完成；普通自动／hourly／main 竞态受控验收仍待定。
+  最新 main 组合、Provider＋行为范围、零 Issue、生命周期、归属、服务观察（均为最终源码 `2cdf0c6` 及其前修复范围；完整受控验收仍待定）。
+  PR #384（已合入 `2cdf0c6`）：未解决外部 review thread 不再遮蔽可执行的 `request_changes`（decision 加至少一个 P0/P1/P2 finding），其余仍走人工。
+  最终安装／回滚 helper 已独立审查：bundle 内 607 项通过，安装与回滚 helper 各 `bash -n`＋收据解析 10 项通过；这只证明安装，不证明完整端到端验收。
+  人工手动无 Issue #381 合入已完成；#383 观测到一次最新 main 竞态（main 到 `2cdf0c6` 后 submit 按当前 main 重建 merge ref `a88b1cc` 并派发 Validate，首 run 取到旧 merge `f004c12` 被判 stale 证据驳回，重派后 `a88b1cc` 上 run 通过被接受）。
+  普通自动合入、hourly 发现／派发／恢复／重叠与其余受控矩阵仍待定。
 - History 与 thin CLI 已集成并通过审查，与其它候选模块同属本候选。
 - #369 受控验收行仍待验证（人工手动无 Issue #381 合入除外）。不新增常驻服务、webhook、事件桥或统一台账。
 
@@ -24,11 +28,11 @@
 
 ## 安装与回滚（最终源码已安装；受控验收仍待定）
 
-- 最终源码安装已完成（控制器 `05ee8089fad58a1d49d7138a15941a8e348e60d2fd85918301fd8defcdc1d4aa`，`build.sourceCommit 7ee8e897194df8300089094cef7fac2b86e20fc1` 干净源码身份；policy v12／report v5）；回滚恢复对象为已审查旧 bundle `c5fa984f`（`build.sourceCommit 34ab5815`），不声称旧 `v11` 适用同一 helper。普通自动／hourly／main 竞态受控验收仍待定；不虚构 installer，不声称可从未合入候选直接安装。
+- 最终源码安装已完成（控制器 `5c454fdda28f3807e556f0c40ec7be0e91596147e6a90a0df69848d210129fbe`，`build.sourceCommit 2cdf0c60defc683dc06314dece2ca7193853dd5a` 干净源码身份，PR #384 合入；policy v12／report v5）；回滚恢复对象为已审查旧 bundle `05ee8089…`（`build.sourceCommit 7ee8e89`），不声称旧 `v11` 适用同一 helper。普通自动合入、hourly 发现／派发／恢复／重叠与其余受控矩阵仍待定；不虚构 installer，不声称可从未合入候选直接安装。
 - 安装与回滚的共同前置条件：先读固定 `pr-approval-status`，其
-  `completionStates` 不得存在任何未完成（`phase !== "complete"`）且
-  `mergeSha === null` 的条目。这种条目在 v11 写入、v12 读取（反之亦然）时
-  会被当作仓库级阻断，而收据永不删除，只能由人工核实实际合入状态后处理。
+  `completionStates` 每一项都必须 `phase === "complete"`（无论 `mergeSha` 是否为空）。
+  helper 先做该检查，再在维护锁下重读 `pr-approval-status` 复核一遍后才 staging；未完成收据阻断维护且永不删除，只能由人工先核实实际合入状态再处理。
+  这种条目在 v11 写入、v12 读取（反之亦然）时会被当作仓库级阻断。
 - 现有固定启动器均为 root-owned，不经工作区源码或 PR 脚本触碰凭证。
 - 回滚为已审查旧 bundle 恢复：先确认无在途写入再恢复；
   永不假设旧 `v11` 能消费 `v12` 收据。
@@ -95,7 +99,7 @@ PR 的生产部署结果（`not_required` / `succeeded` / `pending` / `failed` /
 - 最新 main 竞态／树身份／重放按组合重验；超时重叠／取消恢复／三轮预算
   按控制器拥有计数。
 - Issue 写入精确绑定，部署异常如实报告；每小时发现恢复静默。
-- 所有真实外部行均为待验证，源码夹具另计。
+- 人工手动无 Issue 合入（#381）与 #383 上观测到一次的最新 main 竞态行已有真实证据；其余真实外部行仍待验证，源码夹具另计。不声称任一完整 AC 已通过。
 - 本地真实 worker smoke：实际实现会话＋独立审查通过；
   占用 null／running 拒绝第二个写入者；
   停止保留部分改动且同一实现恢复＋全新预约通过。
