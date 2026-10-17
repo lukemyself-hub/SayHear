@@ -16,7 +16,7 @@
   人工手动无 Issue #381 合入已完成；#383 观测到一次最新 main 竞态（main 到 `2cdf0c6` 后 submit 按当前 main 重建 merge ref `a88b1cc` 并派发 Validate，首 run 取到旧 merge `f004c12` 被判 stale 证据驳回，重派后 `a88b1cc` 上 run 通过被接受）。
   普通自动合入、hourly 发现／派发／恢复／重叠与其余受控矩阵仍待定。
 - History 与 thin CLI 已集成并通过审查，属已安装最终源码 `2cdf0c6` 一部分。
-- #369 受控验收行仍待验证（人工手动无 Issue #381 合入除外）。不新增常驻服务、webhook、事件桥或统一台账。
+- #369 受控验收行仍待验证（人工手动无 Issue #381 合入与 #383 上观测到一次的最新 main 竞态行除外）。不新增常驻服务、webhook、事件桥或统一台账。
 
 ## 前提与冻结
 
