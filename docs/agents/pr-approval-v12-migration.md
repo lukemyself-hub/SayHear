@@ -8,15 +8,15 @@
 - 已安装运行中：policy `sayhear-pr-review-gate:v12`／report `sayhear-pr-review-report:v5`（控制器 `5c454fdda28f3807e556f0c40ec7be0e91596147e6a90a0df69848d210129fbe`，`build.sourceCommit 2cdf0c60defc683dc06314dece2ca7193853dd5a` 干净源码身份，PR #384 合入），`serialized-merge` 生效，
   真保护／App-only main 写入守卫 intact；全部 completion 收据 `phase` 已 complete（#379、#381、#384 attempt 均为 1）。
   先前最终源码（`05ee8089…`／`7ee8e89`）现为已审查回滚恢复对象（升级／回滚对恢复它）；`c5fa984f`／`34ab5815` 为更旧 fallback，仅历史保留；旧 `v11 / report v4` 备份为历史保留，不声称旧 `v11` 适用同一 helper。
-  每小时自动化 `sayhear-pr` 现为 ACTIVE，但受控验收期内暂限 PR #383；2026-10-16 22:55Z 与 23:54Z 两次受控运行仅观测（未 reserve／派发／合入），其后定时运行未执行，首次真实 hourly 修补派发仍待定。
+  每小时自动化 `sayhear-pr` 现为 ACTIVE，但受控验收期内仅处理 `sayhear-pr` automation 当前 prompt 指定的 PR；2026-10-16 22:55Z 与 23:54Z 两次受控运行仅观测（未 reserve／派发／合入），其后定时运行因 Codex App `execution-config-loading` 错误未执行（立即运行同样报错），重启 App 后恢复，恢复后首次运行回执仍待确认，首次真实 hourly 修补派发仍待定。
 - 旧版：历史 `v11 / report v4` 已由 root 备份保留（历史，不作当前回滚依据）。本次已集成：人工最终决定、
   最新 main 组合、Provider＋行为范围、零 Issue、生命周期、归属、服务观察（均为最终源码 `2cdf0c6` 及其前修复范围；完整受控验收仍待定）。
   PR #384（已合入 `2cdf0c6`）：未解决外部 review thread 不再遮蔽可执行的 `request_changes`（decision 加至少一个 P0/P1/P2 finding），其余仍走人工。
   最终安装／回滚 helper 已独立审查：bundle 内 607 项通过，安装与回滚 helper 各 `bash -n`＋收据解析 10 项通过；这只证明安装，不证明完整端到端验收。
-  人工手动无 Issue #381 合入已完成；#383 观测到一次最新 main 竞态（main 到 `2cdf0c6` 后 submit 按当前 main 重建 merge ref `a88b1cc` 并派发 Validate，首 run 取到旧 merge `f004c12` 被判 stale 证据驳回，重派后 `a88b1cc` 上 run 通过被接受）。
+  人工手动无 Issue #381 合入已完成；#383 在当前 head 由 Luke 一次 Approve 后经 submit 首次即合入 `aa45552`，completion 收据 attempt 1；#383 另观测到一次最新 main 竞态（main 到 `2cdf0c6` 后 submit 按当前 main 重建 merge ref `a88b1cc` 并派发 Validate，首 run 取到旧 merge `f004c12` 被判 stale 证据驳回，重派后 `a88b1cc` 上 run 通过被接受）。
   普通自动合入、hourly 发现／派发／恢复／重叠与其余受控矩阵仍待定。
 - History 与 thin CLI 已集成并通过审查，属已安装最终源码 `2cdf0c6` 一部分。
-- #369 受控验收行仍待验证（人工手动无 Issue #381 合入与 #383 上观测到一次的最新 main 竞态行除外）。不新增常驻服务、webhook、事件桥或统一台账。
+- #369 受控验收行仍待验证（人工手动无 Issue #381 合入、#383 人工最终决定合入与 #383 上观测到一次的最新 main 竞态行除外）。不新增常驻服务、webhook、事件桥或统一台账。
 
 ## 前提与冻结
 
@@ -50,7 +50,7 @@
   正式 GitHub Approve 本身不授予 root 安装权限。
 - 不重复已被否决的“合入源码即关闭 #369”方案。
 
-## 每小时提示词逻辑（当前 ACTIVE，受控验收期内暂限 PR #383）
+## 每小时提示词逻辑（当前 ACTIVE，受控验收期内仅处理 `sayhear-pr` automation 当前 prompt 指定的 PR）
 
 现有 Codex 每小时任务只调固定 `status / prepare`，再查实时 GitHub
 暂停、head、范围与台账；用户所有的 worker 调度经已合入可信来源安装的
@@ -89,7 +89,7 @@ PR 的生产部署结果（`not_required` / `succeeded` / `pending` / `failed` /
   必须对在途 worker 调用 `pr:work stop`：它只停会话，返回 `awaiting_release`，随后仍
   需 `release` 才解除占用；已停止且已释放的旧 worker 才不算第二个写入者。
 - Luke 有效 Approve 后停止语义审查重复，只做常规 CI／版本／保护核验。
-- 依实际需要的部署才跟进，否则静默 noop。本节不新增部署自动化；每小时 `sayhear-pr` 现为 ACTIVE，受控验收期内暂限 PR #383，首次真实 hourly 修补派发仍待定。
+- 依实际需要的部署才跟进，否则静默 noop。本节不新增部署自动化；每小时 `sayhear-pr` 现为 ACTIVE，受控验收期内仅处理 `sayhear-pr` automation 当前 prompt 指定的 PR，首次真实 hourly 修补派发仍待定。
 
 ## 受控验收矩阵（分组 SPEC AC01..16）
 
@@ -99,7 +99,7 @@ PR 的生产部署结果（`not_required` / `succeeded` / `pending` / `failed` /
 - 最新 main 竞态／树身份／重放按组合重验；超时重叠／取消恢复／三轮预算
   按控制器拥有计数。
 - Issue 写入精确绑定，部署异常如实报告；每小时发现恢复静默。
-- 人工手动无 Issue 合入（#381）与 #383 上观测到一次的最新 main 竞态行已有真实证据；其余真实外部行仍待验证，源码夹具另计。不声称任一完整 AC 已通过。
+- 人工手动无 Issue 合入（#381）、#383 人工最终决定合入与 #383 上观测到一次的最新 main 竞态行已有真实证据；其余真实外部行仍待验证，源码夹具另计。不声称任一完整 AC 已通过。
 - 本地真实 worker smoke：实际实现会话＋独立审查通过；
   占用 null／running 拒绝第二个写入者；
   停止保留部分改动且同一实现恢复＋全新预约通过。
