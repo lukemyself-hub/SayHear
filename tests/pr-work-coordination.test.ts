@@ -300,6 +300,56 @@ describe("null-session gap", () => {
     if (!retry.ok) throw new Error("must proceed after holder release");
     expect(retry.record.owner?.token).not.toBe(token);
   });
+
+  it("an undispatched predicate of false refuses inside the transaction; bound owners skip it", async () => {
+    const { store } = await makeStore();
+    const first = await reserveWork(store, reserveArgs(22, "predicate"));
+    if (!first.ok || first.record.owner === null) {
+      throw new Error("initial reservation must succeed");
+    }
+    const token = first.record.owner.token;
+    // Predicate false: refused as dispatched, owner retained.
+    let calls = 0;
+    const refused = await releaseWork(
+      store,
+      { repositoryId: REPO, pullRequestNumber: 22, ownerToken: token },
+      stopped,
+      async () => {
+        calls += 1;
+        return false;
+      },
+    );
+    if (refused.ok) throw new Error("a dispatched gap must not release");
+    expect(refused.reason).toBe("dispatched_unattached");
+    expect(refused.record?.owner?.token).toBe(token);
+    expect(calls).toBe(1);
+    // Predicate true: the same holder releases.
+    const cleared = await releaseWork(
+      store,
+      { repositoryId: REPO, pullRequestNumber: 22, ownerToken: token },
+      stopped,
+      async () => true,
+    );
+    if (!cleared.ok || !cleared.released) {
+      throw new Error("an undispatched gap must clear");
+    }
+
+    // Bound owners never consult the predicate: the probe path decides.
+    const { store: boundStore, token: boundToken } = await reserveAttached(23, "predicate-bound");
+    let boundCalls = 0;
+    const denied = await releaseWork(
+      boundStore,
+      { repositoryId: REPO, pullRequestNumber: 23, ownerToken: boundToken },
+      running,
+      async () => {
+        boundCalls += 1;
+        return true;
+      },
+    );
+    if (denied.ok) throw new Error("a running worker must keep occupancy");
+    expect(denied.reason).toBe("worker_running");
+    expect(boundCalls).toBe(0);
+  });
 });
 
 describe("identity and late results", () => {

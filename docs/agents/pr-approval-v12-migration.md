@@ -88,7 +88,7 @@ PR 的生产部署结果（`not_required` / `succeeded` / `pending` / `failed` /
   head 漂移或 `prepare` 已过期时该快照不再可信，须重新 `prepare`。暂停生效时协调者
   必须对在途 worker 调用 `pr:work stop`：它只停会话，返回 `awaiting_release`，随后仍
   需 `release` 才解除占用；已停止且已释放的旧 worker 才不算第二个写入者。
-- 未派发的 null 会话预约由持 token 者直接 `release` 释放，不探活、无需 `stop`；无 token 或 token 不符永不释放。但 wrapper 已写 session.json 时拒为 `dispatched_unattached`（held 类，exit 2），须先 `attach` 再走正常 stop／release。
+- 未派发的 null 会话预约由持 token 者直接 `release` 释放，不探活、无需 `stop`；无 token 或 token 不符永不释放。派发检查绑定本次预约的 attempt：本轮 session.json 已写（attempt 达本轮或 running／不可解析）时拒为 `dispatched_unattached`（held 类，exit 2），须先 `attach` 再走正常 stop／release；上一轮终态收据不阻断复用同一目录的新预约。释放与派发不可并发：持 token 者须先停派发再释放。
 - 同一 head＋changeDigest 已有 accept 的 code-review 结果时，再次 `reserve` 同角色返回 `already_reviewed`（held 类，exit 2）；request 置 `"reReview": true` 才显式复审。只记最近 20 条已接受审查。
 - Luke 有效 Approve 后停止语义审查重复，只做常规 CI／版本／保护核验。
 - 依实际需要的部署才跟进，否则静默 noop。本节不新增部署自动化；每小时 `sayhear-pr` 现为 ACTIVE，受控验收期内仅处理 `sayhear-pr` automation 当前 prompt 指定的 PR；重启后已恢复，#385 上 hourly 已真实完成发现、派发独立 review、确认缺陷修复派发与新会话复审，普通自动合入 `e2ef35b`。

@@ -71,6 +71,16 @@ export type ProbeWorker = (
   owner: WorkOwnerSnapshot,
 ) => Promise<WorkerProbe>;
 
+/**
+ * Caller-supplied dispatch check for a sessionless owner: true when no
+ * wrapper was launched for this reservation yet, so probing-free release is
+ * safe. Evaluated inside the store transaction, right before the release
+ * write.
+ */
+export type UndispatchedCheck = (
+  owner: WorkOwnerSnapshot,
+) => Promise<boolean>;
+
 export interface WorkIdentity {
   repositoryId: number;
   pullRequestNumber: number;
@@ -244,6 +254,7 @@ export type ReleaseResult =
       ok: false;
       reason:
         | "token_mismatch"
+        | "dispatched_unattached"
         | "worker_running"
         | "worker_unknown"
         | "too_large"
@@ -1402,8 +1413,11 @@ export async function attachSession(
  * released by its token holder without probing any session: if the owner is
  * still sessionless under the lock, the token match alone clears it. The
  * store-level precondition is that no wrapper was launched for this
- * reservation; the CLI enforces it via the reserved workerStateDir (a
- * session.json there refuses the release as dispatched). A bound owner keeps
+ * reservation; the CLI enforces it via an `undispatched` predicate evaluated
+ * inside the transaction, bound to this reservation's attempt (the holder
+ * must not launch the wrapper and release concurrently). Without the
+ * predicate the sessionId/token checks alone clear a sessionless owner. A
+ * bound owner keeps
  * the probe path: the probe runs outside the short lock; the owner token is
  * re-checked under the lock before clearing. Requires fresh stopped proof: a
  * running/unknown worker keeps occupancy. Findings and other edits are kept.
@@ -1412,6 +1426,7 @@ export async function releaseWork(
   store: PrWorkCoordinationStore,
   input: ReleaseInput,
   probe: ProbeWorker,
+  undispatched?: UndispatchedCheck,
 ): Promise<ReleaseResult> {
   const ids = checkIdentity(input);
   requireProbe(probe, "releaseWork");
@@ -1450,6 +1465,12 @@ export async function releaseWork(
         // only on a successful attach, which always sets a session id.
         if (current.owner.sessionId !== null) {
           return { write: null, result: { ok: false as const, reason: "worker_unknown" as const, record: current } };
+        }
+        // The caller-supplied dispatch check runs under the same lock, so
+        // a wrapper launched for this reservation blocks the release even
+        // when no session was attached yet.
+        if (undispatched !== undefined && !(await undispatched(current.owner))) {
+          return { write: null, result: { ok: false as const, reason: "dispatched_unattached" as const, record: current } };
         }
         const record: WorkRecord = { ...current, owner: null, phase: "reserved" };
         return { write: record, result: { ok: true as const, record, released: true } };

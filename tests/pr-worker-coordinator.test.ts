@@ -948,26 +948,79 @@ describe("sessionless release and already-reviewed refusal (#389)", () => {
     expect("reReview" in parsed).toBe(false);
   });
 
-  it("refuses a sessionless release once the wrapper wrote session.json; attach recovers", async () => {
+  it("sessionless release is bound to this reservation's attempt, not bare session.json presence", async () => {
     const env = await setupEnv({ pr: 753 });
     const reserved = await runReserve(env.request, { stateDir: env.stateDir });
     expect(reserved.exitCode).toBe(0);
     const token = reserved.output.ownerToken as string;
-    // The wrapper launched but attach never succeeded: a probe would see
-    // nothing, so the holder release must refuse instead of freeing work
-    // that may be live. Even a malformed receipt counts as launched.
-    await writeFile(join(env.wrapper, "session.json"), "{not a receipt");
-    const refused = await runRelease(env.request, { stateDir: env.stateDir, ownerToken: token, serviceConfig: downSvc(env.cred) });
+    // No session.json at all: the fresh reservation releases freely.
+    const released = await runRelease(env.request, { stateDir: env.stateDir, ownerToken: token, serviceConfig: downSvc(env.cred) });
+    expect(released.exitCode).toBe(0);
+    expect(released.output).toMatchObject({ ok: true, released: true });
+
+    // Fresh reservation again, but this attempt's wrapper is running: refuse.
+    const reserved2 = await runReserve(env.request, { stateDir: env.stateDir });
+    const token2 = reserved2.output.ownerToken as string;
+    await writeWrapper(env.wrapper, env.wt, "implementation", 1, "running", null, SESSION, env.taskSha256);
+    const refused = await runRelease(env.request, { stateDir: env.stateDir, ownerToken: token2, serviceConfig: downSvc(env.cred) });
     expect(refused.exitCode).toBe(2);
     expect(refused.output.reason).toBe("dispatched_unattached");
     // Owner retained: the PR stays occupied.
     const held = await runReserve(env.request, { stateDir: env.stateDir });
     expect(held.output.reason).toBe("occupied");
+
+    // Malformed session.json also refuses (fail closed).
+    await writeFile(join(env.wrapper, "session.json"), "{not a receipt");
+    const malformed = await runRelease(env.request, { stateDir: env.stateDir, ownerToken: token2, serviceConfig: downSvc(env.cred) });
+    expect(malformed.exitCode).toBe(2);
+    expect(malformed.output.reason).toBe("dispatched_unattached");
+
     // Operator path: attach the launched session, then normal stop/release.
     const running = svc(env.cred, fakeFetch(infoRoutes({ data: { [SESSION]: { type: "running" } } })).fetchImpl);
     await writeWrapper(env.wrapper, env.wt, "implementation", 1, "running", null, SESSION, env.taskSha256);
-    expect((await runAttach(env.request, { stateDir: env.stateDir, ownerToken: token, serviceConfig: running })).exitCode).toBe(0);
-    expect((await runStop(env.request, { stateDir: env.stateDir, ownerToken: token, serviceConfig: stoppedSvc(env.cred) })).exitCode).toBe(0);
-    expect((await runRelease(env.request, { stateDir: env.stateDir, ownerToken: token, serviceConfig: stoppedSvc(env.cred) })).output).toMatchObject({ ok: true, released: true });
+    expect((await runAttach(env.request, { stateDir: env.stateDir, ownerToken: token2, serviceConfig: running })).exitCode).toBe(0);
+    expect((await runStop(env.request, { stateDir: env.stateDir, ownerToken: token2, serviceConfig: stoppedSvc(env.cred) })).exitCode).toBe(0);
+    expect((await runRelease(env.request, { stateDir: env.stateDir, ownerToken: token2, serviceConfig: stoppedSvc(env.cred) })).output).toMatchObject({ ok: true, released: true });
+  });
+
+  it("a resume reservation releases while only the previous attempt's receipt exists", async () => {
+    const env = await setupEnv({ pr: 754 });
+    // Attempt 1 ran to a terminal state in the same wrapper dir.
+    await writeWrapper(env.wrapper, env.wt, "implementation", 1, "completed", null, SESSION, env.taskSha256);
+    // Reserve the resume (expectedAttempt 2) for the same PR.
+    const resumeReq: CoordinatorRequest = { ...env.request, expectedAttempt: 2 };
+    const reserved = await runReserve(resumeReq, { stateDir: env.stateDir });
+    expect(reserved.exitCode).toBe(0);
+    const token = reserved.output.ownerToken as string;
+    // The previous attempt's terminal receipt must not block the holder
+    // release of the not-yet-started resume reservation.
+    const released = await runRelease(resumeReq, { stateDir: env.stateDir, ownerToken: token, serviceConfig: downSvc(env.cred) });
+    expect(released.exitCode).toBe(0);
+    expect(released.output).toMatchObject({ ok: true, released: true });
+
+    // A previous receipt that is still running also ends the story for the
+    // resume holder: refuse, since the prior worker may be live.
+    const reserved2 = await runReserve(resumeReq, { stateDir: env.stateDir });
+    const token2 = reserved2.output.ownerToken as string;
+    await writeWrapper(env.wrapper, env.wt, "implementation", 1, "running", null, SESSION, env.taskSha256);
+    const refused = await runRelease(resumeReq, { stateDir: env.stateDir, ownerToken: token2, serviceConfig: downSvc(env.cred) });
+    expect(refused.exitCode).toBe(2);
+    expect(refused.output.reason).toBe("dispatched_unattached");
+  });
+
+  it("a resume reservation refuses once its own wrapper started", async () => {
+    const env = await setupEnv({ pr: 755 });
+    await writeWrapper(env.wrapper, env.wt, "implementation", 1, "timed_out", "TIMEOUT", SESSION, env.taskSha256);
+    const resumeReq: CoordinatorRequest = { ...env.request, expectedAttempt: 2 };
+    const reserved = await runReserve(resumeReq, { stateDir: env.stateDir });
+    expect(reserved.exitCode).toBe(0);
+    const token = reserved.output.ownerToken as string;
+    // The resume wrapper started (attempt 2 receipt): refuse even though the
+    // previous attempt ended terminally.
+    await writeWrapper(env.wrapper, env.wt, "implementation", 2, "completed", null, SESSION, env.taskSha256);
+    const refused = await runRelease(resumeReq, { stateDir: env.stateDir, ownerToken: token, serviceConfig: downSvc(env.cred) });
+    expect(refused.exitCode).toBe(2);
+    expect(refused.output.reason).toBe("dispatched_unattached");
+    expect((await runReserve(resumeReq, { stateDir: env.stateDir })).output.reason).toBe("occupied");
   });
 });

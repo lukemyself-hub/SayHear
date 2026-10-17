@@ -566,26 +566,38 @@ export async function runRelease(request: CoordinatorRequest, options: RunOption
   if (record?.owner !== null && record?.owner !== undefined && record.owner.scopeDigest !== computeScopeDigest(request)) {
     return { exitCode: 1, output: { ok: false, reason: "scope_mismatch" } };
   }
-  // A sessionless owner whose wrapper already wrote session.json may have a
-  // live worker even though no session was attached: probing would see
-  // nothing, so probing-free release must not clear it. The operator path is
-  // `attach` (then the normal stop/release flow).
-  if (
-    record?.owner !== null &&
-    record?.owner !== undefined &&
-    record.owner.sessionId === null &&
-    record.owner.workerStateDir !== null
-  ) {
-    // Only a confirmed absence allows release; any other lstat error fails closed.
-    const launched = await lstat(join(record.owner.workerStateDir, "session.json")).then(
-      () => true,
-      (error: NodeJS.ErrnoException) => error.code !== "ENOENT",
+  // Undispatched predicate for the sessionless fast path, bound to THIS
+  // reservation's attempt: the wrapper writes session.json with
+  // attempt = previous.attempt + 1 (1 for a fresh dir) at the start of every
+  // run. A receipt with attempt below this reservation's attempt and a
+  // terminal status is the previous attempt's leftover, not a launch of this
+  // reservation. Anything else present means this reservation may be live,
+  // so probing-free release must not clear it; the operator path is `attach`
+  // (then the normal stop/release flow).
+  const undispatched = async (owner: { workerStateDir: string | null }): Promise<boolean> => {
+    if (owner.workerStateDir === null) return true;
+    let raw: string;
+    try {
+      raw = await readFile(join(owner.workerStateDir, "session.json"), "utf8");
+    } catch (error) {
+      // Only a confirmed absence allows release; any other read error fails closed.
+      return (error as NodeJS.ErrnoException).code === "ENOENT";
+    }
+    let receipt: WrapperReceipt;
+    try {
+      receipt = parseWrapperReceipt(asRecord(JSON.parse(raw) as unknown), "wrapper session.json");
+    } catch {
+      return false;
+    }
+    return (
+      receipt.attempt < request.expectedAttempt &&
+      (receipt.status === "completed" || receipt.status === "blocked" || receipt.status === "timed_out" || receipt.status === "interrupted")
     );
-    if (launched) return { exitCode: 2, output: { ok: false, reason: "dispatched_unattached" } };
-  }
+  };
   const released = await releaseWork(store,
     { repositoryId: request.repositoryId, pullRequestNumber: request.pullRequestNumber, ownerToken: token },
-    async (owner) => (await probePrWorkerSession(serviceConfig(options.serviceConfig), { expectedService: request.expectedService, sessionId: owner.sessionId })).state);
+    async (owner) => (await probePrWorkerSession(serviceConfig(options.serviceConfig), { expectedService: request.expectedService, sessionId: owner.sessionId })).state,
+    undispatched);
   if (!released.ok) return { exitCode: heldExit(released.reason), output: { ok: false, reason: released.reason } };
   return { exitCode: 0, output: { ok: true, released: released.released } };
 }
