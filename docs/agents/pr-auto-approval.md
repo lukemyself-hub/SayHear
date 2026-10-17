@@ -530,7 +530,7 @@ main classic protection rule `84625756` 已保存并由 App API 回读：1 个�
 
 #325 已由 App 于 `2026-10-11T07:37:40Z` 合入，merge SHA `bea67d2739de7cc1c64191d35a9964dd14336f2a`。#258 自动关闭，遗留 ongoing 已清理并回读。对应 Vercel deployment `dpl_GtX8f5k7kP1KScYRMsNy177Nzbom` 为 Production READY，git SHA 一致，生产域名已绑定；登录页和 auth providers 的 HTTP smoke 均为 200。未读取生产私人对话，smoke 不代表聊天功能验收。
 
-每小时本线程 heartbeat `sayhear-pr` 在 2026-10-11 曾 ACTIVE；2026-10-17 快照（真实值以固定 `status` 为准）：现为 ACTIVE，受控验收期内暂限 PR #383；2026-10-16 22:55Z 与 23:54Z 两次受控运行仅观测（未 reserve／派发／合入），其后定时运行未执行，首次真实 hourly 修补派发仍待定；已手动在默认会话执行 status/prepare，成功认证，合入后扫描没有候选，未写入其他七个 PR。运行证据存于 `artifacts/pr-approval/operations/2026-10-11-pilot.json`。修改三轮暂停与失败恢复由测试场景验证，实际试运行完成了待补证回写和成功合入，没有人为制造代码缺陷。
+每小时本线程 heartbeat `sayhear-pr` 在 2026-10-11 曾 ACTIVE；2026-10-17 快照（真实值以固定 `status` 为准）：现为 ACTIVE，受控验收期内暂限 PR #383；2026-10-16 22:55Z 与 23:54Z 两次受控运行仅观测（未 reserve／派发／合入），其后定时运行未执行，首次真实 hourly 修补派发仍待定；2026-10-11 时已手动在默认会话执行 status/prepare，成功认证，合入后扫描没有候选，未写入其他七个 PR。运行证据存于 `artifacts/pr-approval/operations/2026-10-11-pilot.json`。修改三轮暂停与失败恢复由测试场景验证，实际试运行完成了待补证回写和成功合入，没有人为制造代码缺陷。
 
 #309 已由 App 合入：分支同步最新 main 后 `validate` run `38128541215` 成功，独立审查结论为 approve（无 P0-P2）。merge SHA `328662a7a3746b83fd905cd96c67105c113bc23e`，Vercel Production deployment `dpl_91MNFTC2Y7day8pgrUnar2Pb7PAy` 为 READY 且 git SHA 一致，生产域名登录页与 providers 均返回 200；Issue #233 自动关闭，遗留 `ongoing` 已清理。非阻断备注：受版本控制的 `eval/continuation-acceptance-1a3b/run/validator-ledger.json` 指纹会因此变旧，需在下次 validator 采集时刷新；没有 CI 读取该文件。
 
@@ -605,7 +605,7 @@ App ID、installation ID、slug 和生产授权标记存于 root-owned 本机配
 - 合入后确认实际 merged、merge SHA，并清理已关闭关联 Issue 的 ongoing。
 - 对应 main merge SHA 的 Production Deployment 与 smoke；失败或状态未知停止后续合入。
 - 每小时任务使用现有 Coding Plan 和精确启动器规则，无额外 API key，无变化不通知。
-- 调度先 prepare，再仅对无人工保留且符合条件的 PR 调用 scan/submit；七个待批准 PR 按 Luke 最新指示纳入处理，仍逐个验证全部门禁。
+- 调度先 prepare；受控验收期内仅处理 PR #383，不对其他 PR 调用 scan／submit／派发／合入；受控验收结束后，无人工保留且符合全部门禁的 PR 才逐个验证后调用 scan/submit。
 
 最新操作证据见本文件顶部状态。安装后的当前状态必须重新读取，不能以本地文件存在代替真实核验。
 

@@ -15,7 +15,7 @@
   最终安装／回滚 helper 已独立审查：bundle 内 607 项通过，安装与回滚 helper 各 `bash -n`＋收据解析 10 项通过；这只证明安装，不证明完整端到端验收。
   人工手动无 Issue #381 合入已完成；#383 观测到一次最新 main 竞态（main 到 `2cdf0c6` 后 submit 按当前 main 重建 merge ref `a88b1cc` 并派发 Validate，首 run 取到旧 merge `f004c12` 被判 stale 证据驳回，重派后 `a88b1cc` 上 run 通过被接受）。
   普通自动合入、hourly 发现／派发／恢复／重叠与其余受控矩阵仍待定。
-- History 与 thin CLI 已集成并通过审查，与其它候选模块同属本候选。
+- History 与 thin CLI 已集成并通过审查，属已安装最终源码 `2cdf0c6` 一部分。
 - #369 受控验收行仍待验证（人工手动无 Issue #381 合入除外）。不新增常驻服务、webhook、事件桥或统一台账。
 
 ## 前提与冻结
@@ -32,7 +32,7 @@
 - 安装与回滚的共同前置条件：先读固定 `pr-approval-status`，其
   `completionStates` 每一项都必须 `phase === "complete"`（无论 `mergeSha` 是否为空）。
   helper 先做该检查，再在维护锁下重读 `pr-approval-status` 复核一遍后才 staging；未完成收据阻断维护且永不删除，只能由人工先核实实际合入状态再处理。
-  这种条目在 v11 写入、v12 读取（反之亦然）时会被当作仓库级阻断。
+  控制器将未完成收据至少视为该 PR 阻断，其中 `mergeSha === null` 者（含 v11 写入、v12 读取，反之亦然）可为仓库级阻断；两种情形维护均等待。
 - 现有固定启动器均为 root-owned，不经工作区源码或 PR 脚本触碰凭证。
 - 回滚为已审查旧 bundle 恢复：先确认无在途写入再恢复；
   永不假设旧 `v11` 能消费 `v12` 收据。
@@ -50,7 +50,7 @@
   正式 GitHub Approve 本身不授予 root 安装权限。
 - 不重复已被否决的“合入源码即关闭 #369”方案。
 
-## 每小时候选提示词逻辑（仅候选，不启用自动化）
+## 每小时提示词逻辑（当前 ACTIVE，受控验收期内暂限 PR #383）
 
 现有 Codex 每小时任务只调固定 `status / prepare`，再查实时 GitHub
 暂停、head、范围与台账；用户所有的 worker 调度经已合入可信来源安装的
@@ -89,7 +89,7 @@ PR 的生产部署结果（`not_required` / `succeeded` / `pending` / `failed` /
   必须对在途 worker 调用 `pr:work stop`：它只停会话，返回 `awaiting_release`，随后仍
   需 `release` 才解除占用；已停止且已释放的旧 worker 才不算第二个写入者。
 - Luke 有效 Approve 后停止语义审查重复，只做常规 CI／版本／保护核验。
-- 依实际需要的部署才跟进，否则静默 noop。不启用任何实际自动化。
+- 依实际需要的部署才跟进，否则静默 noop。本节不新增部署自动化；每小时 `sayhear-pr` 现为 ACTIVE，受控验收期内暂限 PR #383，首次真实 hourly 修补派发仍待定。
 
 ## 受控验收矩阵（分组 SPEC AC01..16）
 
