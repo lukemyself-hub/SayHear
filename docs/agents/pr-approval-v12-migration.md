@@ -1,17 +1,22 @@
-# PR 审批 v12 迁移说明（预合入候选已安装；最终 main 升级待定）
+# PR 审批 v12 迁移说明（最终源码已安装；受控验收待定）
 
-本文件是 SPEC #362 → #369 的迁移 howto。`v12 / report v5` 预合入候选已安装（`c5fa984f`，`build.sourceCommit 34ab5815`），
-最终 main `7ee8e89`（PR #379，已含其后修复）尚未安装；现有冻结 installer 仅为合入前候选 artifact，不是最终 main 升级 artifact。
+本文件是 SPEC #362 → #369 的迁移 howto。`v12 / report v5` 最终源码安装已完成（控制器 `5c454fdda28f3807e556f0c40ec7be0e91596147e6a90a0df69848d210129fbe`，`build.sourceCommit 2cdf0c60defc683dc06314dece2ca7193853dd5a` 干净源码身份，PR #384 合入），`serialized-merge` 生效，真保护／App-only 守卫 intact；全部 completion 收据 `phase` 已 complete（#379、#381、#384 attempt 均为 1）。先前最终源码（`05ee8089…`／`7ee8e89`）现为已审查回滚恢复对象；`c5fa984f`／`34ab5815` 为更旧 fallback，仅历史保留。
 一切以固定 `status` 回读为准，不以源码存在为准。
 
-## 现状快照（2026-10-16）
+## 现状快照（2026-10-17，最终源码安装后；真实值以固定 `status` 为准）
 
-- 已安装运行中：`v12 / report v5`（`c5fa984f`，`build.sourceCommit 34ab5815`，非最终 main `7ee8e89`），`serialized-merge` 生效，
-  App-only main 写入见证有效；每小时自动化 `sayhear-pr` 当前 PAUSED。最终 main `7ee8e89`（PR #379，已含其后修复）尚未安装。
-- 旧版：`v11 / report v4` 已由 root 备份保留，可经冻结回滚 wizard 恢复。本候选已集成：人工最终决定、
-  最新 main 组合、Provider＋行为范围、零 Issue、生命周期、归属、服务观察（均为预合入候选范围，非最终 main `7ee8e89` 验收结论）。现有冻结 installer 仅为合入前候选 artifact，不是最终 main 升级 artifact。
-- History 与 thin CLI 已集成并通过审查，与其它候选模块同属本候选。
-- #369 实际受控 PR 全部待验证。不新增常驻服务、webhook、事件桥或统一台账。
+- 已安装运行中：policy `sayhear-pr-review-gate:v12`／report `sayhear-pr-review-report:v5`（控制器 `5c454fdda28f3807e556f0c40ec7be0e91596147e6a90a0df69848d210129fbe`，`build.sourceCommit 2cdf0c60defc683dc06314dece2ca7193853dd5a` 干净源码身份，PR #384 合入），`serialized-merge` 生效，
+  真保护／App-only main 写入守卫 intact；全部 completion 收据 `phase` 已 complete（#379、#381、#384 attempt 均为 1）。
+  先前最终源码（`05ee8089…`／`7ee8e89`）现为已审查回滚恢复对象（升级／回滚对恢复它）；`c5fa984f`／`34ab5815` 为更旧 fallback，仅历史保留；旧 `v11 / report v4` 备份为历史保留，不声称旧 `v11` 适用同一 helper。
+  每小时自动化 `sayhear-pr` 现为 ACTIVE，但受控验收期内暂限 PR #383；2026-10-16 22:55Z 与 23:54Z 两次受控运行仅观测（未 reserve／派发／合入），其后定时运行未执行，首次真实 hourly 修补派发仍待定。
+- 旧版：历史 `v11 / report v4` 已由 root 备份保留（历史，不作当前回滚依据）。本次已集成：人工最终决定、
+  最新 main 组合、Provider＋行为范围、零 Issue、生命周期、归属、服务观察（均为最终源码 `2cdf0c6` 及其前修复范围；完整受控验收仍待定）。
+  PR #384（已合入 `2cdf0c6`）：未解决外部 review thread 不再遮蔽可执行的 `request_changes`（decision 加至少一个 P0/P1/P2 finding），其余仍走人工。
+  最终安装／回滚 helper 已独立审查：bundle 内 607 项通过，安装与回滚 helper 各 `bash -n`＋收据解析 10 项通过；这只证明安装，不证明完整端到端验收。
+  人工手动无 Issue #381 合入已完成；#383 观测到一次最新 main 竞态（main 到 `2cdf0c6` 后 submit 按当前 main 重建 merge ref `a88b1cc` 并派发 Validate，首 run 取到旧 merge `f004c12` 被判 stale 证据驳回，重派后 `a88b1cc` 上 run 通过被接受）。
+  普通自动合入、hourly 发现／派发／恢复／重叠与其余受控矩阵仍待定。
+- History 与 thin CLI 已集成并通过审查，属已安装最终源码 `2cdf0c6` 一部分。
+- #369 受控验收行仍待验证（人工手动无 Issue #381 合入与 #383 上观测到一次的最新 main 竞态行除外）。不新增常驻服务、webhook、事件桥或统一台账。
 
 ## 前提与冻结
 
@@ -21,32 +26,31 @@
 - 运行时 App 私钥永不传入 worker，只走本机 Keychain 与 root-owned 配置。
 - 保留已安装备份：旧 bundle、见证、config、Keychain 条目、收据。
 
-## 安装与回滚（最终 main 升级仍 blocked；预合入候选已安装）
+## 安装与回滚（最终源码已安装；受控验收仍待定）
 
-- 预合入候选安装已完成（`c5fa984f`，`build.sourceCommit 34ab5815`）；最终 main `7ee8e89`（PR #379，已含其后修复）升级仍 blocked，需先有针对最终源码的已审查 artifact
-  与明确的 bootstrap 决定；不虚构 installer，不声称现有冻结 installer（仅预合入候选 artifact，可用于最终升级前回溯，不可作为最终升级依据）可用于最终升级，也不声称可从未合入候选直接安装。
+- 最终源码安装已完成（控制器 `5c454fdda28f3807e556f0c40ec7be0e91596147e6a90a0df69848d210129fbe`，`build.sourceCommit 2cdf0c60defc683dc06314dece2ca7193853dd5a` 干净源码身份，PR #384 合入；policy v12／report v5）；回滚恢复对象为已审查旧 bundle `05ee8089…`（`build.sourceCommit 7ee8e89`），不声称旧 `v11` 适用同一 helper。普通自动合入、hourly 发现／派发／恢复／重叠与其余受控矩阵仍待定；不虚构 installer，不声称可从未合入候选直接安装。
 - 安装与回滚的共同前置条件：先读固定 `pr-approval-status`，其
-  `completionStates` 不得存在任何未完成（`phase !== "complete"`）且
-  `mergeSha === null` 的条目。这种条目在 v11 写入、v12 读取（反之亦然）时
-  会被当作仓库级阻断，而收据永不删除，只能由人工核实实际合入状态后处理。
+  `completionStates` 每一项都必须 `phase === "complete"`（无论 `mergeSha` 是否为空）。
+  helper 先做该检查，再在维护锁下重读 `pr-approval-status` 复核一遍后才 staging；未完成收据阻断维护且永不删除，只能由人工先核实实际合入状态再处理。
+  控制器将未完成收据至少视为该 PR 阻断，其中 `mergeSha === null` 者（含 v11 写入、v12 读取，反之亦然）可为仓库级阻断；两种情形维护均等待。
 - 现有固定启动器均为 root-owned，不经工作区源码或 PR 脚本触碰凭证。
 - 回滚为已审查旧 bundle 恢复：先确认无在途写入再恢复；
   永不假设旧 `v11` 能消费 `v12` 收据。
 - 先暂停自动化并检查待收尾；不兼容的占用记录交人工，永不删除。
 - 确切源码、哈希、操作员命令由协调者在冻结时填入，不提前编造。
 
-## 已知迁移死锁
+## 已知迁移死锁（历史：预合入候选阶段记录，最终安装后仅追溯）
 
-- 旧 `v11` 要求至少 1 个开放非 keep-open 交付 Issue，
-  且不能用完整人工最终决定覆盖语义标记。
+- 历史：旧 `v11` 要求至少 1 个开放非 keep-open 交付 Issue，
+  且不能用完整人工最终决定覆盖语义标记（候选阶段死锁记录；前提公式本次不动，另任务修正）。
 - #362..#369 在真正验收前保持开放；不可将 #369 指定为提前自动关闭的交付、
   不用 dummy Issue、虚假报告标记、候选自批或保护 bypass。
-- 尚无已证明合法的旧固定启动器迁移路径。
-- 先产出 artifact，再由 Luke 决定迁移 bootstrap；
+- 历史：尚无已证明合法的旧固定启动器迁移路径（候选阶段记录；最终安装已另行完成）。
+- 历史：先产出 artifact，再由 Luke 决定迁移 bootstrap（候选阶段记录；最终安装已另行完成）；
   正式 GitHub Approve 本身不授予 root 安装权限。
 - 不重复已被否决的“合入源码即关闭 #369”方案。
 
-## 每小时候选提示词逻辑（仅候选，不启用自动化）
+## 每小时提示词逻辑（当前 ACTIVE，受控验收期内暂限 PR #383）
 
 现有 Codex 每小时任务只调固定 `status / prepare`，再查实时 GitHub
 暂停、head、范围与台账；用户所有的 worker 调度经已合入可信来源安装的
@@ -85,7 +89,7 @@ PR 的生产部署结果（`not_required` / `succeeded` / `pending` / `failed` /
   必须对在途 worker 调用 `pr:work stop`：它只停会话，返回 `awaiting_release`，随后仍
   需 `release` 才解除占用；已停止且已释放的旧 worker 才不算第二个写入者。
 - Luke 有效 Approve 后停止语义审查重复，只做常规 CI／版本／保护核验。
-- 依实际需要的部署才跟进，否则静默 noop。不启用任何实际自动化。
+- 依实际需要的部署才跟进，否则静默 noop。本节不新增部署自动化；每小时 `sayhear-pr` 现为 ACTIVE，受控验收期内暂限 PR #383，首次真实 hourly 修补派发仍待定。
 
 ## 受控验收矩阵（分组 SPEC AC01..16）
 
@@ -95,7 +99,7 @@ PR 的生产部署结果（`not_required` / `succeeded` / `pending` / `failed` /
 - 最新 main 竞态／树身份／重放按组合重验；超时重叠／取消恢复／三轮预算
   按控制器拥有计数。
 - Issue 写入精确绑定，部署异常如实报告；每小时发现恢复静默。
-- 所有真实外部行均为待验证，源码夹具另计。
+- 人工手动无 Issue 合入（#381）与 #383 上观测到一次的最新 main 竞态行已有真实证据；其余真实外部行仍待验证，源码夹具另计。不声称任一完整 AC 已通过。
 - 本地真实 worker smoke：实际实现会话＋独立审查通过；
   占用 null／running 拒绝第二个写入者；
   停止保留部分改动且同一实现恢复＋全新预约通过。

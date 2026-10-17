@@ -44,7 +44,7 @@ Luke 对当前被审版本的 GitHub Approve 表达最终决定。控制器继�
 
 ## 与现行实现的边界
 
-本 ADR 是已确认的目标契约，不是最终安装或最终生效声明。当前已安装控制器为
-`sayhear-pr-review-gate:v12` / `sayhear-pr-review-report:v5`（预合入候选 `c5fa984f`，`build.sourceCommit 34ab5815`，`serialized-merge`），
-非最终 main `7ee8e89`（PR #379，已含其后修复）；最终 main 升级尚未安装。旧版 `v11 / report v4` 已由 root 备份保留。实施前须核验实时 main、安装版本、保护设置、worker 有效配置及既有
+本 ADR 是已确认的目标契约，不是最终生效声明。2026-10-17 快照（真实值以固定 `status` 为准）：当前已安装控制器为
+`sayhear-pr-review-gate:v12` / `sayhear-pr-review-report:v5`（最终源码安装：控制器 `5c454fdda28f3807e556f0c40ec7be0e91596147e6a90a0df69848d210129fbe`，`build.sourceCommit 2cdf0c60defc683dc06314dece2ca7193853dd5a` 干净源码身份，PR #384 合入，`serialized-merge`），
+真保护／App-only 守卫 intact，全部 completion 收据 `phase` 已 complete（#379、#381、#384 attempt 均为 1）。PR #384（已合入 `2cdf0c6`）：未解决外部 review thread 不再遮蔽可执行的 `request_changes`（decision 加至少一个 P0/P1/P2 finding），其余仍走人工。先前最终源码（`05ee8089…`／`7ee8e89`）现为已审查回滚恢复对象；`c5fa984f`／`34ab5815` 为更旧 fallback，仅历史保留；旧版 `v11 / report v4` 为历史备份保留。最终 bundle 验证：bundle 内 607 项通过，安装与回滚 helper 各 `bash -n`＋收据解析 10 项通过；这只证明安装，不证明完整端到端验收。每小时 `sayhear-pr` 现为 ACTIVE，受控验收期内暂限 PR #383；2026-10-16 22:55Z 与 23:54Z 两次受控运行仅观测（未 reserve／派发／合入），其后定时运行未执行，首次真实 hourly 修补派发仍待定。#383 观测到一次最新 main 竞态（main 到 `2cdf0c6` 后 submit 按当前 main 重建 merge ref `a88b1cc` 并派发 Validate，首 run 取到旧 merge `f004c12` 被判 stale 证据驳回，重派后 `a88b1cc` 上 run 通过被接受）。普通自动合入、hourly 发现／派发／恢复／重叠与其余受控矩阵仍待定。实施前须核验实时 main、安装版本、保护设置、worker 有效配置及既有
 未提交改动；沿用 ADR-0148 的部署身份、配置授权与验收分离。
