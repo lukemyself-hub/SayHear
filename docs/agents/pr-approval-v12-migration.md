@@ -1,22 +1,22 @@
 # PR 审批 v12 迁移说明（最终源码已安装；受控验收待定）
 
-本文件是 SPEC #362 → #369 的迁移 howto。`v12 / report v5` 最终源码安装已完成（控制器 `5c454fdda28f3807e556f0c40ec7be0e91596147e6a90a0df69848d210129fbe`，`build.sourceCommit 2cdf0c60defc683dc06314dece2ca7193853dd5a` 干净源码身份，PR #384 合入），`serialized-merge` 生效，真保护／App-only 守卫 intact；全部 completion 收据 `phase` 已 complete（#379、#381、#383、#384 attempt 均为 1）。先前最终源码（`05ee8089…`／`7ee8e89`）现为已审查回滚恢复对象；`c5fa984f`／`34ab5815` 为更旧 fallback，仅历史保留。
+本文件是 SPEC #362 → #369 的迁移 howto。`v12 / report v5` 最终源码安装已完成（控制器 `5c454fdda28f3807e556f0c40ec7be0e91596147e6a90a0df69848d210129fbe`，`build.sourceCommit 2cdf0c60defc683dc06314dece2ca7193853dd5a` 干净源码身份，PR #384 合入），`serialized-merge` 生效，真保护／App-only 守卫 intact；全部 13 项 completion 收据 `phase` 已 complete 且 attempt 均为 1（#348、#351、#352、#356、#359、#361、#373、#376、#379、#381、#383、#384、#385）。先前最终源码（`05ee8089…`／`7ee8e89`）现为已审查回滚恢复对象；`c5fa984f`／`34ab5815` 为更旧 fallback，仅历史保留。
 一切以固定 `status` 回读为准，不以源码存在为准。
 
 ## 现状快照（2026-10-17，最终源码安装后；真实值以固定 `status` 为准）
 
 - 已安装运行中：policy `sayhear-pr-review-gate:v12`／report `sayhear-pr-review-report:v5`（控制器 `5c454fdda28f3807e556f0c40ec7be0e91596147e6a90a0df69848d210129fbe`，`build.sourceCommit 2cdf0c60defc683dc06314dece2ca7193853dd5a` 干净源码身份，PR #384 合入），`serialized-merge` 生效，
-  真保护／App-only main 写入守卫 intact；全部 completion 收据 `phase` 已 complete（#379、#381、#383、#384 attempt 均为 1）。
+  真保护／App-only main 写入守卫 intact；全部 13 项 completion 收据 `phase` 已 complete 且 attempt 均为 1（#348、#351、#352、#356、#359、#361、#373、#376、#379、#381、#383、#384、#385）。
   先前最终源码（`05ee8089…`／`7ee8e89`）现为已审查回滚恢复对象（升级／回滚对恢复它）；`c5fa984f`／`34ab5815` 为更旧 fallback，仅历史保留；旧 `v11 / report v4` 备份为历史保留，不声称旧 `v11` 适用同一 helper。
-  每小时自动化 `sayhear-pr` 现为 ACTIVE，但受控验收期内仅处理 `sayhear-pr` automation 当前 prompt 指定的 PR；2026-10-16 22:55Z 与 23:54Z 两次受控运行仅观测（未 reserve／派发／合入），其后定时运行因 Codex App `execution-config-loading` 错误未执行（立即运行同样报错），重启 App 后恢复，恢复后首次运行回执仍待确认，首次真实 hourly 修补派发仍待定。
+  每小时自动化 `sayhear-pr` 现为 ACTIVE，但受控验收期内仅处理 `sayhear-pr` automation 当前 prompt 指定的 PR；2026-10-16 22:55Z 与 23:54Z 两次受控运行仅观测（未 reserve／派发／合入），其后定时运行因 Codex App `execution-config-loading` 错误未执行（立即运行同样报错），重启后已恢复；#385 上 hourly 已真实完成发现、派发独立 review、确认缺陷修复派发与新会话复审，普通自动合入 `e2ef35b`。
 - 旧版：历史 `v11 / report v4` 已由 root 备份保留（历史，不作当前回滚依据）。本次已集成：人工最终决定、
   最新 main 组合、Provider＋行为范围、零 Issue、生命周期、归属、服务观察（均为最终源码 `2cdf0c6` 及其前修复范围；完整受控验收仍待定）。
   PR #384（已合入 `2cdf0c6`）：未解决外部 review thread 不再遮蔽可执行的 `request_changes`（decision 加至少一个 P0/P1/P2 finding），其余仍走人工。
   最终安装／回滚 helper 已独立审查：bundle 内 607 项通过，安装与回滚 helper 各 `bash -n`＋收据解析 10 项通过；这只证明安装，不证明完整端到端验收。
-  人工手动无 Issue #381 合入已完成；#383 在当前 head 由 Luke 一次 Approve 后经 submit 首次即合入 `aa45552`，completion 收据 attempt 1；#383 另观测到一次最新 main 竞态（main 到 `2cdf0c6` 后 submit 按当前 main 重建 merge ref `a88b1cc` 并派发 Validate，首 run 取到旧 merge `f004c12` 被判 stale 证据驳回，重派后 `a88b1cc` 上 run 通过被接受）。
-  普通自动合入、hourly 发现／派发／恢复／重叠与其余受控矩阵仍待定。
+  人工手动无 Issue #381 合入已完成；#383 在其被审 head `2c5f82e` 上由 Luke 一次 Approve 后经 submit 首次即合入 `aa45552`，completion 收据 attempt 1；#383 另观测到一次最新 main 竞态（main 到 `2cdf0c6` 后 submit 按当前 main 重建 merge ref `a88b1cc` 并派发 Validate，首 run 取到旧 merge `f004c12` 被判 stale 证据驳回，重派后 `a88b1cc` 上 run 通过被接受）。
+  普通自动合入（#385 已有真实证据：无 Issue 纯文档，Luke 未作任何 review 或决定；hourly 发现并派发独立 review 确认真实 P2 后控制器 `request_changes` 到 `e2ef824`，确认缺陷后派发修复并由授权协调者核验 diff 后推送 `95e2f71`，全新独立会话复审通过后普通自动合入 `e2ef35b`，无需部署、无 Issue 写入，completion 收据 attempt 1）、hourly 恢复／重叠与其余受控矩阵仍待定（hourly 双唤醒并发重叠、中断 worker 跨小时恢复、Luke 暂停／撤回、真实 PR 上未知／转人工路由、真实 PR 上冲突与 CI 失败、main 前进复用既有 Luke 批准、三轮预算耗尽、多 Issue 部分收尾、需部署 PR 与部署失败）。不声称任一完整 AC 已通过。
 - History 与 thin CLI 已集成并通过审查，属已安装最终源码 `2cdf0c6` 一部分。
-- #369 受控验收行仍待验证（人工手动无 Issue #381 合入、#383 人工最终决定合入与 #383 上观测到一次的最新 main 竞态行除外）。不新增常驻服务、webhook、事件桥或统一台账。
+- #369 受控验收行仍待验证（人工手动无 Issue #381 合入、#383 人工最终决定合入、#383 上观测到一次的最新 main 竞态、#385 hourly 发现／独立 review 派发／确认缺陷修复派发／全新复审／普通自动合入行除外）。不新增常驻服务、webhook、事件桥或统一台账。
 
 ## 前提与冻结
 
@@ -28,7 +28,7 @@
 
 ## 安装与回滚（最终源码已安装；受控验收仍待定）
 
-- 最终源码安装已完成（控制器 `5c454fdda28f3807e556f0c40ec7be0e91596147e6a90a0df69848d210129fbe`，`build.sourceCommit 2cdf0c60defc683dc06314dece2ca7193853dd5a` 干净源码身份，PR #384 合入；policy v12／report v5）；回滚恢复对象为已审查旧 bundle `05ee8089…`（`build.sourceCommit 7ee8e89`），不声称旧 `v11` 适用同一 helper。普通自动合入、hourly 发现／派发／恢复／重叠与其余受控矩阵仍待定；不虚构 installer，不声称可从未合入候选直接安装。
+- 最终源码安装已完成（控制器 `5c454fdda28f3807e556f0c40ec7be0e91596147e6a90a0df69848d210129fbe`，`build.sourceCommit 2cdf0c60defc683dc06314dece2ca7193853dd5a` 干净源码身份，PR #384 合入；policy v12／report v5）；回滚恢复对象为已审查旧 bundle `05ee8089…`（`build.sourceCommit 7ee8e89`），不声称旧 `v11` 适用同一 helper。普通自动合入（#385 已有真实证据：普通自动合入 `e2ef35b`）、hourly 发现／派发（#385 已有真实证据）／恢复／重叠与其余受控矩阵仍待定（hourly 双唤醒并发重叠、中断 worker 跨小时恢复、Luke 暂停／撤回、真实 PR 上未知／转人工路由、真实 PR 上冲突与 CI 失败、main 前进复用既有 Luke 批准、三轮预算耗尽、多 Issue 部分收尾、需部署 PR 与部署失败）；不虚构 installer，不声称可从未合入候选直接安装。
 - 安装与回滚的共同前置条件：先读固定 `pr-approval-status`，其
   `completionStates` 每一项都必须 `phase === "complete"`（无论 `mergeSha` 是否为空）。
   helper 先做该检查，再在维护锁下重读 `pr-approval-status` 复核一遍后才 staging；未完成收据阻断维护且永不删除，只能由人工先核实实际合入状态再处理。
@@ -89,7 +89,7 @@ PR 的生产部署结果（`not_required` / `succeeded` / `pending` / `failed` /
   必须对在途 worker 调用 `pr:work stop`：它只停会话，返回 `awaiting_release`，随后仍
   需 `release` 才解除占用；已停止且已释放的旧 worker 才不算第二个写入者。
 - Luke 有效 Approve 后停止语义审查重复，只做常规 CI／版本／保护核验。
-- 依实际需要的部署才跟进，否则静默 noop。本节不新增部署自动化；每小时 `sayhear-pr` 现为 ACTIVE，受控验收期内仅处理 `sayhear-pr` automation 当前 prompt 指定的 PR，首次真实 hourly 修补派发仍待定。
+- 依实际需要的部署才跟进，否则静默 noop。本节不新增部署自动化；每小时 `sayhear-pr` 现为 ACTIVE，受控验收期内仅处理 `sayhear-pr` automation 当前 prompt 指定的 PR；重启后已恢复，#385 上 hourly 已真实完成发现、派发独立 review、确认缺陷修复派发与新会话复审，普通自动合入 `e2ef35b`。
 
 ## 受控验收矩阵（分组 SPEC AC01..16）
 
@@ -99,7 +99,7 @@ PR 的生产部署结果（`not_required` / `succeeded` / `pending` / `failed` /
 - 最新 main 竞态／树身份／重放按组合重验；超时重叠／取消恢复／三轮预算
   按控制器拥有计数。
 - Issue 写入精确绑定，部署异常如实报告；每小时发现恢复静默。
-- 人工手动无 Issue 合入（#381）、#383 人工最终决定合入与 #383 上观测到一次的最新 main 竞态行已有真实证据；其余真实外部行仍待验证，源码夹具另计。不声称任一完整 AC 已通过。
+- 人工手动无 Issue 合入（#381）、#383 人工最终决定合入、#383 上观测到一次的最新 main 竞态、#385 hourly 发现并派发独立 review、#385 确认缺陷后修复派发与授权协调者推送、全新独立会话复审通过、#385 普通自动合入（无 Issue 纯文档、无 Luke 决定、无需部署、无 Issue 写入）行已有真实证据；其余真实外部行仍待验证（hourly 双唤醒并发重叠、中断 worker 跨小时恢复、Luke 暂停／撤回、真实 PR 上未知／转人工路由、真实 PR 上冲突与 CI 失败、main 前进复用既有 Luke 批准、三轮预算耗尽、多 Issue 部分收尾、需部署 PR 与部署失败），源码夹具另计。不声称任一完整 AC 已通过。
 - 本地真实 worker smoke：实际实现会话＋独立审查通过；
   占用 null／running 拒绝第二个写入者；
   停止保留部分改动且同一实现恢复＋全新预约通过。
