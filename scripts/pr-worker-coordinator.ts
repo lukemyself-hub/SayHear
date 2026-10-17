@@ -58,6 +58,12 @@ export interface CoordinatorRequest {
 export type ServiceOverrides = Pick<PrWorkerServiceConfig, "baseUrl" | "credentialFile" | "timeoutMs" | "fetch">;
 export interface RunOptions { stateDir: string; ownerToken?: string; serviceConfig?: ServiceOverrides }
 export interface CliOutcome { exitCode: number; output: Record<string, unknown> }
+/**
+ * The ONLY valid pr:work owner store. Production (`invokedAsCli`) is pinned
+ * to this path: `runCli` takes no env var and no CLI flag for it, so two
+ * awakenings can never split ownership across sibling or mistyped dirs.
+ */
+export const PR_WORK_OWNER_STORE = "/Users/lukemyself/.codex/automations/sayhear-pr/pr-work-state";
 const runExec = promisify(execFile);
 const HEX40 = /^[0-9a-f]{40}$/;
 const HEX64 = /^[0-9a-f]{64}$/;
@@ -219,12 +225,20 @@ async function ownerStoreWrapperArtifact(canonicalStore: string): Promise<string
 }
 /**
  * Refuses a misplaced owner store before any store read/write or lock
- * creation. The shared owner store must never be the request's worker task
- * state directory, overlap it, or already carry wrapper receipts.
+ * creation. The `--state-dir` must be the configured shared path
+ * (`PR_WORK_OWNER_STORE`); anything else — equal or overlapping the request's
+ * worker task state directory, carrying wrapper receipts, or merely a clean
+ * sibling or mistyped directory — is refused so two runs can never reserve
+ * independently in different stores. The older equality/overlap/artifact
+ * checks below remain as defense in depth behind the pinned-path check.
  */
-async function refuseMisplacedOwnerStore(stateDir: string, workerStateDir: string): Promise<CliOutcome | null> {
+async function refuseMisplacedOwnerStore(stateDir: string, workerStateDir: string, expectedOwnerStore: string): Promise<CliOutcome | null> {
   if (!isAbsolute(stateDir)) return null;
   const store = await canonicalizeForOwnerGuard(stateDir);
+  const expected = await canonicalizeForOwnerGuard(expectedOwnerStore);
+  if (store !== expected) {
+    return { exitCode: 1, output: { ok: false, reason: "owner_store_misplaced", detail: `owner store must be the configured shared path (store="${store}" expected="${expected}")` } };
+  }
   const worker = await canonicalizeForOwnerGuard(workerStateDir);
   if (store === worker) {
     return { exitCode: 1, output: { ok: false, reason: "owner_store_misplaced", detail: `owner store equals workerStateDir (store="${store}" worker="${worker}")` } };
@@ -708,7 +722,7 @@ export function parseCliArgs(argv: string[]): { command: string; requestFile: st
   }
   return { command, requestFile, stateDir, ownerToken };
 }
-export async function runCli(argv: string[], serviceOverrides?: ServiceOverrides): Promise<CliOutcome> {
+export async function runCli(argv: string[], serviceOverrides?: ServiceOverrides, expectedOwnerStore: string = PR_WORK_OWNER_STORE): Promise<CliOutcome> {
   let parsed: ReturnType<typeof parseCliArgs>;
   try {
     parsed = parseCliArgs(argv);
@@ -726,7 +740,7 @@ export async function runCli(argv: string[], serviceOverrides?: ServiceOverrides
     const options: RunOptions = { stateDir: parsed.stateDir };
     if (parsed.ownerToken !== undefined) options.ownerToken = parsed.ownerToken;
     if (serviceOverrides !== undefined) options.serviceConfig = serviceOverrides;
-    const misplaced = await refuseMisplacedOwnerStore(parsed.stateDir, request.workerStateDir);
+    const misplaced = await refuseMisplacedOwnerStore(parsed.stateDir, request.workerStateDir, expectedOwnerStore);
     if (misplaced !== null) return misplaced;
     switch (parsed.command) {
       case "reserve": return await runReserve(request, options);
