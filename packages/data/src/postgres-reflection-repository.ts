@@ -363,7 +363,7 @@ export class PostgresReflectionRepository implements ReflectionRepository {
                 GREATEST(0, FLOOR(EXTRACT(EPOCH FROM ($1::timestamptz - s.quiescent_at))))::int AS pending_seconds
          FROM daily_sessions s
          INNER JOIN app_users owner ON owner.user_id = s.user_id
-         INNER JOIN daily_session_date_outcomes outcome
+         LEFT JOIN daily_session_date_outcomes outcome
            ON outcome.daily_session_id = s.daily_session_id
            AND outcome.source_revision = s.source_revision
          LEFT JOIN LATERAL (
@@ -378,7 +378,7 @@ export class PostgresReflectionRepository implements ReflectionRepository {
          WHERE s.activity_state = 'quiescent'
            AND s.quiescent_at IS NOT NULL
            AND owner.status = 'active'
-           AND outcome.outcome <> 'no_activity'
+           AND outcome.outcome IS DISTINCT FROM 'no_activity'
            AND EXISTS (
              SELECT 1 FROM evidence_source_snapshots snap
              INNER JOIN evidence_items item
