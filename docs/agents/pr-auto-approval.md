@@ -55,6 +55,31 @@ v12 迁移 howto 见 [pr-approval-v12-migration.md](pr-approval-v12-migration.md
 - 第一版沿用现有 Codex 每小时任务；不新增常驻服务、webhook、事件桥接或统一验收
   台账。范围新鲜度不新增命令，复用固定 `prepare` / `submit` 入口。
 
+### 暂停、恢复与撤回的操作入口
+
+- 仅配置的所有者身份 Luke 可操作暂停与恢复，不是 Agent 作者身份；
+  Agent 不得冒充 Luke 发布暂停或恢复命令。
+- 暂停：在 PR 顶部发表一条新的独立评论，正文含
+  `/pause-pr-auto-approval`；恢复：另起一条新的独立评论，正文含
+  `/resume-pr-auto-approval`，恢复后仅回到可调度候选。
+- 每次都用新评论表达最新意图；不要编辑或删除旧评论来模拟状态。
+  已识别的暂停／恢复事件按 `created_at` 排序，以最新一条为准。
+- 所有者手写命令与 Bot 暂停标记是两类记录：Bot 标记是受信 App
+  写入的可信记录，不得手写伪造；其他账户的同名评论不生效。
+- 暂停与恢复走现有每小时轮询或手动运行生效，不是即时 webhook；
+  观察到暂停后，不再发起新的派发。
+- 协调者在观察到暂停后，经认可的 helper 停止在途 worker 并保留已有改动；
+  未确认已停止／释放的 worker 不得替换；不保证零延迟中断。
+- 撤回批准是同一 head 上的真实 GitHub `Request changes` 评审
+  （或既有评审撤回能力），不是评论命令；推送新提交只用于检验 stale
+  head，不是撤回。本文件不新设任何 `/withdraw` 命令。
+- 恢复不恢复已撤回的批准；如需继续，协调者先跑固定 `prepare`
+  冻结当前上下文，再请 Luke 在需要时给出新的 Approve。
+- 普通评论与无冲突的 main 前进本身不撤销有效批准；实际合入前仍须
+  验证最新 PR 与 main 组合。
+- 运行细节见 [pr-approval-v12-migration.md](pr-approval-v12-migration.md)，
+  目标契约见 [ADR-0154](../adr/0154-human-review-is-a-complete-pr-approval-path.md)。
+
 ### 候选实现：人工最终决定（#363）
 
 - 新浏览器 challenge 带 `liveness: final-decision-v1`。Luke 在该 challenge 冻结后对
