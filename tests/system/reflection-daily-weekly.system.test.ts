@@ -3,6 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import {
   NARRATIVE_FINDINGS_SCHEMA_VERSION,
   NARRATIVE_VALIDATOR_PROMPT_VERSION_REFLECTION,
+  REFLECTION_ADMISSION_POLICY_VERSION,
   REFLECTION_DAILY_PROMPT_VERSION,
   createModelRoleCommandService,
   createModelRoleProviderEgress,
@@ -56,6 +57,7 @@ const BASE_TIME = Date.parse("2026-09-09T08:00:00.000Z");
 const G1_FINGERPRINT = `sha256:${"d".repeat(64)}`;
 const INTERVAL_MS = 30 * 60 * 1000;
 const READINESS_POLICY = "reflection-readiness:v1";
+const ADMISSION_POLICY = REFLECTION_ADMISSION_POLICY_VERSION;
 
 const dailyRoleConfiguration: ModelRoleConfigurationSnapshot = {
   role: "reflection.daily",
@@ -662,11 +664,11 @@ systemDescribe("Daily / Weekly Reflection — 1A.3b A3 (issue #199)", () => {
         predicateId === "sh.memory.hobby" ? { predicateId } : null,
       registryVersion: () => 1,
     });
-    expect(await repository.readDerivedLatency(new Date(BASE_TIME + 2 * 60 * 60 * 1000), READINESS_POLICY)).toEqual({
+    expect(await repository.readDerivedLatency(new Date(BASE_TIME + 2 * 60 * 60 * 1000), ADMISSION_POLICY)).toEqual({
       oldestPendingSeconds: 7200,
       pendingSessions: 3,
     });
-    expect(await repository.readDerivedLatency(new Date(BASE_TIME + 2 * 60 * 60 * 1000 + 1_000), READINESS_POLICY)).toEqual({
+    expect(await repository.readDerivedLatency(new Date(BASE_TIME + 2 * 60 * 60 * 1000 + 1_000), ADMISSION_POLICY)).toEqual({
       oldestPendingSeconds: 7201,
       pendingSessions: 3,
     });
@@ -677,9 +679,9 @@ systemDescribe("Daily / Weekly Reflection — 1A.3b A3 (issue #199)", () => {
          source_revision, claim_baseline_digest, policy_version,
          expected_data_epoch, status, created_at, updated_at
        ) VALUES ($1, $2, 'daily_session', $3, 1, 'baseline', $4, 1, 'built', $5, $5)`,
-      [seedId(), OWNER, oldSession.dailySessionId, READINESS_POLICY, new Date(BASE_TIME + 2 * 60 * 60 * 1000)],
+      [seedId(), OWNER, oldSession.dailySessionId, ADMISSION_POLICY, new Date(BASE_TIME + 2 * 60 * 60 * 1000)],
     );
-    expect(await repository.readDerivedLatency(new Date(BASE_TIME + 2 * 60 * 60 * 1000), READINESS_POLICY)).toEqual({
+    expect(await repository.readDerivedLatency(new Date(BASE_TIME + 2 * 60 * 60 * 1000), ADMISSION_POLICY)).toEqual({
       oldestPendingSeconds: 7200,
       pendingSessions: 2,
     });
@@ -701,7 +703,7 @@ systemDescribe("Daily / Weekly Reflection — 1A.3b A3 (issue #199)", () => {
          source_revision, claim_baseline_digest, policy_version,
          expected_data_epoch, status, created_at, updated_at
        ) VALUES ($1, $2, 'daily_session', $3, 1, 'baseline', $4, 1, 'built', $5, $5)`,
-      [seedId(), OWNER, session.dailySessionId, "reflection-readiness:old", new Date(BASE_TIME)],
+      [seedId(), OWNER, session.dailySessionId, "reflection-admission:old", new Date(BASE_TIME)],
     );
 
     expect(await reflectionRepository!.listDueDailySessions({
@@ -710,7 +712,7 @@ systemDescribe("Daily / Weekly Reflection — 1A.3b A3 (issue #199)", () => {
       limit: 10,
     })).toHaveLength(1);
     const now = new Date(BASE_TIME + 2 * 60 * 60 * 1000);
-    expect(await reflectionRepository!.readDerivedLatency(now, READINESS_POLICY)).toEqual({
+    expect(await reflectionRepository!.readDerivedLatency(now, ADMISSION_POLICY)).toEqual({
       oldestPendingSeconds: 7200,
       pendingSessions: 1,
     });
@@ -721,11 +723,40 @@ systemDescribe("Daily / Weekly Reflection — 1A.3b A3 (issue #199)", () => {
          source_revision, claim_baseline_digest, policy_version,
          expected_data_epoch, status, created_at, updated_at
        ) VALUES ($1, $2, 'daily_session', $3, 1, 'baseline', $4, 1, 'built', $5, $5)`,
-      [seedId(), OWNER, session.dailySessionId, READINESS_POLICY, now],
+      [seedId(), OWNER, session.dailySessionId, ADMISSION_POLICY, now],
     );
-    expect(await reflectionRepository!.readDerivedLatency(now, READINESS_POLICY)).toEqual({
+    expect(await reflectionRepository!.readDerivedLatency(now, ADMISSION_POLICY)).toEqual({
       oldestPendingSeconds: 0,
       pendingSessions: 0,
+    });
+  });
+
+  it("keeps head Evidence pending before a date outcome has been committed", async () => {
+    await seedSession({ logicalDate: "2026-09-09" });
+
+    expect(await reflectionRepository!.readDerivedLatency(
+      new Date(BASE_TIME + 2 * 60 * 60 * 1000 + 1_000),
+      ADMISSION_POLICY,
+    )).toEqual({ oldestPendingSeconds: 7201, pendingSessions: 1 });
+  });
+
+  it("keeps a ready-but-unbuilt Reflection pending in derived latency", async () => {
+    const session = await seedSession({ logicalDate: "2026-09-09" });
+    await seedDateOutcome({ dailySessionId: session.dailySessionId, outcome: "journal_available" });
+    await seedJournalOutcome({ dailySessionId: session.dailySessionId, outcome: "published" });
+    await database!.pool.query(
+      `INSERT INTO reflection_runs (
+         reflection_run_id, user_id, scope_type, daily_session_id,
+         source_revision, claim_baseline_digest, policy_version,
+         expected_data_epoch, status, created_at, updated_at
+       ) VALUES ($1, $2, 'daily_session', $3, 1, 'baseline', $4, 1, 'ready', $5, $5)`,
+      [seedId(), OWNER, session.dailySessionId, ADMISSION_POLICY, new Date(BASE_TIME)],
+    );
+
+    const now = new Date(BASE_TIME + 2 * 60 * 60 * 1000 + 1_000);
+    expect(await reflectionRepository!.readDerivedLatency(now, ADMISSION_POLICY)).toEqual({
+      oldestPendingSeconds: 7201,
+      pendingSessions: 1,
     });
   });
 
@@ -2504,6 +2535,13 @@ systemDescribe("Daily / Weekly Reflection — 1A.3b A3 (issue #199)", () => {
     );
     expect(disposition.rows).toHaveLength(1);
     expect(disposition.rows[0]!.outcome).toBe("created");
+
+    // Issue #386: the recovery scan must recognize the run this real build
+    // wrote, or every built Daily stays pending past the 2h gate forever.
+    expect(await reflectionRepository!.readDerivedLatency(
+      new Date(BASE_TIME + 3 * 60 * 60 * 1000),
+      ADMISSION_POLICY,
+    )).toEqual({ oldestPendingSeconds: 0, pendingSessions: 0 });
   });
 
   it("does not fail a committed Reflection if commit acknowledgement throws (#257)", async () => {

@@ -21,6 +21,9 @@
   边界前，必须先通过 [`docs/decisions.md`](docs/decisions.md) 按主题和关键词检索，
   并读取所有命中的相关 ADR，在既有结论共识上完善和实施。
 - 不无目标地通读全部 ADR，但不能以节省上下文为由跳过对任务相关 ADR 的检索和读取。
+- 需要本地环境变量（如 `DATABASE_URL`、`TEST_DATABASE_URL`）、运行测试、连接数据库
+  或探针前，先读取 [`docs/agents/local-environment.md`](docs/agents/local-environment.md)，
+  按任务目标选择 `.env` 或 `.env.neon` profile，并按其规则安全加载。
 - 发现文档与代码、SPEC 与 ADR 冲突时，明确指出冲突，不要自行猜测。
 - 一次任务中不要重复读取没有变化的长文档。
 

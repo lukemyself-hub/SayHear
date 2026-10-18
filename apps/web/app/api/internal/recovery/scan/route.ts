@@ -1,3 +1,4 @@
+import { REFLECTION_ADMISSION_POLICY_VERSION } from "@sayhear/application";
 import { runPredicateRegistryReleaseWorkflow } from "@sayhear/application/candidate-review-workflow";
 import { createRecoveryScannerHandler } from "../../../../../src/recovery-scanner-handler";
 import { createServerComposition } from "../../../../../src/server-composition";
@@ -35,7 +36,7 @@ export async function GET(request: Request): Promise<Response> {
     readDerivedLatency: () =>
       composition.reflectionRepository.readDerivedLatency(
         composition.clock(),
-        composition.reflectionReadinessPolicyVersion,
+        REFLECTION_ADMISSION_POLICY_VERSION,
       ),
   })(request);
 }
