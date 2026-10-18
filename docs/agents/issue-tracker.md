@@ -71,14 +71,16 @@ GitHub 标签更新不是原子操作；交接时可先写入 `ready-for-agent`�
   `ongoing` 和其他互斥分诊状态，并回读最终标签。标签更新失败时保持交接未完成，不能
   声称已重新派发。暂停标记仍优先阻止自动修改；评论要求维护者决定时，接续 Agent
   必须等待维护者决定。
-- 一个 PR 可关联多个 Issue。完整读取全部引用的需求；PR 明确声明不关闭的 Issue 只作
-  上下文，不认领、不回写、不修改标签、不关闭。声明范围不明确时先由维护者明确编号，
+- 一个 PR 可关联多个 Issue。完整读取全部引用的需求；但只有 PR 用 closing keyword
+  （`Fixes #N`、`Closes #N`）或 Development 关联明确交付的 Issue 才会自动关闭，其余
+  引用与 keep-open 声明只作上下文，不认领、不回写、不修改标签、不关闭。写实现 PR
+  时必须用 closing keyword 写出被完成的 Issue。声明范围不明确时先由维护者明确编号，
   具体解析与审核包规则见 [`PR 自动审批 gate`](pr-auto-approval.md#多-issue-pr-与关闭排除)。
-- 终态非批准时，逐个交接未排除的开放 Issue；一个 Issue 更新失败不跳过其余 Issue，
-  报告未完成项。任何交付 Issue 的暂停都阻止整个 PR 自动接续。
-- 审核通过后，确认 GitHub PR 已实际合入，再逐个关闭未排除的开放 Issue，清理
+- 终态非批准时，逐个交接开放的交付 Issue；一个 Issue 更新失败不跳过其余 Issue，
+  报告未完成项。任何非 keep-open 引用的暂停（包括背景引用）都阻止整个 PR 自动接续。
+- 审核通过后，确认 GitHub PR 已实际合入，再逐个关闭开放的交付 Issue，清理
   `ongoing` 和互斥分诊状态并回读。只启用 auto-merge 时继续等待并保持执行占用。
-  GitHub 因 PR 合入自动关闭 Issue 时也清理未排除项的遗留标签。
+  GitHub 因 PR 合入自动关闭 Issue 时也清理交付项的遗留标签。
 - 自动调度 Agent 只派发开放、带 `ready-for-agent`、无 `ongoing`、无暂停记录且依赖已解除的
   Issue。若恰好有一个开放关联 PR，接续该 PR 和原分支；没有关联 PR 才创建新的 PR。
   多个开放关联 PR 或其他执行者会造成冲突，必须停止并报告。
@@ -133,11 +135,13 @@ head/base/当前 main SHA 与同步复验要求写回未排除的开放 Issue。
 `ready-for-agent`、清理 `ongoing` 并回读；人工分诊状态只收到提醒，保留标签等待决定。
 PR 明确保持开放的 Issue 不参与评论或标签交接；暂停优先于交接。
 
-实现 Agent 接续原 PR 和原分支，先重读最新 main、Issue 评论、依赖与暂停，按 Git 授权
-同步最新 main、处理冲突，在新 head/base 上重跑可信 CI 和受影响专项，再送审原 PR。
-不创建重复 PR，不用旧版本绿色 CI、报告或授权替代新核验。同步提醒不是代码缺陷
-request changes，不增加三轮失败计数。App 已完成的相同 PR/head/base/main 交接不再释放
-Agent 后续新认领；部分失败可重试，但不得把未完成交接写成成功。
+实现 Agent 接续原 PR 和原分支，先重读最新 main、Issue 评论、依赖与暂停，仅在
+`up-to-date-base` 部署下才按 Git 授权同步最新 main、处理冲突，在新 head/base 上重跑
+可信 CI 和受影响专项，再送审原 PR。`serialized-merge` 下不得为追 main 改写 PR head
+（新提交会使 Luke 的 Approve 失效），只重新验证当前组合。不创建重复 PR，不用旧版本
+绿色 CI、报告或授权替代新核验。同步提醒不是代码缺陷 request changes，不增加三轮
+失败计数。App 已完成的相同 PR/head/base/main 交接不再释放 Agent 后续新认领；部分
+失败可重试，但不得把未完成交接写成成功。
 
 ### 缺少验收证据时
 

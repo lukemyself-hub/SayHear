@@ -16,3 +16,35 @@ Luke 对当前被审版本的 GitHub Approve 表达最终决定。控制器继�
 这个取舍保留人工责任，放弃将所有未来判断编码为硬门禁的做法。控制器更新来自新
 流程需求，而不是处理单个例外 PR 的前置条件。缺口不能记为通过，PR 批准也不直接
 移除产品运行时围栏或伪造部署结果。具体执行与迁移以最终确认并发布的 SPEC 为准。
+
+## SPEC362 确认的范围补充
+
+- 正式规格为 SPEC #362（开发票 #363），属 Internal Core 工程交付工具链，不新增产品
+  Core Flow。GitHub Issue 正文、评论和标签是执行唯一真源。
+- 两条通路：自动通路只处理现有契约内普通修复与改进；未知授权范围、证据争议与新
+  决定转人工。Luke 可随时主动接管，不必先耗尽自动整改轮次。
+- 人工接管后仍执行共同硬约束：批准身份真实且有权限、批准对应被审版本及需求范围、
+  固定可信 CI 真实通过、分支保护满足且无未解决冲突、执行前核验 PR 版本与最新 main
+  组合。分类依据、专项适用性、Agent 意见、有无开放 Issue 不属于共同硬约束。
+- 评论与实质范围区分：新提交或实质需求变化需重新确认；普通评论、CI 更新、标签清理
+  不撤销批准；main 无冲突前进时不修改 PR head，仅重新验证组合并沿用批准。
+- PR 可以没有关联 Issue；仅明确由 PR 完成的 Issue 才自动关闭。
+- 有界自动修复：Codex 协调 OpenCode V2 implementation / code-review worker，同一 PR
+  单一写入者，独立会话，修复者不自批，最多三轮自动整改；有争议项调查或转人工，不因
+  P2 标签盲目改代码。
+- 部署适用性：Approve 覆盖已披露并同意的直接部署效果，不推断范围外追加操作；无需部署
+  的 PR 合入后结束；已合入但部署失败报告真实结果，不重复合入或擅自回滚。
+- 暂停与撤回：实际合入前 Luke 可撤销批准、要求暂停；暂停后停止新派发并通知在途 worker
+  保留已有改动；解除暂停不恢复已撤销批准。
+- 第一版沿用现有 Codex 每小时任务，不新增常驻服务、webhook 或事件桥接。
+- 实质范围的判定：自由文本是否构成实质变化无法确定性地判断，因此不写分类器。
+  批准后需求摘要变化只暂缓人工通路；由协调者经固定 `submit` 入口给出
+  unchanged / material / unknown，控制器写入现有签名存储。unchanged 推进覆盖范围，
+  material 需要重新 Approve，unknown 等待人工。
+
+## 与现行实现的边界
+
+本 ADR 是已确认的目标契约，不是最终生效声明。2026-10-17 历史快照原样保留；2026-10-18 UTC 现行（真实值以固定 `status` 为准）：当前已安装控制器为
+`sayhear-pr-review-gate:v12` / `sayhear-pr-review-report:v5`（最终源码安装：控制器 `5c454fdda28f3807e556f0c40ec7be0e91596147e6a90a0df69848d210129fbe`，`build.sourceCommit 2cdf0c60defc683dc06314dece2ca7193853dd5a` 干净源码身份，PR #384 合入，`serialized-merge`；#397 合入后回读安装源与控制器未变，配置与构建未被文档 PR 改变，受信 helper 源 `546d1b8`，文档 PR 无需部署），
+真保护／App-only 守卫 intact，2026-10-17 历史快照全部 19 项 completion 收据 `phase` 已 complete 且 attempt 均为 1（#348、#351、#352、#356、#359、#361、#373、#376、#379、#381、#383、#384、#385、#387、#388、#390、#391、#392、#394）原样保留；2026-10-18 UTC 现行增量：#397 `4b2ad10` 与 #398 `4c16797` 新增 `phase: complete`、attempt 1（真实值以固定 `status` 为准）。PR #384（已合入 `2cdf0c6`）：未解决外部 review thread 不再遮蔽可执行的 `request_changes`（decision 加至少一个 P0/P1/P2 finding），其余仍走人工。先前最终源码（`05ee8089…`／`7ee8e89`）现为已审查回滚恢复对象；`c5fa984f`／`34ab5815` 为更旧 fallback，仅历史保留；旧版 `v11 / report v4` 为历史备份保留。最终 bundle 验证：bundle 内 607 项通过，安装与回滚 helper 各 `bash -n`＋收据解析 10 项通过；这只证明安装，不证明完整端到端验收。每小时 `sayhear-pr` 现为 ACTIVE，历史受控范围语句原样保留；2026-10-18 UTC 现行：临时观察范围为 #397，该 PR 现已合入，属待清理的事实状态，此处不声称已恢复常态；#371 始终排除在外。2026-10-16 22:55Z 与 23:54Z 两次受控运行仅观测（未 reserve／派发／合入），其后定时运行因 Codex App `execution-config-loading` 错误未执行（立即运行同样报错），重启后已恢复；#385 上 hourly 已真实完成发现、派发独立 review、确认缺陷修复派发与新会话复审，普通自动合入 `e2ef35b`。#383 观测到一次最新 main 竞态（main 到 `2cdf0c6` 后 submit 按当前 main 重建 merge ref `a88b1cc` 并派发 Validate，首 run 取到旧 merge `f004c12` 被判 stale 证据驳回，重派后 `a88b1cc` 上 run 通过被接受）。普通自动合入（#385 已有真实证据：无 Issue 纯文档，Luke 未作任何 review 或决定；hourly 发现并派发独立 review 确认真实 P2 后控制器 `request_changes` 到 `e2ef824`，确认缺陷后派发修复并由授权协调者核验 diff 后推送 `95e2f71`，全新独立会话复审通过后普通自动合入 `e2ef35b`，无需部署、无 Issue 写入，completion 收据 attempt 1）、#387 人工最终决定合入、真实 PR 上转人工路由（#390、#391 首轮、#394，未解决外部 review thread）、#391 交付 Issue 的普通自动合入与控制器 Issue 收尾、#395 双唤醒重叠真实观测（详见 pr-approval-v12-migration.md 真实运行记录：same-head `already_reviewed` exit 2 与 `owner_store_misplaced` exit 1 为真实运行观测，helper 层 owner 忙拒绝仍仅源码／测试证明，不再要求另一次重叠运行）已有真实证据；2026-10-17 当时仍待验证的后三项（Luke 暂停／撤回、真实 PR 上冲突与 CI 失败、main 前进复用既有 Luke 批准）已在 2026-10-18 由迁移矩阵 canonical 记录证明（其中 main 前进复用为不同路径证明，红 CI／冲突为实际拒绝范围口径详见 canonical，不声称已执行人工分支），本 ADR 不重复展开，仍待验证中必须真实运行的现行清单见迁移矩阵 canonical 未关闭缺口口径，其中真实跨小时恢复与在途取消仍未验证（含 #368）；夹具已接受＋`awaiting_verification`（不记为真实 E2E 通过）：三轮预算耗尽、多 Issue 部分收尾、需部署 PR 与部署失败；未知路由已有 #365 下测试证明已接受，不记为真实 E2E 通过。实施前须核验实时 main、安装版本、保护设置、worker 有效配置及既有
+未提交改动；沿用 ADR-0148 的部署身份、配置授权与验收分离。

@@ -11,6 +11,7 @@ export type BrowserContext = Readonly<{
   diffDigest: string; requirementDigest: string; protectedPaths: readonly string[];
   validateWorkflowBlobSha: string;
   reviewBinding?: "head-v2";
+  liveness?: "final-decision-v1";
 }>;
 type Watermark = Readonly<{ id: number; submittedAt: number }>;
 export type BrowserChallenge = Readonly<{ epoch: string; context: BrowserContext; frozenAt: number; watermark: Watermark }>;
@@ -18,13 +19,20 @@ export type BrowserReceipt = Readonly<{ challenge: BrowserChallenge; reviewId: n
 export type BrowserState = Readonly<{
   version: 1; pullRequestNumber: number; epoch: string;
   challenge: BrowserChallenge | null; receipt: BrowserReceipt | null;
+  // Requirement digest the coordinator attested as unchanged scope relative
+  // to a final-decision receipt. Cleared with the receipt it qualifies.
+  scopeRequirementDigest?: string;
+}>;
+export type ScopeVerdict = "unchanged" | "material" | "unknown";
+export type ScopeReconciliation = Readonly<{
+  epoch: string; approvedRequirementDigest: string; verdict: ScopeVerdict;
 }>;
 export interface BrowserApprovalStore {
   read(number: number): Promise<BrowserState | null>;
   save(value: BrowserState): Promise<void>;
 }
 export type HumanAuthorization =
-  | Readonly<{ channel: "browser"; receipt: BrowserReceipt | null; challenge: BrowserChallenge | null }>
+  | Readonly<{ channel: "browser"; receipt: BrowserReceipt | null; challenge: BrowserChallenge | null; coveredRequirementDigest: string | null }>
   | Readonly<{ channel: "legacy-root" }>
   | Readonly<{ channel: "unknown" }>;
 function record(value: unknown): value is Record<string, unknown> {
@@ -59,6 +67,9 @@ export function parseBrowserContext(value: unknown): BrowserContext {
   if (value.reviewBinding !== undefined && value.reviewBinding !== "head-v2") {
     throw new Error("browser_binding_invalid");
   }
+  if (value.liveness !== undefined && value.liveness !== "final-decision-v1") {
+    throw new Error("browser_liveness_invalid");
+  }
   return {
     repositoryId: integer(value.repositoryId), repositoryNodeId: text(value.repositoryNodeId),
     pullRequestNumber: integer(value.pullRequestNumber), pullRequestNodeId: text(value.pullRequestNodeId),
@@ -66,14 +77,21 @@ export function parseBrowserContext(value: unknown): BrowserContext {
     diffDigest: hex(value.diffDigest, 64), requirementDigest: hex(value.requirementDigest, 64),
     protectedPaths: [...new Set(paths)].sort(), validateWorkflowBlobSha: hex(value.validateWorkflowBlobSha, 40),
     ...(value.reviewBinding === "head-v2" ? { reviewBinding: "head-v2" as const } : {}),
+    ...(value.liveness === "final-decision-v1" ? { liveness: "final-decision-v1" as const } : {}),
   };
 }
 export function browserContextDigest(context: BrowserContext): string {
   const parsed = parseBrowserContext(context);
-  // The controller separately proves that main changes are safe before passing
-  // a head-v2 context. Old challenges retain their exact-base interpretation.
-  const identity = parsed.reviewBinding === "head-v2"
-    ? { ...parsed, baseSha: null } : parsed;
+  // A head-v2 approval survives main advancing; combined Validate on the
+  // current merge ref carries that risk. Old challenges retain their exact-base
+  // interpretation.
+  // Final-decision challenges keep requirement freshness out of drift: a scope
+  // change withholds the human route until reconciled instead of revoking it.
+  const identity = {
+    ...parsed,
+    ...(parsed.reviewBinding === "head-v2" ? { baseSha: null } : {}),
+    ...(parsed.liveness === "final-decision-v1" ? { requirementDigest: null } : {}),
+  };
   return createHash("sha256").update(JSON.stringify(identity)).digest("hex");
 }
 function parseChallenge(value: unknown): BrowserChallenge {
@@ -90,7 +108,9 @@ export function parseBrowserReceipt(value: unknown): BrowserReceipt {
 export function parseBrowserState(value: unknown): BrowserState {
   if (!record(value) || value.version !== 1) throw new Error("browser_state_invalid");
   const result: BrowserState = { version: 1, pullRequestNumber: integer(value.pullRequestNumber), epoch: text(value.epoch),
-    challenge: value.challenge === null ? null : parseChallenge(value.challenge), receipt: value.receipt === null ? null : parseBrowserReceipt(value.receipt) };
+    challenge: value.challenge === null ? null : parseChallenge(value.challenge), receipt: value.receipt === null ? null : parseBrowserReceipt(value.receipt),
+    ...(value.scopeRequirementDigest === undefined ? {} : { scopeRequirementDigest: hex(value.scopeRequirementDigest, 64) }) };
+  if (result.scopeRequirementDigest !== undefined && result.receipt?.challenge.context.liveness !== "final-decision-v1") throw new Error("browser_scope_invalid");
   if (result.challenge && (result.challenge.epoch !== result.epoch || result.challenge.context.pullRequestNumber !== result.pullRequestNumber)) throw new Error("browser_epoch_mismatch");
   if (result.receipt && JSON.stringify(result.receipt.challenge) !== JSON.stringify(result.challenge)) throw new Error("browser_receipt_mismatch");
   return result;
@@ -101,7 +121,7 @@ export class SignedBrowserApprovalStore extends SignedJsonStore<BrowserState> im
   }
 }
 export type SubmittedLukeReview = Readonly<{ id: number; submittedAt: number; state: string; headSha: string }>;
-export function latestLukeReview(reviews: readonly unknown[]): SubmittedLukeReview | null {
+function sortedLukeReviews(reviews: readonly unknown[]): SubmittedLukeReview[] {
   const relevant: SubmittedLukeReview[] = [];
   for (const raw of reviews) {
     if (!record(raw) || !record(raw.user)) throw new Error("browser_review_identity_invalid");
@@ -120,7 +140,19 @@ export function latestLukeReview(reviews: readonly unknown[]): SubmittedLukeRevi
   for (let i = 1; i < relevant.length; i++) {
     if (relevant[i]!.id === relevant[i - 1]!.id || relevant[i]!.submittedAt <= relevant[i - 1]!.submittedAt) throw new Error("browser_review_order_invalid");
   }
+  return relevant;
+}
+export function latestLukeReview(reviews: readonly unknown[]): SubmittedLukeReview | null {
+  const relevant = sortedLukeReviews(reviews);
   return relevant.at(-1) ?? null;
+}
+function lastDecisive(ordered: readonly SubmittedLukeReview[]): SubmittedLukeReview | null {
+  for (let i = ordered.length - 1; i >= 0; i--) if (ordered[i]!.state !== "COMMENTED") return ordered[i]!;
+  return null;
+}
+// Latest non-COMMENTED review; identity/time/order still cover every review.
+export function decisiveLukeReview(reviews: readonly unknown[]): SubmittedLukeReview | null {
+  return lastDecisive(sortedLukeReviews(reviews));
 }
 
 // Every read re-derives the current context and invalidates observed drift.
@@ -134,14 +166,21 @@ export async function readBrowserAuthorization(
   now = Date.now(),
 ): Promise<Extract<HumanAuthorization, { channel: "browser" }>> {
   let current = await store.read(number);
-  let latest: SubmittedLukeReview | null;
-  try { latest = latestLukeReview(reviews); }
+  let ordered: SubmittedLukeReview[];
+  try { ordered = sortedLukeReviews(reviews); }
   catch (error) {
     await store.save({ version: 1, pullRequestNumber: number, epoch: randomUUID(), challenge: null, receipt: null });
     throw error;
   }
+  const latest = ordered.at(-1) ?? null;
+  const decisive = lastDecisive(ordered);
   const drift = current?.challenge && (!context || browserContextDigest(current.challenge.context) !== browserContextDigest(context));
-  const revoked = current?.receipt && (!latest || latest.id < current.receipt.reviewId || latest.state !== "APPROVED" || latest.headSha !== context?.headSha);
+  // Old signed receipts keep old exact semantics: only a stored
+  // final-decision-v1 challenge ignores trailing COMMENTED reviews, and only
+  // for selecting the decisive approval. Identity/time/order validation above
+  // still covers every review.
+  const revocationReview = current?.receipt?.challenge.context.liveness === "final-decision-v1" ? decisive : latest;
+  const revoked = current?.receipt && (!revocationReview || revocationReview.id < current.receipt.reviewId || revocationReview.state !== "APPROVED" || revocationReview.headSha !== context?.headSha);
   if (drift || revoked) {
     current = { version: 1, pullRequestNumber: number, epoch: randomUUID(), challenge: null, receipt: null };
     await store.save(current);
@@ -154,11 +193,45 @@ export async function readBrowserAuthorization(
     await store.save(current);
   }
   const challenge = current?.challenge ?? null;
-  if (!challenge || !latest || latest.state !== "APPROVED" || latest.headSha !== context?.headSha ||
-      latest.id <= challenge.watermark.id || latest.submittedAt <= Math.max(challenge.frozenAt, challenge.watermark.submittedAt)) {
-    return { channel: "browser", challenge, receipt: null };
+  const bindingReview = challenge?.context.liveness === "final-decision-v1" ? decisive : latest;
+  if (!challenge || !bindingReview || bindingReview.state !== "APPROVED" || bindingReview.headSha !== context?.headSha ||
+      bindingReview.id <= challenge.watermark.id || bindingReview.submittedAt <= Math.max(challenge.frozenAt, challenge.watermark.submittedAt)) {
+    return { channel: "browser", challenge, receipt: null, coveredRequirementDigest: null };
   }
-  const receipt: BrowserReceipt = { challenge, reviewId: latest.id, submittedAt: latest.submittedAt };
-  if (JSON.stringify(current?.receipt) !== JSON.stringify(receipt)) await store.save({ version: 1, pullRequestNumber: number, epoch: challenge.epoch, challenge, receipt });
-  return { channel: "browser", challenge, receipt };
+  const receipt: BrowserReceipt = { challenge, reviewId: bindingReview.id, submittedAt: bindingReview.submittedAt };
+  if (JSON.stringify(current?.receipt) !== JSON.stringify(receipt)) {
+    current = { version: 1, pullRequestNumber: number, epoch: challenge.epoch, challenge, receipt };
+    await store.save(current);
+  }
+  return { channel: "browser", challenge, receipt,
+    coveredRequirementDigest: current?.scopeRequirementDigest ?? challenge.context.requirementDigest };
+}
+
+// Applies the authorized coordinator's reconciliation of a requirement change
+// after Luke's final decision. Called from report submission, including the
+// saved-report replay during scans.
+// Unchanged extends coverage to the live digest; material or unknown revokes the
+// receipt so a fresh challenge on the live digest plus a new Approve is needed.
+// Unknown still routes to the human (no coverage without Luke), but revoking
+// like material keeps it resolvable instead of withheld forever.
+export async function reconcileBrowserScope(
+  store: BrowserApprovalStore,
+  number: number,
+  reconciliation: ScopeReconciliation,
+  liveRequirementDigest: string,
+): Promise<void> {
+  const current = await store.read(number);
+  const receipt = current?.receipt;
+  // Saved reports are replayed by later scans; a verdict for a superseded
+  // approval epoch simply no longer applies.
+  if (!current || !receipt || current.epoch !== reconciliation.epoch) return;
+  if (receipt.challenge.context.liveness !== "final-decision-v1" ||
+      receipt.challenge.context.requirementDigest !== reconciliation.approvedRequirementDigest) {
+    throw new Error("browser_scope_reconciliation_mismatch");
+  }
+  if (reconciliation.verdict === "material" || reconciliation.verdict === "unknown") {
+    await store.save({ version: 1, pullRequestNumber: number, epoch: randomUUID(), challenge: null, receipt: null });
+    return;
+  }
+  await store.save({ ...current, scopeRequirementDigest: hex(liveRequirementDigest, 64) });
 }

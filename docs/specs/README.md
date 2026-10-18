@@ -18,9 +18,9 @@ Accepted
 ## Current specs
 
 - [#362 — Internal Core 工程交付 — 自动审批、人工最终决定与有界 Agent 修复](https://github.com/lukemyself-hub/SayHear/issues/362)
-  — Internal Core 工程交付工具链 — `ready-for-agent`；开发票
+  — Internal Core 工程交付工具链 — 发布时标签 `ready-for-agent`；开发票
   [#363](https://github.com/lukemyself-hub/SayHear/issues/363)–[#369](https://github.com/lukemyself-hub/SayHear/issues/369)。
-  发布不代表实施或上线。
+  最终源码已安装，受控验收进行中；安装不等于完整验收，当前状态以固定 `status` 与 Issue 回读为准。
 
 - [连续记忆、自然接续与稳定人格体验契约](https://github.com/lukemyself-hub/SayHear/issues/301)
   — Internal Core / Memory & Recall — 体验与首轮路线已确认、`ready-for-agent`；先完成

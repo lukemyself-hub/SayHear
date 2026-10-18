@@ -18,6 +18,8 @@ export type CompletionIdentity = Readonly<{
   // Absent on v4 receipts, which always used the App review channel.
   humanChannel?: "app" | "browser";
   humanReviewId?: number;
+  // Absent means the browser receipt used last-review revocation semantics.
+  humanLiveness?: "final-decision-v1";
   epoch?: string | null;
   integrationMode?: IntegrationMode;
   reviewIdentity?: Readonly<{
@@ -29,7 +31,7 @@ export type CompletionIdentity = Readonly<{
 }>;
 export type CompletionPhase = "merge_unconfirmed" | "issues_pending" | "complete" | "needs_attention";
 export type CompletionRecord = Readonly<{
-  version: 1;
+  version: 1 | 2;
   identity: CompletionIdentity;
   phase: CompletionPhase;
   attempts: number;
@@ -38,6 +40,9 @@ export type CompletionRecord = Readonly<{
   mergeSha: string | null;
   // Absence means an older operation whose delivery must be reconciled.
   mergeWriteState?: "not-sent" | "uncertain" | "rejected" | "accepted";
+  // Tree of the merge ref whose combined Validate passed, read just before the
+  // merge write. The confirmed merge commit must carry the same tree.
+  testedTreeSha?: string;
 }>;
 export class CompletionMismatch extends Error {}
 export class CompletionUnavailable extends Error {
@@ -75,18 +80,20 @@ function digest(value: unknown, length: number): string {
   return result;
 }
 export function parseCompletionRecord(value: unknown): CompletionRecord {
-  if (!record(value) || value.version !== 1 || !record(value.identity)) throw new Error("completion_schema_invalid");
+  if (!record(value) || (value.version !== 1 && value.version !== 2) || !record(value.identity)) throw new Error("completion_schema_invalid");
+  const version = value.version;
   const identity = value.identity;
   const reviewIdentity = identity.reviewIdentity;
   if (reviewIdentity !== undefined && !record(reviewIdentity)) throw new Error("completion_schema_invalid");
   if (identity.mergeAction !== undefined && identity.mergeAction !== "merge-now") throw new Error("completion_schema_invalid");
+  if (identity.humanLiveness !== undefined && (identity.humanLiveness !== "final-decision-v1" || identity.humanChannel !== "browser")) throw new Error("completion_schema_invalid");
   if (value.mergeWriteState !== undefined &&
       !["not-sent", "uncertain", "rejected", "accepted"].includes(string(value.mergeWriteState))) throw new Error("completion_schema_invalid");
-  if (!Array.isArray(identity.issueNumbers) || identity.issueNumbers.length === 0 || identity.issueNumbers.length > 100) throw new Error("completion_schema_invalid");
+  if (!Array.isArray(identity.issueNumbers) || identity.issueNumbers.length > 100 || (version === 1 && identity.issueNumbers.length === 0)) throw new Error("completion_schema_invalid");
   const phase = value.phase;
   if (phase !== "merge_unconfirmed" && phase !== "issues_pending" && phase !== "complete" && phase !== "needs_attention") throw new Error("completion_schema_invalid");
   const result: CompletionRecord = {
-    version: 1,
+    version,
     identity: {
       repositoryId: positive(identity.repositoryId), pullRequestNumber: positive(identity.pullRequestNumber),
       pullRequestNodeId: string(identity.pullRequestNodeId), headSha: digest(identity.headSha, 40),
@@ -97,6 +104,7 @@ export function parseCompletionRecord(value: unknown): CompletionRecord {
       issueNumbers: identity.issueNumbers.map(positive),
       humanChannel: identity.humanChannel === "browser" ? "browser" : "app",
       humanReviewId: identity.humanReviewId === undefined ? positive(identity.reviewId) : positive(identity.humanReviewId),
+      ...(identity.humanLiveness === "final-decision-v1" ? { humanLiveness: "final-decision-v1" as const } : {}),
       epoch: identity.epoch === undefined || identity.epoch === null ? null : string(identity.epoch),
       integrationMode: completionIntegrationMode(identity.integrationMode),
       ...(record(reviewIdentity) ? { reviewIdentity: {
@@ -111,6 +119,7 @@ export function parseCompletionRecord(value: unknown): CompletionRecord {
     ...(value.mergeWriteState === "not-sent" || value.mergeWriteState === "uncertain" ||
       value.mergeWriteState === "rejected" || value.mergeWriteState === "accepted"
       ? { mergeWriteState: value.mergeWriteState } : {}),
+    ...(value.testedTreeSha === undefined ? {} : { testedTreeSha: digest(value.testedTreeSha, 40) }),
   };
   if ((phase === "issues_pending" || phase === "complete") && result.mergeSha === null) throw new Error("completion_schema_invalid");
   return result;
